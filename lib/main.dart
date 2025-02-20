@@ -1,6 +1,7 @@
-import 'package:autoheat/src/config/themes/theme_cubit.dart';
-import 'package:autoheat/src/config/themes/theme_name.dart';
+import 'package:autoheat/src/ui/themes/theme_cubit.dart';
+import 'package:autoheat/src/ui/themes/theme_name.dart';
 import 'package:autoheat/src/service_locator.dart';
+import 'package:autoheat/src/ui/app_content.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -20,48 +21,16 @@ class AutoheatApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocProvider(
       create: (_) => locator<ThemeCubit>(),
-      child: BlocBuilder<ThemeCubit, ThemeName>(
+      child: BlocBuilder<ThemeCubit, ThemeType>(
         builder: (context, theme) {
           final themeCubit = context.read<ThemeCubit>();
 
           return MaterialApp(
-            title: 'Theme Demo',
+            title: 'AutoHeat',
             theme: themeCubit.getCurrentTheme(context),
-            home: const HomeScreen(),
+            home: const AppContent(),
           );
         },
-      ),
-    );
-  }
-}
-
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final themeManager = context.read<ThemeCubit>();
-
-    return Scaffold(
-      appBar: AppBar(title: Text('Multiple Themes Example')),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            ElevatedButton(
-              onPressed: () => themeManager.changeTheme(ThemeName.base),
-              child: Text('Green Theme'),
-            ),
-            ElevatedButton(
-              onPressed: () => themeManager.changeTheme(ThemeName.red),
-              child: Text('Red Theme'),
-            ),
-            ElevatedButton(
-              onPressed: () => themeManager.changeTheme(ThemeName.white),
-              child: Text('White Theme'),
-            ),
-          ],
-        ),
       ),
     );
   }

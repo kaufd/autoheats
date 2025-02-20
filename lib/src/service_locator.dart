@@ -1,6 +1,6 @@
-import 'package:autoheat/src/config/themes/theme_configurator.dart';
-import 'package:autoheat/src/config/themes/theme_cubit.dart';
-import 'package:autoheat/src/config/themes/theme_service.dart';
+import 'package:autoheat/src/ui/themes/theme_configurator.dart';
+import 'package:autoheat/src/ui/themes/theme_cubit.dart';
+import 'package:autoheat/src/ui/themes/theme_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

@@ -7,5 +7,5 @@ class ColorConstants {
 
   static const systemWhite = Color(0xFFFFFFFF);
   static const systemGrey = Color(0xFFACACAC);
-  static const systemBlack = Color(0xFF202020);
+  static const systemBlack = Color(0xFF000000);
 }

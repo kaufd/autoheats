@@ -4,11 +4,11 @@ import 'theme_service.dart';
 import 'theme_configurator.dart';
 import 'theme_name.dart';
 
-class ThemeCubit extends Cubit<ThemeName> {
+class ThemeCubit extends Cubit<ThemeType> {
   final ThemeService _themeService;
   final ThemeConfigurator _themeConfigurator;
 
-  ThemeCubit(this._themeService, this._themeConfigurator) : super(ThemeName.white);
+  ThemeCubit(this._themeService, this._themeConfigurator) : super(ThemeType.base);
 
   Future<void> initialize() async {
     final savedTheme = _themeService.getSavedTheme();
@@ -17,7 +17,7 @@ class ThemeCubit extends Cubit<ThemeName> {
     }
   }
 
-  Future<void> changeTheme(ThemeName theme) async {
+  Future<void> changeTheme(ThemeType theme) async {
     if (state == theme) return;
     emit(theme);
     await _themeService.saveTheme(theme);
@@ -25,5 +25,9 @@ class ThemeCubit extends Cubit<ThemeName> {
 
   ThemeData getCurrentTheme(BuildContext context) {
     return _themeConfigurator.configureTheme(themeName: state, context: context);
+  }
+
+  String? getCurrentThemeName() {
+    return _themeService.currentTheme;
   }
 }

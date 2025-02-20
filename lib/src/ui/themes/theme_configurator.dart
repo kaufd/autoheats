@@ -1,18 +1,18 @@
-import 'app_theme.dart';
+import '../../config/app_theme.dart';
 import 'theme_name.dart';
 import 'package:flutter/material.dart';
 
 class ThemeConfigurator {
   ThemeData configureTheme({
-    required ThemeName themeName,
+    required ThemeType themeName,
     required BuildContext context,
   }) {
     switch (themeName) {
-      case ThemeName.red:
+      case ThemeType.red:
         return AppTheme.red(context);
-      case ThemeName.white:
+      case ThemeType.white:
         return AppTheme.white(context);
-      case ThemeName.base:
+      case ThemeType.base:
         return AppTheme.base(context);
     }
   }

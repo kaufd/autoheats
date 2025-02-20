@@ -8,12 +8,14 @@ class ThemeService {
 
   ThemeService(this._prefs);
 
-  ThemeName? getSavedTheme() {
+  ThemeType? getSavedTheme() {
     final key = _prefs.getString(_themeKey);
-    return key != null ? ThemeName.fromKey(key) : null;
+    return key != null ? ThemeType.fromKey(key) : null;
   }
 
-  Future<void> saveTheme(ThemeName theme) async {
+  Future<void> saveTheme(ThemeType theme) async {
     await _prefs.setString(_themeKey, theme.key);
   }
+
+  String? get currentTheme => _prefs.getString(_themeKey);
 }
