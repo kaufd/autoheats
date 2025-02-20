@@ -1,22 +1,16 @@
-import 'package:autoheat/src/config/themes/theme_manager.dart';
+import 'package:autoheat/src/config/themes/theme_cubit.dart';
 import 'package:autoheat/src/config/themes/theme_name.dart';
 import 'package:autoheat/src/service_locator.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await setupServiceLocator();
-  await locator<ThemeManager>().initialize();
+  await locator<ThemeCubit>().initialize();
 
-  // runApp(const AutoheatApp());
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => locator<ThemeManager>(),
-      child: const AutoheatApp(),
-    ),
-  );
+  runApp(const AutoheatApp());
 }
 
 class AutoheatApp extends StatelessWidget {
@@ -24,13 +18,15 @@ class AutoheatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    print('Rebuilding MaterialApp');
-    return ChangeNotifierProvider(
-      create: (_) => locator<ThemeManager>(),
-      child: Builder(
-        builder: (context) {
+    return BlocProvider(
+      create: (_) => locator<ThemeCubit>(),
+      child: BlocBuilder<ThemeCubit, ThemeName>(
+        builder: (context, theme) {
+          final themeCubit = context.read<ThemeCubit>();
+
           return MaterialApp(
-            theme: context.watch<ThemeManager>().getCurrentTheme(context),
+            title: 'Theme Demo',
+            theme: themeCubit.getCurrentTheme(context),
             home: const HomeScreen(),
           );
         },
@@ -44,7 +40,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeManager = locator<ThemeManager>();
+    final themeManager = context.read<ThemeCubit>();
 
     return Scaffold(
       appBar: AppBar(title: Text('Multiple Themes Example')),
