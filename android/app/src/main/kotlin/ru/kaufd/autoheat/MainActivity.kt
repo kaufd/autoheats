@@ -1,4 +1,4 @@
-package com.example.autoheat
+package ru.kaufd.autoheat
 
 import io.flutter.embedding.android.FlutterActivity
 
