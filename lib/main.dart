@@ -1,27 +1,22 @@
-import 'package:autoheat/src/config/themes/theme_configurator.dart';
 import 'package:autoheat/src/config/themes/theme_manager.dart';
 import 'package:autoheat/src/config/themes/theme_name.dart';
-import 'package:autoheat/src/config/themes/theme_service.dart';
+import 'package:autoheat/src/service_locator.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final sharedPrefs = await SharedPreferences.getInstance();
-  final themeService = ThemeService(sharedPrefs);
-  final themeManager = ThemeManager(themeService, ThemeConfigurator());
+  await setupServiceLocator();
+  await locator<ThemeManager>().initialize();
 
-  await themeManager.initialize();
-
+  // runApp(const AutoheatApp());
   runApp(
     ChangeNotifierProvider(
-      create: (_) => themeManager,
+      create: (_) => locator<ThemeManager>(),
       child: const AutoheatApp(),
     ),
   );
-  // runApp(AutoheatApp());
 }
 
 class AutoheatApp extends StatelessWidget {
@@ -29,13 +24,17 @@ class AutoheatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeManager>(
-      builder: (context, themeManager, child) {
-        return MaterialApp(
-          theme: themeManager.getCurrentTheme(context),
-          home: HomeScreen(),
-        );
-      },
+    print('Rebuilding MaterialApp');
+    return ChangeNotifierProvider(
+      create: (_) => locator<ThemeManager>(),
+      child: Builder(
+        builder: (context) {
+          return MaterialApp(
+            theme: context.watch<ThemeManager>().getCurrentTheme(context),
+            home: const HomeScreen(),
+          );
+        },
+      ),
     );
   }
 }
@@ -45,7 +44,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final themeManager = Provider.of<ThemeManager>(context);
+    final themeManager = locator<ThemeManager>();
 
     return Scaffold(
       appBar: AppBar(title: Text('Multiple Themes Example')),

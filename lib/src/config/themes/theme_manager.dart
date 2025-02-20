@@ -34,6 +34,7 @@ class ThemeManager extends ChangeNotifier {
     _currentTheme = themeName;
     await _themeService.saveTheme(themeName);
     notifyListeners();
+    print('Theme changed to $_currentTheme');
   }
 
   ThemeName get currentThemeName => _currentTheme;
