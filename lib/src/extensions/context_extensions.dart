@@ -1,5 +1,5 @@
-import 'package:autoheat/src/config/themes/text_styles.dart';
-import 'package:autoheat/src/config/themes/theme_colors.dart';
+import 'package:autoheat/src/config/text_styles.dart';
+import 'package:autoheat/src/config/theme_colors.dart';
 import 'package:flutter/material.dart';
 
 extension BuildContextExtension on BuildContext {

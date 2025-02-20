@@ -8,22 +8,32 @@ class AppTextStyle {
   AppTextStyle(this._context);
 
   TextStyle get heading1 => TextStyle(
-        fontSize: 46,
-        decoration: TextDecoration.none,
-        fontFamily: 'SourceSans3',
+        fontSize: 24,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w700,
+        color: _context.themeColors.textBody,
+      );
+
+  TextStyle get textnav => TextStyle(
+        fontSize: 18,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w400,
+        letterSpacing: 0,
+        color: _context.themeColors.textButtonText,
+      );
+
+  TextStyle get textnavActive => TextStyle(
+        fontSize: 18,
         fontStyle: FontStyle.normal,
         fontWeight: FontWeight.w700,
         letterSpacing: 0,
-        color: _context.themeColors.textBody,
+        color: _context.themeColors.textButtonText,
       );
 
   TextStyle get paragraph1 => TextStyle(
         fontSize: 16,
-        decoration: TextDecoration.none,
-        fontFamily: 'SourceSans3',
         fontStyle: FontStyle.normal,
         fontWeight: FontWeight.w400,
-        letterSpacing: 0,
         color: _context.themeColors.textBody,
       );
 }
