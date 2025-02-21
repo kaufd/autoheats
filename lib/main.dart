@@ -1,3 +1,4 @@
+// import 'package:android_automotive_plugin/android_automotive_plugin.dart';
 import 'package:autoheat/src/ui/themes/theme_cubit.dart';
 import 'package:autoheat/src/ui/themes/theme_name.dart';
 import 'package:autoheat/src/service_locator.dart';
@@ -10,6 +11,12 @@ void main() async {
 
   await setupServiceLocator();
   await locator<ThemeCubit>().initialize();
+
+  // final AndroidAutomotivePlugin _androidAutomotivePlugin = AndroidAutomotivePlugin();
+  // print("init plugin");
+
+  // await _androidAutomotivePlugin.connect();
+  // print("connected");
 
   runApp(const AutoheatApp());
 }
