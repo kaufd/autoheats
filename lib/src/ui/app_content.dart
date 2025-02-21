@@ -4,6 +4,7 @@ import 'package:autoheat/src/ui/screens/settings/settings_screen.dart';
 import 'package:autoheat/src/ui/themes/theme_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:provider/provider.dart';
 
 class AppContent extends StatefulWidget {
   const AppContent({super.key});
@@ -51,13 +52,21 @@ class AppContentState extends State<AppContent> with SingleTickerProviderStateMi
       appBar: AppBar(
         title: Row(
           children: [
-            _buildTabButton('Подогрев сидений', 0, _selectTab),
+            Padding(
+              padding: const EdgeInsets.only(left: 32),
+              child: Text(
+                'Подогрев сидений',
+                style: context.textStyle.textNavActive
+                    .copyWith(color: context.themeColors.textButtonPrimary),
+              ),
+            ),
             Container(
               margin: EdgeInsets.symmetric(horizontal: 24),
               height: 28,
               width: 1,
               color: Colors.white,
             ),
+            _buildTabButton('Управление', 0, _selectTab),
             _buildTabButton('Настройки', 1, _selectTab),
             Expanded(child: SizedBox.shrink()),
           ],
@@ -71,12 +80,15 @@ class AppContentState extends State<AppContent> with SingleTickerProviderStateMi
               fit: BoxFit.cover,
             ),
           ),
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              HeatScreen(),
-              SettingsScreen(),
-            ],
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(32, 46, 32, 32),
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                HeatScreen(),
+                SettingsScreen(),
+              ],
+            ),
           ),
         ),
       ),
@@ -89,12 +101,13 @@ class AppContentState extends State<AppContent> with SingleTickerProviderStateMi
     return TextButton(
       style: ButtonStyle(
         backgroundColor: WidgetStatePropertyAll(
-            isActiveTab ? context.themeColors.backgroundAccent : Colors.transparent),
+          isActiveTab ? context.themeColors.backgroundButtonPrimary : Colors.transparent,
+        ),
       ),
       onPressed: () => selectTab(index),
       child: Text(
         text,
-        style: isActiveTab ? context.textStyle.textnavActive : context.textStyle.textnav,
+        style: isActiveTab ? context.textStyle.textNavActive : context.textStyle.textNav,
       ),
     );
   }

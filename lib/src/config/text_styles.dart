@@ -8,30 +8,40 @@ class AppTextStyle {
   AppTextStyle(this._context);
 
   TextStyle get heading1 => TextStyle(
-        fontSize: 24,
+        fontSize: 28,
         fontStyle: FontStyle.normal,
         fontWeight: FontWeight.w700,
-        color: _context.themeColors.textBody,
       );
 
-  TextStyle get textnav => TextStyle(
-        fontSize: 18,
+  TextStyle get textNav => TextStyle(
+        fontSize: 21,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w500,
+        color: _context.themeColors.textButtonPrimary,
+      );
+
+  TextStyle get textNavActive => TextStyle(
+        fontSize: 21,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w700,
+        color: _context.themeColors.textButtonSelected,
+      );
+
+  TextStyle get textSegmentedButton => TextStyle(
+        fontSize: 21,
         fontStyle: FontStyle.normal,
         fontWeight: FontWeight.w400,
-        letterSpacing: 0,
-        color: _context.themeColors.textButtonText,
-      );
-
-  TextStyle get textnavActive => TextStyle(
-        fontSize: 18,
-        fontStyle: FontStyle.normal,
-        fontWeight: FontWeight.w700,
-        letterSpacing: 0,
-        color: _context.themeColors.textButtonText,
       );
 
   TextStyle get paragraph1 => TextStyle(
         fontSize: 16,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w400,
+        color: _context.themeColors.textBody,
+      );
+
+  TextStyle get textSettings => TextStyle(
+        fontSize: 24,
         fontStyle: FontStyle.normal,
         fontWeight: FontWeight.w400,
         color: _context.themeColors.textBody,

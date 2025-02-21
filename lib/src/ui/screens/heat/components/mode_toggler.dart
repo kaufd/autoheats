@@ -12,33 +12,38 @@ class _ModeTogglerState extends State<ModeToggler> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(
-              value: 'off',
-              label: Text('Выкл.'),
-              icon: Icon(Icons.not_interested),
-            ),
-            ButtonSegment(
-              value: 'manual',
-              label: Text('Вручную'),
-              icon: Icon(Icons.touch_app),
-            ),
-            ButtonSegment(
-              value: 'auto',
-              label: Text('Авто'),
-              icon: Icon(Icons.hdr_auto),
+        const SizedBox(height: 20),
+        Row(
+          children: [
+            SegmentedButton<String>(
+              segments: const [
+                ButtonSegment(
+                  value: 'off',
+                  label: Text('Выкл.'),
+                  icon: Icon(Icons.not_interested),
+                ),
+                ButtonSegment(
+                  value: 'manual',
+                  label: Text('Вручную'),
+                  icon: Icon(Icons.touch_app),
+                ),
+                ButtonSegment(
+                  value: 'auto',
+                  label: Text('Авто'),
+                  icon: Icon(Icons.hdr_auto),
+                ),
+              ],
+              selected: {selected},
+              onSelectionChanged: (newSelection) {
+                setState(() {
+                  selected = newSelection.first;
+                });
+              },
+              showSelectedIcon: false,
             ),
           ],
-          selected: {selected},
-          onSelectionChanged: (newSelection) {
-            setState(() {
-              selected = newSelection.first;
-            });
-          },
-          showSelectedIcon: false,
         ),
       ],
     );

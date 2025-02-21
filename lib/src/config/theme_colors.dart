@@ -2,47 +2,52 @@ import 'package:flutter/material.dart';
 import 'color_constants.dart';
 
 class AppThemeColors extends ThemeExtension<AppThemeColors> {
-  final Color backgroundDefault;
-  final Color backgroundAccent;
-  final Color textButtonText;
-  final Color textButtonDisabled;
+  final Color primary;
+  final Color backgroundButtonPrimary;
+  final Color backgroundButtonInactive;
+  final Color textButtonPrimary;
+  final Color textButtonSelected;
   final Color textBody;
   final Color tabbarDefault;
 
   AppThemeColors({
-    required this.backgroundDefault,
-    required this.backgroundAccent,
-    required this.textButtonText,
-    required this.textButtonDisabled,
+    required this.primary,
+    required this.backgroundButtonPrimary,
+    required this.backgroundButtonInactive,
+    required this.textButtonPrimary,
+    required this.textButtonSelected,
     required this.textBody,
     required this.tabbarDefault,
   });
 
   static AppThemeColors baseThemeColors = AppThemeColors(
-    backgroundDefault: ColorConstants.systemBlack,
-    backgroundAccent: ColorConstants.accentGreen,
-    textButtonText: ColorConstants.systemWhite,
-    textButtonDisabled: ColorConstants.systemGrey,
-    textBody: ColorConstants.systemBlack,
-    tabbarDefault: ColorConstants.systemBlack,
-  );
-
-  static AppThemeColors whiteThemeColors = AppThemeColors(
-    backgroundDefault: ColorConstants.systemBlack,
-    backgroundAccent: ColorConstants.accentWhite,
-    textButtonText: ColorConstants.systemBlack,
-    textButtonDisabled: ColorConstants.systemGrey,
-    textBody: ColorConstants.systemBlack,
+    primary: ColorConstants.accentGreen,
+    backgroundButtonPrimary: ColorConstants.accentGreen,
+    backgroundButtonInactive: ColorConstants.systemGrey,
+    textButtonPrimary: ColorConstants.systemWhite,
+    textButtonSelected: ColorConstants.systemWhite,
+    textBody: ColorConstants.systemWhite,
     tabbarDefault: ColorConstants.systemBlack,
   );
 
   static AppThemeColors redThemeColors = AppThemeColors(
-    backgroundDefault: ColorConstants.systemBlack,
-    backgroundAccent: ColorConstants.accentRed,
-    textButtonText: ColorConstants.systemWhite,
-    textButtonDisabled: ColorConstants.systemGrey,
-    textBody: ColorConstants.systemBlack,
+    primary: ColorConstants.accentRed,
+    backgroundButtonPrimary: ColorConstants.accentRed,
+    backgroundButtonInactive: ColorConstants.systemGrey,
+    textButtonPrimary: ColorConstants.systemWhite,
+    textButtonSelected: ColorConstants.systemWhite,
+    textBody: ColorConstants.systemWhite,
     tabbarDefault: ColorConstants.systemBlack,
+  );
+
+  static AppThemeColors whiteThemeColors = AppThemeColors(
+    primary: ColorConstants.accentWhite,
+    backgroundButtonPrimary: ColorConstants.accentWhite,
+    backgroundButtonInactive: ColorConstants.systemGrey,
+    textButtonPrimary: ColorConstants.systemWhite,
+    textButtonSelected: ColorConstants.systemBlack,
+    textBody: ColorConstants.systemWhite,
+    tabbarDefault: ColorConstants.systemWhite,
   );
 
   @override
