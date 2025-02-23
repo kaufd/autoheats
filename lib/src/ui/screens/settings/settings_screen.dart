@@ -1,3 +1,5 @@
+import 'package:autoheat/src/cubit/mode_cubit.dart';
+import 'package:autoheat/src/models/mode.dart';
 import 'package:autoheat/src/ui/themes/theme_cubit.dart';
 import 'package:autoheat/src/ui/themes/theme_name.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
@@ -10,7 +12,9 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ThemeCubit themeManager = context.read<ThemeCubit>();
-    final String themeName = context.read<ThemeCubit>().state.key;
+    final String themeName = themeManager.state.key;
+    // final String userName = context.read<ModeCubit>().state.userType.name;
+    // final String mode = context.read<ModeCubit>().state.heatMode.name;
 
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,

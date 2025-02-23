@@ -15,6 +15,7 @@ dependencies:
   flutter_bloc: ^9.0.0
   android_automotive_plugin:
     path: packages/android_automotive_plugin
+  realm: ^20.0.1
 
 dev_dependencies:
   flutter_test:

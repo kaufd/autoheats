@@ -1,4 +1,5 @@
 // import 'package:android_automotive_plugin/android_automotive_plugin.dart';
+import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/ui/themes/theme_cubit.dart';
 import 'package:autoheat/src/ui/themes/theme_name.dart';
 import 'package:autoheat/src/service_locator.dart';
@@ -26,8 +27,15 @@ class AutoheatApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => locator<ThemeCubit>(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<ThemeCubit>(
+          create: (context) => locator<ThemeCubit>(),
+        ),
+        BlocProvider<ModeCubit>(
+          create: (context) => locator<ModeCubit>(),
+        ),
+      ],
       child: BlocBuilder<ThemeCubit, ThemeType>(
         builder: (context, theme) {
           final themeCubit = context.read<ThemeCubit>();
