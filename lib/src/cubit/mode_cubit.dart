@@ -1,26 +1,29 @@
 import 'package:autoheat/src/models/mode.dart';
+import 'package:autoheat/src/repository/mode/repository.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:realm/realm.dart';
 
 import 'mode_state_cubit.dart';
 
 class ModeCubit extends Cubit<ModesState> {
-  final Realm realm;
-  late List<Mode> modeList;
+  final ModeRepository _modeRepository;
 
-  ModeCubit(this.realm)
+  ModeCubit(this._modeRepository)
       : super(ModesState(states: [
           ModeState(userType: UserType.driver, heatMode: HeatMode.off),
           ModeState(userType: UserType.passenger, heatMode: HeatMode.off),
         ])) {
-    modeList = realm.all<Mode>().toList();
+    _initialize();
+  }
 
-    if (modeList.isEmpty) {
-      _createDefaultModes();
+  void _initialize() async {
+    final modes = await _modeRepository.getAllModes();
+
+    if (modes.isEmpty) {
+      _modeRepository.createDefaultModes();
     }
 
     emit(ModesState(
-        states: modeList
+        states: modes
             .map((mode) => ModeState(
                   userType: mode.user,
                   heatMode: mode.mode,
@@ -28,46 +31,18 @@ class ModeCubit extends Cubit<ModesState> {
             .toList()));
   }
 
-  void _createDefaultModes() {
-    realm.write(() {
-      modeList = [
-        realm.add(Mode(
-          UserType.driver.name,
-          HeatMode.off.name,
-        )),
-        realm.add(Mode(
-          UserType.passenger.name,
-          HeatMode.off.name,
-        )),
-      ];
-    });
+  String getModeByUser(UserType user) {
+    return state.states.firstWhere((mode) => mode.userType == user).heatMode.name;
   }
 
-  void setMode(UserType userType, HeatMode newMode) {
-    final modeToUpdate = modeList.firstWhere(
-      (mode) => mode.user == userType,
-      orElse: () => throw Exception('Mode with userType $userType not found'),
-    );
-
-    realm.write(() {
-      modeToUpdate.mode = newMode;
-    });
+  void setMode(UserType userType, String newMode) async {
+    final HeatMode heatMode = HeatModeExtension.fromString(newMode);
+    await _modeRepository.setMode(userType, heatMode);
 
     final updatedStates = state.states.toList();
-    final index = modeList.indexOf(modeToUpdate);
-    updatedStates[index] = ModeState(userType: userType, heatMode: newMode);
+    final index = updatedStates.indexWhere((state) => state.userType == userType);
+    updatedStates[index] = ModeState(userType: userType, heatMode: heatMode);
 
     emit(ModesState(states: updatedStates));
   }
-
-  // void setMode(int index, HeatMode newMode, UserType userType) {
-  //   realm.write(() {
-  //     modeList[index] = Mode(userType.name, newMode.name);
-  //   });
-
-  //   final updatedStates = state.states.toList();
-  //   updatedStates[index] = ModeState(userType: userType, heatMode: newMode);
-
-  //   emit(ModesState(states: updatedStates));
-  // }
 }

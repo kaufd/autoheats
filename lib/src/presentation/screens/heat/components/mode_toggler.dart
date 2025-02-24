@@ -12,15 +12,10 @@ class ModeToggler extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ModeCubit state = context.watch<ModeCubit>();
-    final String selected = state.modeList.firstWhere((mode) => mode.user == user).modeName;
+    final String selected = state.getModeByUser(user);
 
     changeMode(Set<String> newSelection) {
-      final HeatMode heatMode = HeatMode.values.firstWhere(
-        (mode) => mode.name == newSelection.first,
-        orElse: () => HeatMode.off,
-      );
-
-      state.setMode(user, heatMode);
+      state.setMode(user, newSelection.first);
     }
 
     return Column(

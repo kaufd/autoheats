@@ -1,6 +1,6 @@
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/models/mode.dart';
-import 'package:autoheat/src/ui/screens/heat/components/mode_toggler.dart';
+import 'package:autoheat/src/presentation/screens/heat/components/mode_toggler.dart';
 import 'package:flutter/material.dart';
 
 import 'components/seat.dart';

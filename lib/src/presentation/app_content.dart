@@ -1,7 +1,7 @@
 import 'package:autoheat/src/extensions/context_extensions.dart';
-import 'package:autoheat/src/ui/screens/heat/heat_screen.dart';
-import 'package:autoheat/src/ui/screens/settings/settings_screen.dart';
-import 'package:autoheat/src/ui/themes/theme_cubit.dart';
+import 'package:autoheat/src/presentation/screens/heat/heat_screen.dart';
+import 'package:autoheat/src/presentation/screens/settings/settings_screen.dart';
+import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:provider/provider.dart';
