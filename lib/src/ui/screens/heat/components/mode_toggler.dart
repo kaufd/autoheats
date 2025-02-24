@@ -1,49 +1,63 @@
+import 'package:autoheat/src/cubit/mode_cubit.dart';
+import 'package:autoheat/src/extensions/context_extensions.dart';
+import 'package:autoheat/src/models/mode.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-class ModeToggler extends StatefulWidget {
-  const ModeToggler({super.key});
+class ModeToggler extends StatelessWidget {
+  final UserType user;
 
-  @override
-  State<ModeToggler> createState() => _ModeTogglerState();
-}
-
-class _ModeTogglerState extends State<ModeToggler> {
-  String selected = 'auto';
+  const ModeToggler({super.key, required this.user});
 
   @override
   Widget build(BuildContext context) {
+    final ModeCubit state = context.watch<ModeCubit>();
+    final String selected = state.modeList.firstWhere((mode) => mode.user == user).modeName;
+
+    changeMode(Set<String> newSelection) {
+      final HeatMode heatMode = HeatMode.values.firstWhere(
+        (mode) => mode.name == newSelection.first,
+        orElse: () => HeatMode.off,
+      );
+
+      state.setMode(user, heatMode);
+    }
+
     return Column(
       children: [
         const SizedBox(height: 20),
         Row(
           children: [
             SegmentedButton<String>(
-              segments: const [
+              segments: [
                 ButtonSegment(
-                  value: 'off',
+                  value: HeatMode.off.name,
                   label: Text('Выкл.'),
                   icon: Icon(Icons.not_interested),
                 ),
                 ButtonSegment(
-                  value: 'manual',
+                  value: HeatMode.manual.name,
                   label: Text('Вручную'),
                   icon: Icon(Icons.touch_app),
                 ),
                 ButtonSegment(
-                  value: 'auto',
+                  value: HeatMode.auto.name,
                   label: Text('Авто'),
                   icon: Icon(Icons.hdr_auto),
                 ),
               ],
               selected: {selected},
-              onSelectionChanged: (newSelection) {
-                setState(() {
-                  selected = newSelection.first;
-                });
-              },
+              onSelectionChanged: changeMode,
               showSelectedIcon: false,
             ),
           ],
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 20.0),
+          child: Text(
+            'Current mode for ${user.name} is $selected',
+            style: context.textStyle.paragraph1.copyWith(color: Colors.white),
+          ),
         ),
       ],
     );

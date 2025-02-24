@@ -1,4 +1,5 @@
 import 'package:autoheat/src/extensions/context_extensions.dart';
+import 'package:autoheat/src/models/mode.dart';
 import 'package:autoheat/src/ui/screens/heat/components/mode_toggler.dart';
 import 'package:flutter/material.dart';
 
@@ -20,7 +21,7 @@ class HeatScreen extends StatelessWidget {
               children: [
                 Column(
                   children: [
-                    ModeToggler(),
+                    ModeToggler(user: UserType.driver),
                   ],
                 ),
                 SeatBlock(),
@@ -40,7 +41,7 @@ class HeatScreen extends StatelessWidget {
                 SeatBlock(),
                 Column(
                   children: [
-                    ModeToggler(),
+                    ModeToggler(user: UserType.passenger),
                   ],
                 ),
               ],
