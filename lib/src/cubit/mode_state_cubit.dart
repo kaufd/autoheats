@@ -1,4 +1,4 @@
-import 'package:autoheat/src/models/mode.dart';
+import 'package:autoheat/src/app_enums.dart';
 
 class ModeState {
   final UserType userType;

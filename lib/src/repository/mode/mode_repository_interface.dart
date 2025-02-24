@@ -1,3 +1,4 @@
+import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/mode.dart';
 
 abstract interface class ModeRepositoryInterface {

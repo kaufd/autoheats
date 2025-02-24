@@ -1,6 +1,6 @@
+import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
-import 'package:autoheat/src/models/mode.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
