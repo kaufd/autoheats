@@ -11,9 +11,11 @@ class Mode extends _Mode with RealmEntity, RealmObjectBase, RealmObject {
   Mode(
     String userName,
     String modeName,
+    int heatLevel,
   ) {
     RealmObjectBase.set(this, 'userName', userName);
     RealmObjectBase.set(this, 'modeName', modeName);
+    RealmObjectBase.set(this, 'heatLevel', heatLevel);
   }
 
   Mode._();
@@ -31,6 +33,11 @@ class Mode extends _Mode with RealmEntity, RealmObjectBase, RealmObject {
   set modeName(String value) => RealmObjectBase.set(this, 'modeName', value);
 
   @override
+  int get heatLevel => RealmObjectBase.get<int>(this, 'heatLevel') as int;
+  @override
+  set heatLevel(int value) => RealmObjectBase.set(this, 'heatLevel', value);
+
+  @override
   Stream<RealmObjectChanges<Mode>> get changes =>
       RealmObjectBase.getChanges<Mode>(this);
 
@@ -45,6 +52,7 @@ class Mode extends _Mode with RealmEntity, RealmObjectBase, RealmObject {
     return <String, dynamic>{
       'userName': userName.toEJson(),
       'modeName': modeName.toEJson(),
+      'heatLevel': heatLevel.toEJson(),
     };
   }
 
@@ -55,10 +63,12 @@ class Mode extends _Mode with RealmEntity, RealmObjectBase, RealmObject {
       {
         'userName': EJsonValue userName,
         'modeName': EJsonValue modeName,
+        'heatLevel': EJsonValue heatLevel,
       } =>
         Mode(
           fromEJson(userName),
           fromEJson(modeName),
+          fromEJson(heatLevel),
         ),
       _ => raiseInvalidEJson(ejson),
     };
@@ -70,6 +80,7 @@ class Mode extends _Mode with RealmEntity, RealmObjectBase, RealmObject {
     return const SchemaObject(ObjectType.realmObject, Mode, 'Mode', [
       SchemaProperty('userName', RealmPropertyType.string),
       SchemaProperty('modeName', RealmPropertyType.string),
+      SchemaProperty('heatLevel', RealmPropertyType.int),
     ]);
   }();
 

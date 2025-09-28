@@ -5,5 +5,6 @@ abstract interface class ModeRepositoryInterface {
   Future<List<Mode>> getAllModes();
   // Future<String?> getModeByUser(String user);
   Future<void> setMode(UserType user, HeatMode mode);
+  Future<void> setHeatLevel(UserType user, int heatLevel);
   Future<void> createDefaultModes();
 }

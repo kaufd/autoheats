@@ -1,5 +1,3 @@
-// import 'package:android_automotive_plugin/android_automotive_plugin.dart';
-import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/di/app_bloc_providers.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_name.dart';

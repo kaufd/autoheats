@@ -7,6 +7,7 @@ part 'mode.realm.dart';
 class _Mode {
   late String userName;
   late String modeName;
+  late int heatLevel;
 
   UserType get user => UserType.values.firstWhere((e) => e.name == userName);
 

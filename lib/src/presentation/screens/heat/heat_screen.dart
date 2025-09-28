@@ -10,45 +10,49 @@ class HeatScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return IntrinsicWidth(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: (MediaQuery.of(context).size.width - 66) / 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                Column(
+    return Column(
+      children: [
+        IntrinsicWidth(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: (MediaQuery.of(context).size.width - 66) / 2,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    ModeToggler(user: UserType.driver),
+                    Column(
+                      children: [
+                        ModeToggler(user: UserType.driver),
+                      ],
+                    ),
+                    SeatBlock(userType: UserType.driver),
                   ],
                 ),
-                SeatBlock(),
-              ],
-            ),
-          ),
-          Container(
-            height: 400,
-            color: context.themeColors.primary.withAlpha(70),
-            width: 2,
-          ),
-          SizedBox(
-            width: (MediaQuery.of(context).size.width - 66) / 2,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                SeatBlock(),
-                Column(
+              ),
+              Container(
+                height: 400,
+                color: context.themeColors.primary.withAlpha(70),
+                width: 2,
+              ),
+              SizedBox(
+                width: (MediaQuery.of(context).size.width - 66) / 2,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    ModeToggler(user: UserType.passenger),
+                    SeatBlock(userType: UserType.passenger),
+                    Column(
+                      children: [
+                        ModeToggler(user: UserType.passenger),
+                      ],
+                    ),
                   ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

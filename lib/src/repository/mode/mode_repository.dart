@@ -15,10 +15,12 @@ class ModeRepository implements ModeRepositoryInterface {
           _realm.add(Mode(
             UserType.driver.name,
             HeatMode.off.name,
+            0,
           )),
           _realm.add(Mode(
             UserType.passenger.name,
             HeatMode.off.name,
+            0,
           )),
         ]);
   }
@@ -34,6 +36,15 @@ class ModeRepository implements ModeRepositoryInterface {
 
     _realm.write(() {
       modeToUpdate.mode = mode;
+    });
+  }
+
+  @override
+  Future setHeatLevel(UserType user, int heatLevel) async {
+    final modeToUpdate = _realm.all<Mode>().firstWhere((mode) => mode.user == user);
+
+    _realm.write(() {
+      modeToUpdate.heatLevel = heatLevel;
     });
   }
 
