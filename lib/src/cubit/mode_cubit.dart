@@ -11,8 +11,8 @@ class ModeCubit extends Cubit<ModesState> {
 
   ModeCubit(this._modeRepository)
       : super(ModesState(states: [
-          ModeState(userType: UserType.driver, heatMode: HeatMode.off, heatLevel: 0),
-          ModeState(userType: UserType.passenger, heatMode: HeatMode.off, heatLevel: 0),
+          ModeState(userType: UserType.driver, heatMode: HeatMode.manual, heatLevel: 0),
+          ModeState(userType: UserType.passenger, heatMode: HeatMode.manual, heatLevel: 0),
         ])) {
     _initialize();
   }
@@ -50,8 +50,8 @@ class ModeCubit extends Cubit<ModesState> {
     final index = updatedStates.indexWhere((state) => state.userType == userType);
     final currentState = updatedStates[index];
 
-    // При переключении в режим "off" сбрасываем уровень подогрева в 0
-    final newHeatLevel = heatMode == HeatMode.off ? 0 : currentState.heatLevel;
+    // При переключении в режим "manual" сбрасываем уровень подогрева в 0
+    final newHeatLevel = heatMode == HeatMode.manual ? 0 : currentState.heatLevel;
 
     updatedStates[index] = ModeState(
       userType: userType,
@@ -86,11 +86,18 @@ class ModeCubit extends Cubit<ModesState> {
   }
 
   void toggleHeatLevel(UserType userType) {
-    final currentLevel = getHeatLevelByUser(userType);
-    final newLevel = currentLevel == 3 ? 0 : currentLevel + 1;
+    final currentMode = state.states.firstWhere((state) => state.userType == userType).heatMode;
 
-    setMode(userType, HeatMode.manual.name);
-    setHeatLevel(userType, newLevel);
+    // Переключаем уровень только в ручном режиме
+    if (currentMode == HeatMode.manual) {
+      final currentLevel = getHeatLevelByUser(userType);
+      final newLevel = currentLevel == 3 ? 0 : currentLevel + 1;
+      setHeatLevel(userType, newLevel);
+    } else {
+      // Если не в ручном режиме, переключаем в ручной и устанавливаем уровень 1
+      setMode(userType, HeatMode.manual.name);
+      setHeatLevel(userType, 1);
+    }
   }
 
   // Управление автоматическим подогревом
@@ -127,8 +134,9 @@ class ModeCubit extends Cubit<ModesState> {
       } else if (state.heatMode == HeatMode.manual && state.heatLevel > 0) {
         // Если режим "Вручную" и есть сохраненный уровень - восстанавливаем его
         setHeatLevel(state.userType, state.heatLevel);
+      } else if (state.heatMode == HeatMode.presets) {
+        // Режим "Пресеты" - ничего не делаем, настройки управляются через PresetsScreen
       }
-      // Режим "Выкл" - ничего не делаем
     }
   }
 

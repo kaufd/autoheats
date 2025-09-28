@@ -14,12 +14,12 @@ class ModeRepository implements ModeRepositoryInterface {
     return _realm.write(() => [
           _realm.add(Mode(
             UserType.driver.name,
-            HeatMode.off.name,
+            HeatMode.manual.name,
             0,
           )),
           _realm.add(Mode(
             UserType.passenger.name,
-            HeatMode.off.name,
+            HeatMode.manual.name,
             0,
           )),
         ]);

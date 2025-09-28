@@ -1,8 +1,7 @@
-import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
-import 'package:autoheat/src/presentation/screens/heat/components/manual_settings_section.dart';
+import 'package:autoheat/src/presentation/screens/heat/presets_screen.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_name.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
@@ -189,19 +188,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Настройки ручного режима:',
+                'Настройки пресетов:',
                 style: context.textStyle.textSettings,
               ),
             ],
           ),
           const SizedBox(height: 10),
-          _buildManualSettingsSection(context),
+          _buildPresetsSection(context),
         ],
       ),
     );
   }
 
-  Widget _buildManualSettingsSection(BuildContext context) {
+  Widget _buildPresetsSection(BuildContext context) {
     return BlocBuilder<ManualSettingsCubit, ManualSettingsState>(
       builder: (context, settingsState) {
         if (settingsState.isLoading) {
@@ -232,7 +231,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
 
         return Container(
-          padding: const EdgeInsets.all(20),
           decoration: BoxDecoration(
             color: Colors.black.withValues(alpha: 0.8),
             borderRadius: BorderRadius.circular(12),
@@ -241,64 +239,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               width: 1,
             ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Настройки водителя
-                  Expanded(
-                    child: ManualSettingsSection(
-                      userType: UserType.driver,
-                      settings: settingsState.driverSettings,
-                      onAutoHeatLevelChanged: (autoHeatLevel, level) {
-                        context.read<ManualSettingsCubit>().updateAutoHeatLevel(
-                              UserType.driver,
-                              autoHeatLevel,
-                              level,
-                            );
-                      },
-                      onTemperatureThresholdChanged: (temperature) {
-                        context.read<ManualSettingsCubit>().updateTemperatureThreshold(
-                              UserType.driver,
-                              temperature,
-                            );
-                      },
-                    ),
-                  ),
-
-                  // Разделитель
-                  Container(
-                    height: 300,
-                    color: context.themeColors.primary.withValues(alpha: 0.3),
-                    width: 1,
-                    margin: const EdgeInsets.symmetric(horizontal: 20),
-                  ),
-
-                  // Настройки пассажира
-                  Expanded(
-                    child: ManualSettingsSection(
-                      userType: UserType.passenger,
-                      settings: settingsState.passengerSettings,
-                      onAutoHeatLevelChanged: (autoHeatLevel, level) {
-                        context.read<ManualSettingsCubit>().updateAutoHeatLevel(
-                              UserType.passenger,
-                              autoHeatLevel,
-                              level,
-                            );
-                      },
-                      onTemperatureThresholdChanged: (temperature) {
-                        context.read<ManualSettingsCubit>().updateTemperatureThreshold(
-                              UserType.passenger,
-                              temperature,
-                            );
-                      },
-                    ),
-                  ),
-                ],
-              ),
-            ],
+          child: PresetsScreen(
+            settingsState: settingsState,
+            onAutoHeatLevelChanged: (autoHeatLevel, level, userType) {
+              context.read<ManualSettingsCubit>().updateAutoHeatLevel(
+                    userType,
+                    autoHeatLevel,
+                    level,
+                  );
+            },
+            onTemperatureThresholdChanged: (temperature, userType) {
+              context.read<ManualSettingsCubit>().updateTemperatureThreshold(
+                    userType,
+                    temperature,
+                  );
+            },
           ),
         );
       },

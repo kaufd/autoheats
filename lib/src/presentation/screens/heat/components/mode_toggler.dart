@@ -26,14 +26,14 @@ class ModeToggler extends StatelessWidget {
             SegmentedButton<String>(
               segments: [
                 ButtonSegment(
-                  value: HeatMode.off.name,
-                  label: Text('Выкл.'),
-                  icon: Icon(Icons.not_interested),
-                ),
-                ButtonSegment(
                   value: HeatMode.manual.name,
                   label: Text('Вручную'),
                   icon: Icon(Icons.touch_app),
+                ),
+                ButtonSegment(
+                  value: HeatMode.presets.name,
+                  label: Text('Пресеты'),
+                  icon: Icon(Icons.settings),
                 ),
                 ButtonSegment(
                   value: HeatMode.auto.name,
