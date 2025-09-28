@@ -1,7 +1,11 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/constants/temperature_constants.dart';
 import 'package:equatable/equatable.dart';
+import 'package:json_annotation/json_annotation.dart';
 
+part 'manual_settings.g.dart';
+
+@JsonSerializable()
 class ManualHeatSettings extends Equatable {
   final List<AutoHeatLevel> autoHeatLevels;
   final double temperatureThreshold;
@@ -32,10 +36,15 @@ class ManualHeatSettings extends Equatable {
     );
   }
 
+  factory ManualHeatSettings.fromJson(Map<String, dynamic> json) =>
+      _$ManualHeatSettingsFromJson(json);
+  Map<String, dynamic> toJson() => _$ManualHeatSettingsToJson(this);
+
   @override
   List<Object?> get props => [autoHeatLevels, temperatureThreshold];
 }
 
+@JsonSerializable()
 class AutoHeatLevel extends Equatable {
   final int duration;
   final int level;
@@ -55,13 +64,14 @@ class AutoHeatLevel extends Equatable {
     );
   }
 
-  @override
-  List<Object?> get props => [duration, level];
+  factory AutoHeatLevel.fromJson(Map<String, dynamic> json) => _$AutoHeatLevelFromJson(json);
+  Map<String, dynamic> toJson() => _$AutoHeatLevelToJson(this);
 
   @override
-  String toString() {
-    return 'AutoHeatLevel(duration: $duration, level: $level)';
-  }
+  List<Object?> get props => [
+        duration,
+        level,
+      ];
 }
 
 class ManualSettingsState extends Equatable {

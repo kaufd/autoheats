@@ -1,8 +1,8 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
-import 'package:autoheat/src/presentation/screens/heat/components/manual_settings_section.dart';
-import 'package:autoheat/src/presentation/screens/heat/components/save_preset_dialog.dart';
+import 'package:autoheat/src/presentation/screens/settings/components/manual_settings_section.dart';
+import 'package:autoheat/src/presentation/screens/settings/components/save_preset_dialog.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:flutter/material.dart';

@@ -1,6 +1,6 @@
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
-import 'package:autoheat/src/presentation/screens/heat/components/preset_list.dart';
+import 'package:autoheat/src/presentation/screens/presets/components/preset_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 

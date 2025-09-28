@@ -1,7 +1,7 @@
 import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
-import 'package:autoheat/src/presentation/screens/heat/presets_screen.dart';
+import 'package:autoheat/src/presentation/screens/settings/components/presets_screen.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_name.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';

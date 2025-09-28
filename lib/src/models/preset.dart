@@ -1,13 +1,20 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:equatable/equatable.dart';
+import 'package:json_annotation/json_annotation.dart';
 
+part 'preset.g.dart';
+
+@JsonSerializable()
 class Preset extends Equatable {
   final String id;
   final String name;
+  @JsonKey(fromJson: _userTypeFromJson, toJson: _userTypeToJson)
   final UserType userType;
   final ManualHeatSettings settings;
+  @JsonKey(fromJson: _dateTimeFromJson, toJson: _dateTimeToJson)
   final DateTime createdAt;
+  @JsonKey(fromJson: _dateTimeNullableFromJson, toJson: _dateTimeNullableToJson)
   final DateTime? lastUsed;
 
   const Preset({
@@ -37,50 +44,8 @@ class Preset extends Equatable {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'userType': userType.name,
-      'settings': {
-        'autoHeatLevels': settings.autoHeatLevels
-            .map((level) => {
-                  'duration': level.duration,
-                  'level': level.level,
-                })
-            .toList(),
-        'temperatureThreshold': settings.temperatureThreshold,
-      },
-      'createdAt': createdAt.toIso8601String(),
-      'lastUsed': lastUsed?.toIso8601String(),
-    };
-  }
-
-  factory Preset.fromJson(Map<String, dynamic> json) {
-    return Preset(
-      id: json['id'],
-      name: json['name'],
-      userType: UserType.values.firstWhere(
-        (type) => type.name == json['userType'],
-        orElse: () => UserType.driver,
-      ),
-      settings: _settingsFromJson(json['settings']),
-      createdAt: DateTime.parse(json['createdAt']),
-      lastUsed: json['lastUsed'] != null ? DateTime.parse(json['lastUsed']) : null,
-    );
-  }
-
-  static ManualHeatSettings _settingsFromJson(Map<String, dynamic> json) {
-    return ManualHeatSettings(
-      autoHeatLevels: (json['autoHeatLevels'] as List)
-          .map((levelJson) => AutoHeatLevel(
-                duration: levelJson['duration'],
-                level: levelJson['level'],
-              ))
-          .toList(),
-      temperatureThreshold: (json['temperatureThreshold'] as num).toDouble(),
-    );
-  }
+  factory Preset.fromJson(Map<String, dynamic> json) => _$PresetFromJson(json);
+  Map<String, dynamic> toJson() => _$PresetToJson(this);
 
   @override
   List<Object?> get props => [
@@ -91,4 +56,31 @@ class Preset extends Equatable {
         createdAt,
         lastUsed,
       ];
+}
+
+UserType _userTypeFromJson(String json) {
+  return UserType.values.firstWhere(
+    (type) => type.name == json,
+    orElse: () => UserType.driver,
+  );
+}
+
+String _userTypeToJson(UserType userType) {
+  return userType.name;
+}
+
+DateTime _dateTimeFromJson(String json) {
+  return DateTime.parse(json);
+}
+
+String _dateTimeToJson(DateTime dateTime) {
+  return dateTime.toIso8601String();
+}
+
+DateTime? _dateTimeNullableFromJson(String? json) {
+  return json != null ? DateTime.parse(json) : null;
+}
+
+String? _dateTimeNullableToJson(DateTime? dateTime) {
+  return dateTime?.toIso8601String();
 }

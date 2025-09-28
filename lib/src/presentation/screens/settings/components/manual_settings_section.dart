@@ -1,7 +1,7 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
-import 'package:autoheat/src/presentation/screens/heat/components/auto_heat_level_slider.dart';
-import 'package:autoheat/src/presentation/screens/heat/components/temperature_threshold_slider.dart';
+import 'package:autoheat/src/presentation/screens/settings/components/auto_heat_level_slider.dart';
+import 'package:autoheat/src/presentation/screens/settings/components/temperature_threshold_slider.dart';
 import 'package:flutter/material.dart';
 
 class ManualSettingsSection extends StatelessWidget {

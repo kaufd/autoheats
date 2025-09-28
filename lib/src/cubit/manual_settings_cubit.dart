@@ -119,7 +119,6 @@ class ManualSettingsCubit extends Cubit<ManualSettingsState> {
         passengerSettings: passengerSettings,
       ));
 
-      // Сохраняем оба набора настроек
       await _settingsService.saveSettings(driverSettings, UserType.driver);
       await _settingsService.saveSettings(passengerSettings, UserType.passenger);
     } catch (e) {
