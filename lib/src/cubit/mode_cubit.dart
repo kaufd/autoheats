@@ -1,15 +1,15 @@
 import 'package:autoheat/src/app_enums.dart';
-import 'package:autoheat/src/repository/mode/repository.dart';
+import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'mode_state_cubit.dart';
 
 class ModeCubit extends Cubit<ModesState> {
-  final ModeRepository _modeRepository;
+  final ModeService _modeService;
   final AutoHeatService _autoHeatService = AutoHeatService();
 
-  ModeCubit(this._modeRepository)
+  ModeCubit(this._modeService)
       : super(ModesState(states: [
           ModeState(userType: UserType.driver, heatMode: HeatMode.manual, heatLevel: 0),
           ModeState(userType: UserType.passenger, heatMode: HeatMode.manual, heatLevel: 0),
@@ -18,17 +18,17 @@ class ModeCubit extends Cubit<ModesState> {
   }
 
   void _initialize() async {
-    final modes = await _modeRepository.getAllModes();
+    // Инициализируем значения по умолчанию если нужно
+    await _modeService.initializeDefaults();
 
-    if (modes.isEmpty) {
-      _modeRepository.createDefaultModes();
-    }
+    // Получаем все режимы
+    final modes = _modeService.getAllModes();
 
-    final states = modes
-        .map((mode) => ModeState(
-              userType: mode.user,
-              heatMode: mode.mode,
-              heatLevel: mode.heatLevel,
+    final states = modes.entries
+        .map((entry) => ModeState(
+              userType: entry.key,
+              heatMode: entry.value['mode'] as HeatMode,
+              heatLevel: entry.value['heatLevel'] as int,
             ))
         .toList();
 
@@ -44,7 +44,7 @@ class ModeCubit extends Cubit<ModesState> {
 
   void setMode(UserType userType, String newMode) async {
     final HeatMode heatMode = HeatModeExtension.fromString(newMode);
-    await _modeRepository.setMode(userType, heatMode);
+    await _modeService.setMode(userType, heatMode);
 
     final updatedStates = state.states.toList();
     final index = updatedStates.indexWhere((state) => state.userType == userType);
@@ -70,8 +70,8 @@ class ModeCubit extends Cubit<ModesState> {
   }
 
   void setHeatLevel(UserType userType, int level) async {
-    // Сохраняем уровень подогрева в базу данных
-    await _modeRepository.setHeatLevel(userType, level);
+    // Сохраняем уровень подогрева в SharedPreferences
+    await _modeService.setHeatLevel(userType, level);
 
     final updatedStates = state.states.toList();
     final index = updatedStates.indexWhere((state) => state.userType == userType);

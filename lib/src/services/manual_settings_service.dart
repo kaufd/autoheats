@@ -27,15 +27,14 @@ class ManualSettingsService {
     return ManualHeatSettings.defaultFor(userType);
   }
 
-  Future<void> saveSettings(ManualHeatSettings settings) async {
-    final key = settings.userType == UserType.driver ? _driverSettingsKey : _passengerSettingsKey;
+  Future<void> saveSettings(ManualHeatSettings settings, UserType userType) async {
+    final key = userType == UserType.driver ? _driverSettingsKey : _passengerSettingsKey;
     final settingsJson = json.encode(_settingsToJson(settings));
     await _prefs.setString(key, settingsJson);
   }
 
   Map<String, dynamic> _settingsToJson(ManualHeatSettings settings) {
     return {
-      'userType': settings.userType.name,
       'autoHeatLevels': settings.autoHeatLevels
           .map((level) => {
                 'duration': level.duration,
@@ -48,10 +47,6 @@ class ManualSettingsService {
 
   ManualHeatSettings _settingsFromJson(Map<String, dynamic> json) {
     return ManualHeatSettings(
-      userType: UserType.values.firstWhere(
-        (type) => type.name == json['userType'],
-        orElse: () => UserType.driver,
-      ),
       autoHeatLevels: (json['autoHeatLevels'] as List)
           .map((levelJson) => AutoHeatLevel(
                 duration: levelJson['duration'],

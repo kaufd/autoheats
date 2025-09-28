@@ -1,4 +1,5 @@
 import 'package:autoheat/src/extensions/context_extensions.dart';
+import 'package:autoheat/src/constants/temperature_constants.dart';
 import 'package:flutter/material.dart';
 
 class TemperatureThresholdSlider extends StatelessWidget {
@@ -11,8 +12,8 @@ class TemperatureThresholdSlider extends StatelessWidget {
     required this.onTemperatureChanged,
   });
 
-  static const List<double> temperatureValues = [-5, 0, 5, 7, 10];
-  static const List<String> temperatureLabels = ['-5°C', '0°C', '5°C', '7°C', '10°C'];
+  static const List<double> temperatureValues = TemperatureConstants.sliderValues;
+  static const List<String> temperatureLabels = TemperatureConstants.sliderLabels;
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +21,7 @@ class TemperatureThresholdSlider extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Включать когда температура в салоне ниже ${temperatureThreshold.toInt()}°C',
+          'Включать когда температура в салоне ниже ${temperatureThreshold.round()}°C',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w500,
@@ -49,10 +50,16 @@ class TemperatureThresholdSlider extends StatelessWidget {
         ),
         child: Slider(
           value: temperatureThreshold,
-          min: -5,
-          max: 10,
-          divisions: 4,
-          onChanged: onTemperatureChanged,
+          min: TemperatureConstants.sliderMin,
+          max: TemperatureConstants.sliderMax,
+          divisions: TemperatureConstants.sliderDivisions,
+          onChanged: (value) {
+            // Округляем до ближайшего значения из предустановленных
+            final nearestValue = TemperatureConstants.sliderValues.reduce(
+              (a, b) => (value - a).abs() < (value - b).abs() ? a : b,
+            );
+            onTemperatureChanged(nearestValue);
+          },
         ),
       ),
     );

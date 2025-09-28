@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/temperature.dart';
+import 'package:autoheat/src/constants/temperature_constants.dart';
 
 class AutoHeatService {
   static final AutoHeatService _instance = AutoHeatService._internal();
@@ -45,7 +46,7 @@ class AutoHeatService {
 
     _heatTimers[userType]?.cancel();
 
-    final sequence = AutoHeatConfig.getHeatSequence(_currentTemperature!.celsius);
+    final sequence = TemperatureConstants.getHeatSequence(_currentTemperature!.celsius);
     if (sequence == null) {
       callback(0);
       return;
@@ -71,13 +72,13 @@ class AutoHeatService {
 
       if (nextLevel == 2) {
         callback(2);
-        final sequence = AutoHeatConfig.getHeatSequence(_currentTemperature!.celsius);
+        final sequence = TemperatureConstants.getHeatSequence(_currentTemperature!.celsius);
         if (sequence != null) {
           _scheduleNextLevel(userType, 1, sequence.level2Duration);
         }
       } else if (nextLevel == 1) {
         callback(1);
-        final sequence = AutoHeatConfig.getHeatSequence(_currentTemperature!.celsius);
+        final sequence = TemperatureConstants.getHeatSequence(_currentTemperature!.celsius);
         if (sequence != null) {
           _scheduleNextLevel(userType, 0, sequence.level1Duration);
         }

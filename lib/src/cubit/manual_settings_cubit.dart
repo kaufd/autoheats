@@ -63,6 +63,7 @@ class ManualSettingsCubit extends Cubit<ManualSettingsState> {
 
       await _settingsService.saveSettings(
         userType == UserType.driver ? state.driverSettings : state.passengerSettings,
+        userType,
       );
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
@@ -79,13 +80,13 @@ class ManualSettingsCubit extends Cubit<ManualSettingsState> {
           temperatureThreshold: temperature,
         );
         emit(state.copyWith(driverSettings: updatedSettings));
-        await _settingsService.saveSettings(updatedSettings);
+        await _settingsService.saveSettings(updatedSettings, UserType.driver);
       } else {
         final updatedSettings = state.passengerSettings.copyWith(
           temperatureThreshold: temperature,
         );
         emit(state.copyWith(passengerSettings: updatedSettings));
-        await _settingsService.saveSettings(updatedSettings);
+        await _settingsService.saveSettings(updatedSettings, UserType.passenger);
       }
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
@@ -102,7 +103,25 @@ class ManualSettingsCubit extends Cubit<ManualSettingsState> {
         emit(state.copyWith(passengerSettings: defaultSettings));
       }
 
-      await _settingsService.saveSettings(defaultSettings);
+      await _settingsService.saveSettings(defaultSettings, userType);
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
+  }
+
+  Future<void> applyPresetSettings(
+    ManualHeatSettings driverSettings,
+    ManualHeatSettings passengerSettings,
+  ) async {
+    try {
+      emit(state.copyWith(
+        driverSettings: driverSettings,
+        passengerSettings: passengerSettings,
+      ));
+
+      // Сохраняем оба набора настроек
+      await _settingsService.saveSettings(driverSettings, UserType.driver);
+      await _settingsService.saveSettings(passengerSettings, UserType.passenger);
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
     }
