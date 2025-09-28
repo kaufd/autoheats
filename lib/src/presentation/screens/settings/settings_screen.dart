@@ -1,3 +1,4 @@
+import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_name.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
@@ -125,9 +126,43 @@ class SettingsScreen extends StatelessWidget {
               'Показывать температуру в салоне: ',
               style: context.textStyle.textSettings,
             ),
-            Switch(
-              value: true,
-              onChanged: (val) {},
+            BlocBuilder<SettingsCubit, SettingsState>(
+              builder: (context, settingsState) {
+                return GestureDetector(
+                  onTap: () async {
+                    await context
+                        .read<SettingsCubit>()
+                        .setCabinTemperatureVisibility(!settingsState.showCabinTemperature);
+                  },
+                  child: Container(
+                    width: 60,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: settingsState.showCabinTemperature
+                          ? context.themeColors.primary.withAlpha(100)
+                          : context.themeColors.backgroundButtonInactive,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: AnimatedAlign(
+                      duration: const Duration(milliseconds: 200),
+                      alignment: settingsState.showCabinTemperature
+                          ? Alignment.centerRight
+                          : Alignment.centerLeft,
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        margin: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: settingsState.showCabinTemperature
+                              ? context.themeColors.primary
+                              : context.themeColors.backgroundButtonPrimary,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           ],
         )

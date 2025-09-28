@@ -1,9 +1,11 @@
 import 'package:autoheat/src/cubit/mode_cubit.dart';
+import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/models/mode.dart';
 import 'package:autoheat/src/presentation/themes/theme_configurator.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_service.dart';
 import 'package:autoheat/src/repository/mode/repository.dart';
+import 'package:autoheat/src/services/settings_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:realm/realm.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +20,8 @@ Future<void> setupServiceLocator() async {
 
   locator.registerSingleton<ThemeService>(ThemeService(locator<SharedPreferences>()));
 
+  locator.registerSingleton<SettingsService>(SettingsService(locator<SharedPreferences>()));
+
   locator.registerSingleton<ThemeConfigurator>(ThemeConfigurator());
 
   locator.registerSingleton<ThemeCubit>(
@@ -27,4 +31,6 @@ Future<void> setupServiceLocator() async {
   locator.registerSingleton<ModeRepository>(ModeRepository(locator<Realm>()));
 
   locator.registerSingleton<ModeCubit>(ModeCubit(locator<ModeRepository>()));
+
+  locator.registerSingleton<SettingsCubit>(SettingsCubit(locator<SettingsService>()));
 }

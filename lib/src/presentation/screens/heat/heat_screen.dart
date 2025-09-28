@@ -4,6 +4,7 @@ import 'package:autoheat/src/presentation/screens/heat/components/mode_toggler.d
 import 'package:flutter/material.dart';
 
 import 'components/seat.dart';
+import 'components/cabin_temperature_display.dart';
 
 class HeatScreen extends StatelessWidget {
   const HeatScreen({super.key});
@@ -12,6 +13,7 @@ class HeatScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        const CabinTemperatureDisplay(),
         IntrinsicWidth(
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -20,6 +22,7 @@ class HeatScreen extends StatelessWidget {
                 width: (MediaQuery.of(context).size.width - 66) / 2,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Column(
                       children: [
@@ -39,6 +42,7 @@ class HeatScreen extends StatelessWidget {
                 width: (MediaQuery.of(context).size.width - 66) / 2,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     SeatBlock(userType: UserType.passenger),
                     Column(
