@@ -1,6 +1,5 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
-import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -18,41 +17,29 @@ class ModeToggler extends StatelessWidget {
       state.setMode(user, newSelection.first);
     }
 
-    return Column(
+    return Row(
       children: [
-        const SizedBox(height: 20),
-        Row(
-          children: [
-            SegmentedButton<String>(
-              segments: [
-                ButtonSegment(
-                  value: HeatMode.off.name,
-                  label: Text('Выкл.'),
-                  icon: Icon(Icons.not_interested),
-                ),
-                ButtonSegment(
-                  value: HeatMode.manual.name,
-                  label: Text('Вручную'),
-                  icon: Icon(Icons.touch_app),
-                ),
-                ButtonSegment(
-                  value: HeatMode.auto.name,
-                  label: Text('Авто'),
-                  icon: Icon(Icons.hdr_auto),
-                ),
-              ],
-              selected: {selected},
-              onSelectionChanged: changeMode,
-              showSelectedIcon: false,
+        SegmentedButton<String>(
+          segments: [
+            ButtonSegment(
+              value: HeatMode.manual.name,
+              label: Text('Вручную'),
+              icon: Icon(Icons.touch_app),
+            ),
+            ButtonSegment(
+              value: HeatMode.presets.name,
+              label: Text('Пресеты'),
+              icon: Icon(Icons.settings),
+            ),
+            ButtonSegment(
+              value: HeatMode.auto.name,
+              label: Text('Авто'),
+              icon: Icon(Icons.hdr_auto),
             ),
           ],
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 20.0),
-          child: Text(
-            'Current mode for ${user.name} is $selected',
-            style: context.textStyle.paragraph1.copyWith(color: Colors.white),
-          ),
+          selected: {selected},
+          onSelectionChanged: changeMode,
+          showSelectedIcon: false,
         ),
       ],
     );

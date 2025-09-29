@@ -13,6 +13,20 @@ class AppTextStyle {
         fontWeight: FontWeight.w700,
       );
 
+  TextStyle get heading2 => TextStyle(
+        fontSize: 24,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w700,
+        color: _context.themeColors.textBody,
+      );
+
+  TextStyle get heading3 => TextStyle(
+        fontSize: 18,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w600,
+        color: _context.themeColors.textBody,
+      );
+
   TextStyle get textNav => TextStyle(
         fontSize: 21,
         fontStyle: FontStyle.normal,
@@ -35,6 +49,20 @@ class AppTextStyle {
 
   TextStyle get paragraph1 => TextStyle(
         fontSize: 16,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w400,
+        color: _context.themeColors.textBody,
+      );
+
+  TextStyle get paragraph2 => TextStyle(
+        fontSize: 14,
+        fontStyle: FontStyle.normal,
+        fontWeight: FontWeight.w400,
+        color: _context.themeColors.textBody,
+      );
+
+  TextStyle get paragraph3 => TextStyle(
+        fontSize: 12,
         fontStyle: FontStyle.normal,
         fontWeight: FontWeight.w400,
         color: _context.themeColors.textBody,

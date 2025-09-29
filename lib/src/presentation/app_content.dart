@@ -1,6 +1,10 @@
+import 'package:autoheat/src/app_enums.dart';
+import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
+import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/presentation/screens/heat/heat_screen.dart';
 import 'package:autoheat/src/presentation/screens/settings/settings_screen.dart';
+import 'package:autoheat/src/presentation/screens/presets/presets_list_screen.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -20,7 +24,7 @@ class AppContentState extends State<AppContent> with SingleTickerProviderStateMi
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
 
     _tabController.addListener(() {
       if (_tabController.index != _selectedIndex) {
@@ -68,6 +72,7 @@ class AppContentState extends State<AppContent> with SingleTickerProviderStateMi
             ),
             _buildTabButton('Управление', 0, _selectTab),
             _buildTabButton('Настройки', 1, _selectTab),
+            _buildTabButton('Пресеты', 2, _selectTab),
             Expanded(child: SizedBox.shrink()),
           ],
         ),
@@ -87,6 +92,11 @@ class AppContentState extends State<AppContent> with SingleTickerProviderStateMi
               children: [
                 HeatScreen(),
                 SettingsScreen(),
+                PresetsListScreen(
+                  onPresetApplied: (preset) {
+                    _applyPreset(preset);
+                  },
+                ),
               ],
             ),
           ),
@@ -108,6 +118,41 @@ class AppContentState extends State<AppContent> with SingleTickerProviderStateMi
       child: Text(
         text,
         style: isActiveTab ? context.textStyle.textNavActive : context.textStyle.textNav,
+      ),
+    );
+  }
+
+  void _applyPreset(preset) {
+    // Применяем настройки пресета для конкретного пользователя
+    if (preset.userType == UserType.driver) {
+      // Получаем текущие настройки пассажира
+      final currentState = context.read<ManualSettingsCubit>().state;
+
+      // Применяем настройки пресета для водителя, сохраняя настройки пассажира
+      context.read<ManualSettingsCubit>().applyPresetSettings(
+            preset.settings, // настройки водителя из пресета
+            currentState.passengerSettings, // текущие настройки пассажира
+          );
+    } else {
+      // Получаем текущие настройки водителя
+      final currentState = context.read<ManualSettingsCubit>().state;
+
+      // Применяем настройки пресета для пассажира, сохраняя настройки водителя
+      context.read<ManualSettingsCubit>().applyPresetSettings(
+            currentState.driverSettings, // текущие настройки водителя
+            preset.settings, // настройки пассажира из пресета
+          );
+    }
+
+    // Обновляем информацию о последнем использовании пресета
+    context.read<PresetCubit>().applyPreset(preset);
+
+    // Показываем уведомление
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            'Пресет "${preset.name}" применен для ${preset.userType == UserType.driver ? 'водителя' : 'пассажира'}'),
+        backgroundColor: context.themeColors.primary,
       ),
     );
   }

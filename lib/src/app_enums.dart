@@ -1,4 +1,4 @@
-enum HeatMode { off, manual, auto }
+enum HeatMode { manual, presets, auto }
 
 enum UserType { driver, passenger }
 
@@ -15,7 +15,7 @@ extension HeatModeExtension on HeatMode {
   static HeatMode fromString(String value) {
     return HeatMode.values.firstWhere(
       (mode) => mode.name == value,
-      orElse: () => HeatMode.off,
+      orElse: () => HeatMode.manual,
     );
   }
 }

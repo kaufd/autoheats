@@ -7,5 +7,12 @@ class ColorConstants {
 
   static const systemWhite = Color(0xFFFFFFFF);
   static const systemGrey = Color(0xFFACACAC);
+  static const systemGreyDark = Color.fromARGB(255, 98, 90, 90);
   static const systemBlack = Color(0xFF000000);
+
+  static const systemBlue = Colors.blue;
+  static const systemLightBlue = Colors.lightBlue;
+  static const systemOrange = Colors.orange;
+
+  static const error = Color(0xFFC62828);
 }
