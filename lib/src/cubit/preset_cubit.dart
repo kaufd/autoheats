@@ -92,7 +92,7 @@ class PresetCubit extends Cubit<PresetState> {
   }
 
   void clearError() {
-    emit(state.copyWith(error: null));
+    emit(state.copyWith(clearError: true));
   }
 }
 
@@ -114,12 +114,13 @@ class PresetState extends Equatable {
     Preset? selectedPreset,
     bool? isLoading,
     String? error,
+    bool clearError = false,
   }) {
     return PresetState(
       presets: presets ?? this.presets,
       selectedPreset: selectedPreset ?? this.selectedPreset,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 
