@@ -14,12 +14,6 @@ void main() async {
   await locator<ThemeCubit>().initialize();
   await locator<SettingsCubit>().initialize();
 
-  // final AndroidAutomotivePlugin _androidAutomotivePlugin = AndroidAutomotivePlugin();
-  // print("init plugin");
-
-  // await _androidAutomotivePlugin.connect();
-  // print("connected");
-
   runApp(const AutoheatApp());
 }
 
