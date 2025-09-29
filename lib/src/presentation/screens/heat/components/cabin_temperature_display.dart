@@ -17,7 +17,7 @@ class CabinTemperatureDisplay extends StatelessWidget {
           return BlocBuilder<ModeCubit, ModesState>(
             builder: (context, modeState) {
               final cubit = context.read<ModeCubit>();
-              final cabinTemp = cubit.getCabinTemperature();
+              final cabinTemp = cubit.cabinTemperature;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 20),

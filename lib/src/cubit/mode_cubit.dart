@@ -1,22 +1,17 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
-import 'package:autoheat/src/services/seat_heat_service.dart';
-import 'package:autoheat/src/services/temperature_sensor_service.dart';
-import 'package:autoheat/src/services/temperature_event_service.dart';
+import 'package:autoheat/src/services/hvac_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'mode_state_cubit.dart';
 
 class ModeCubit extends Cubit<ModesState> {
   final ModeService _modeService;
-  final SeatHeatService _seatHeatService;
-  final TemperatureSensorService _temperatureSensorService;
-  final TemperatureEventService _temperatureEventService;
+  final HvacService _hvacService;
   final AutoHeatService _autoHeatService = AutoHeatService();
 
-  ModeCubit(this._modeService, this._seatHeatService, this._temperatureSensorService,
-      this._temperatureEventService)
+  ModeCubit(this._modeService, this._hvacService)
       : super(ModesState(states: [
           ModeState(userType: UserType.driver, heatMode: HeatMode.manual, heatLevel: 0),
           ModeState(userType: UserType.passenger, heatMode: HeatMode.manual, heatLevel: 0),
@@ -24,14 +19,13 @@ class ModeCubit extends Cubit<ModesState> {
     _initialize();
   }
 
-  void _initialize() async {
+  Future<void> _initialize() async {
     await _modeService.initializeDefaults();
+    _autoHeatService.initialize(_hvacService);
 
-    _autoHeatService.initialize(_temperatureSensorService, _temperatureEventService);
-
-    final modes = _modeService.getAllModes();
-
-    final states = modes.entries
+    final states = _modeService
+        .getAllModes()
+        .entries
         .map((entry) => ModeState(
               userType: entry.key,
               heatMode: entry.value['mode'] as HeatMode,
@@ -40,68 +34,65 @@ class ModeCubit extends Cubit<ModesState> {
         .toList();
 
     emit(ModesState(states: states));
-
     _initializeHeatModes(states);
   }
 
-  String getModeByUser(UserType user) {
-    return state.states.firstWhere((mode) => mode.userType == user).heatMode.name;
+  ModeState _getStateByUser(UserType userType) {
+    return state.states.firstWhere((mode) => mode.userType == userType);
   }
 
-  void setMode(UserType userType, String newMode) async {
-    final HeatMode heatMode = HeatModeExtension.fromString(newMode);
-    await _modeService.setMode(userType, heatMode);
+  void _updateUserState(UserType userType, {HeatMode? mode, int? heatLevel}) {
+    final currentState = _getStateByUser(userType);
+    final newState = ModeState(
+      userType: userType,
+      heatMode: mode ?? currentState.heatMode,
+      heatLevel: heatLevel ?? currentState.heatLevel,
+    );
 
     final updatedStates = state.states.toList();
     final index = updatedStates.indexWhere((state) => state.userType == userType);
-    final currentState = updatedStates[index];
-
-    final newHeatLevel = heatMode == HeatMode.manual ? 0 : currentState.heatLevel;
-
-    updatedStates[index] = ModeState(
-      userType: userType,
-      heatMode: heatMode,
-      heatLevel: newHeatLevel,
-    );
-
-    _manageAutoHeat(userType, heatMode);
-
+    updatedStates[index] = newState;
     emit(ModesState(states: updatedStates));
+  }
+
+  String getModeByUser(UserType user) {
+    return _getStateByUser(user).heatMode.name;
   }
 
   int getHeatLevelByUser(UserType user) {
-    return state.states.firstWhere((mode) => mode.userType == user).heatLevel;
+    return _getStateByUser(user).heatLevel;
   }
 
-  void setHeatLevel(UserType userType, int level) async {
+  Future<void> setMode(UserType userType, String newMode) async {
+    final heatMode = HeatModeExtension.fromString(newMode);
+    await _modeService.setMode(userType, heatMode);
+
+    final currentState = _getStateByUser(userType);
+    final newHeatLevel = heatMode == HeatMode.manual ? 0 : currentState.heatLevel;
+
+    _updateUserState(userType, mode: heatMode, heatLevel: newHeatLevel);
+    _manageAutoHeat(userType, heatMode);
+  }
+
+  Future<void> setHeatLevel(UserType userType, int level) async {
     await _modeService.setHeatLevel(userType, level);
-
-    await _seatHeatService.setSeatHeatLevel(userType, level);
-
-    final updatedStates = state.states.toList();
-    final index = updatedStates.indexWhere((state) => state.userType == userType);
-    final currentState = updatedStates[index];
-    updatedStates[index] = ModeState(
-      userType: userType,
-      heatMode: currentState.heatMode,
-      heatLevel: level,
-    );
-
-    emit(ModesState(states: updatedStates));
+    await _hvacService.setSeatHeatLevel(userType, level);
+    _updateUserState(userType, heatLevel: level);
   }
 
   void toggleHeatLevel(UserType userType) {
-    final currentMode = state.states.firstWhere((state) => state.userType == userType).heatMode;
+    final currentState = _getStateByUser(userType);
 
-    if (currentMode == HeatMode.manual) {
-      final currentLevel = getHeatLevelByUser(userType);
-      final newLevel = currentLevel == 3 ? 0 : currentLevel + 1;
+    if (currentState.heatMode == HeatMode.manual) {
+      final newLevel = currentState.heatLevel == 3 ? 0 : currentState.heatLevel + 1;
       setHeatLevel(userType, newLevel);
     } else {
       setMode(userType, HeatMode.manual.name);
       setHeatLevel(userType, 1);
     }
   }
+
+  double? get cabinTemperature => _autoHeatService.currentTemperature;
 
   void _manageAutoHeat(UserType userType, HeatMode heatMode) {
     if (heatMode == HeatMode.auto) {
@@ -111,10 +102,6 @@ class ModeCubit extends Cubit<ModesState> {
     } else {
       _autoHeatService.stopAutoHeat(userType);
     }
-  }
-
-  double? getCabinTemperature() {
-    return _autoHeatService.currentTemperature?.celsius;
   }
 
   void _initializeHeatModes(List<ModeState> states) {

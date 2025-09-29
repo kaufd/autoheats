@@ -9,7 +9,7 @@ ModeCubit.setHeatLevel()
     ↓
 ModeService.setHeatLevel() → SharedPreferences (сохранение состояния)
     ↓
-SeatHeatService.setSeatHeatLevel()
+HvacService.setSeatHeatLevel()
     ↓
 CarHvacManager.setSeatHeatLevel()
     ↓
@@ -26,7 +26,7 @@ Android Automotive System → Датчик температуры салона
     ↓
 AndroidAutomotivePlugin.onHvacChangeEvent()
     ↓
-TemperatureEventService._handleHvacChangeEvent()
+HvacService._handleHvacChangeEvent()
     ↓
 AutoHeatService._setupTemperatureEvents()
     ↓
@@ -39,7 +39,7 @@ AutoHeatService._updateAutoHeatForAllUsers()
 ```
 При запуске приложения → AutoHeatService._getInitialTemperature()
     ↓
-TemperatureSensorService.getCabinTemperatureModel()
+HvacService.getCabinTemperature() → double
     ↓
 CarHvacManager.getInsideTemperature()
     ↓
@@ -52,10 +52,7 @@ AndroidAutomotivePlugin.getHvacIntProperty()
 
 ### 1. Service Locator (DI)
 - **AndroidAutomotivePlugin** - основной плагин для связи с автомобилем
-- **CarHvacManager** - менеджер HVAC системы
-- **SeatHeatService** - сервис управления подогревом сидений
-- **TemperatureSensorService** - сервис получения температуры салона от датчиков
-- **TemperatureEventService** - сервис обработки событий изменения температуры салона
+- **HvacService** - централизованный сервис управления HVAC системой (включает CarHvacManager и обработку событий температуры)
 - **AutoHeatService** - сервис автоматического подогрева
 - **ModeCubit** - бизнес-логика управления режимами
 

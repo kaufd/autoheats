@@ -4,6 +4,9 @@ import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_name.dart';
 import 'package:autoheat/src/di/service_locator.dart';
 import 'package:autoheat/src/presentation/app_content.dart';
+import 'package:autoheat/src/services/accessibility_service.dart';
+import 'package:autoheat/src/services/service_status.dart';
+import 'package:autoheat/src/services/background_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -13,6 +16,21 @@ void main() async {
   await setupServiceLocator();
   await locator<ThemeCubit>().initialize();
   await locator<SettingsCubit>().initialize();
+
+  await initializeAccessibilityService();
+  await ServiceStatus().initialize();
+
+  // Инициализируем background service с задержкой, чтобы канал уведомлений успел создаться
+  Future.delayed(Duration(milliseconds: 1000), () async {
+    try {
+      await initializeBackgroundService();
+
+      final isRunning = await ServiceStatus().checkServiceStatus();
+      print('Background service статус после инициализации: $isRunning');
+    } catch (e) {
+      print('Ошибка инициализации background service: $e');
+    }
+  });
 
   runApp(const AutoheatApp());
 }

@@ -9,11 +9,7 @@ import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/settings_service.dart';
 import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/preset_service.dart';
-import 'package:autoheat/src/services/seat_heat_service.dart';
-import 'package:autoheat/src/services/temperature_sensor_service.dart';
-import 'package:autoheat/src/services/temperature_event_service.dart';
-import 'package:android_automotive_plugin/android_automotive_plugin.dart';
-import 'package:android_automotive_plugin/car/hvac_manager.dart';
+import 'package:autoheat/src/services/hvac_service.dart';
 import 'package:get_it/get_it.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -23,26 +19,7 @@ Future<void> setupServiceLocator() async {
   final sharedPreferences = await SharedPreferences.getInstance();
   locator.registerSingleton<SharedPreferences>(sharedPreferences);
 
-  final androidAutomotivePlugin = AndroidAutomotivePlugin();
-  try {
-    await androidAutomotivePlugin.connect();
-    print("AutoHeat: AndroidAutomotivePlugin успешно подключен");
-    locator.registerSingleton<AndroidAutomotivePlugin>(androidAutomotivePlugin);
-  } catch (e) {
-    print("AutoHeat: Ошибка подключения AndroidAutomotivePlugin: $e");
-    print("AutoHeat: Приложение будет работать в режиме симуляции");
-    locator.registerSingleton<AndroidAutomotivePlugin>(androidAutomotivePlugin);
-  }
-
-  locator.registerSingleton<CarHvacManager>(CarHvacManager(androidAutomotivePlugin));
-
-  locator.registerSingleton<SeatHeatService>(SeatHeatService(locator<CarHvacManager>()));
-
-  locator.registerSingleton<TemperatureSensorService>(
-      TemperatureSensorService(locator<CarHvacManager>()));
-
-  locator.registerSingleton<TemperatureEventService>(
-      TemperatureEventService(locator<AndroidAutomotivePlugin>()));
+  locator.registerSingleton<HvacService>(HvacService());
 
   locator.registerSingleton<ThemeService>(ThemeService(locator<SharedPreferences>()));
 
@@ -61,8 +38,7 @@ Future<void> setupServiceLocator() async {
     ThemeCubit(locator<ThemeService>(), locator<ThemeConfigurator>()),
   );
 
-  locator.registerSingleton<ModeCubit>(ModeCubit(locator<ModeService>(), locator<SeatHeatService>(),
-      locator<TemperatureSensorService>(), locator<TemperatureEventService>()));
+  locator.registerSingleton<ModeCubit>(ModeCubit(locator<ModeService>(), locator<HvacService>()));
 
   locator.registerSingleton<SettingsCubit>(SettingsCubit(locator<SettingsService>()));
 
