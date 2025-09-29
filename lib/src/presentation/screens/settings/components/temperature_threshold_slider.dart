@@ -21,17 +21,13 @@ class TemperatureThresholdSlider extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Включать когда температура в салоне ниже ${temperatureThreshold.round()}°C',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w500,
-              ),
+          'Включать, когда температура в салоне ниже ${temperatureThreshold.toInt()}°C',
+          style: context.textStyle.paragraph2.copyWith(fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 12),
         _buildSlider(context),
         const SizedBox(height: 6),
         _buildTemperatureLabels(context),
-        const SizedBox(height: 8),
       ],
     );
   }
@@ -42,7 +38,7 @@ class TemperatureThresholdSlider extends StatelessWidget {
       child: SliderTheme(
         data: SliderTheme.of(context).copyWith(
           activeTrackColor: context.themeColors.primary,
-          inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+          inactiveTrackColor: context.themeColors.sliderInactiveTrack,
           thumbColor: context.themeColors.primary,
           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
           trackHeight: 8,
@@ -53,13 +49,7 @@ class TemperatureThresholdSlider extends StatelessWidget {
           min: TemperatureConstants.sliderMin,
           max: TemperatureConstants.sliderMax,
           divisions: TemperatureConstants.sliderDivisions,
-          onChanged: (value) {
-            // Округляем до ближайшего значения из предустановленных
-            final nearestValue = TemperatureConstants.sliderValues.reduce(
-              (a, b) => (value - a).abs() < (value - b).abs() ? a : b,
-            );
-            onTemperatureChanged(nearestValue);
-          },
+          onChanged: onTemperatureChanged,
         ),
       ),
     );
@@ -69,13 +59,7 @@ class TemperatureThresholdSlider extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: temperatureLabels.map((label) {
-        return Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white.withValues(alpha: 0.7),
-                fontSize: 12,
-              ),
-        );
+        return Text(label, style: context.textStyle.paragraph3);
       }).toList(),
     );
   }

@@ -18,17 +18,6 @@ class AutoHeatLevelSlider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 6),
-        _buildSlider(context),
-        const SizedBox(height: 8),
-      ],
-    );
-  }
-
-  Widget _buildSlider(BuildContext context) {
     return SizedBox(
       height: 32,
       child: Row(
@@ -38,26 +27,23 @@ class AutoHeatLevelSlider extends StatelessWidget {
             decoration: BoxDecoration(
               color: context.themeColors.primary.withValues(alpha: 0.2),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: context.themeColors.primary,
-                width: 1,
-              ),
+              border: Border.all(color: context.themeColors.primary, width: 1),
             ),
             child: Text(
               (levelIndex + 1).toString(),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: context.themeColors.primary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 10,
-                  ),
+              style: context.textStyle.paragraph3.copyWith(
+                color: context.themeColors.primary,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 12),
           Expanded(
             child: SliderTheme(
               data: SliderTheme.of(context).copyWith(
                 activeTrackColor: context.themeColors.primary,
-                inactiveTrackColor: Colors.white.withValues(alpha: 0.3),
+                inactiveTrackColor: context.themeColors.sliderInactiveTrack,
                 thumbColor: context.themeColors.primary,
                 thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
                 trackHeight: 8,
@@ -74,8 +60,8 @@ class AutoHeatLevelSlider extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          _buildLevelIndicator(context),
+          const SizedBox(width: 12),
+          SizedBox(width: 85, child: _buildLevelIndicator(context)),
         ],
       ),
     );
@@ -94,10 +80,11 @@ class AutoHeatLevelSlider extends StatelessWidget {
       ),
       child: Text(
         '${autoHeatLevel.duration} мин.',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: context.themeColors.primary,
-              fontWeight: FontWeight.w600,
-            ),
+        style: context.textStyle.paragraph2.copyWith(
+          color: context.themeColors.primary,
+          fontWeight: FontWeight.w600,
+        ),
+        textAlign: TextAlign.center,
       ),
     );
   }

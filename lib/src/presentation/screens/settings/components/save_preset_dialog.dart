@@ -1,4 +1,5 @@
 import 'package:autoheat/src/extensions/context_extensions.dart';
+import 'package:autoheat/src/presentation/ui/custom_alert_dialog.dart';
 import 'package:flutter/material.dart';
 
 class SavePresetDialog extends StatefulWidget {
@@ -10,18 +11,24 @@ class SavePresetDialog extends StatefulWidget {
 
 class _SavePresetDialogState extends State<SavePresetDialog> {
   final TextEditingController _nameController = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
   bool _isButtonEnabled = false;
 
   @override
   void initState() {
     super.initState();
     _nameController.addListener(_onTextChanged);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _focusNode.requestFocus();
+    });
   }
 
   @override
   void dispose() {
     _nameController.removeListener(_onTextChanged);
     _nameController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -33,40 +40,20 @@ class _SavePresetDialogState extends State<SavePresetDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: Colors.black.withValues(alpha: 0.9),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: context.themeColors.primary.withValues(alpha: 0.3),
-          width: 1,
-        ),
-      ),
-      title: Text(
-        'Сохранить пресет',
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w600,
-            ),
-      ),
+    return CustomAlertDialog(
+      title: 'Сохранение пресета',
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            'Введите название для нового пресета:',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white70,
-                ),
-          ),
-          const SizedBox(height: 16),
           TextField(
             controller: _nameController,
-            style: const TextStyle(color: Colors.white),
+            focusNode: _focusNode,
+            style: TextStyle(color: context.themeColors.textBody),
             decoration: InputDecoration(
-              hintText: 'Например: Зимний режим',
-              hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.5)),
+              hintText: 'Название пресета',
+              hintStyle: TextStyle(color: context.themeColors.textBody.withValues(alpha: 0.5)),
               filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.1),
+              fillColor: context.themeColors.textBody.withValues(alpha: 0.1),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
@@ -81,41 +68,17 @@ class _SavePresetDialogState extends State<SavePresetDialog> {
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: context.themeColors.primary,
-                  width: 2,
-                ),
+                borderSide: BorderSide(color: context.themeColors.primary, width: 2),
               ),
             ),
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(
-            'Отмена',
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-          ),
-        ),
-        ElevatedButton(
-          onPressed: _isButtonEnabled
-              ? () {
-                  Navigator.of(context).pop(_nameController.text.trim());
-                }
-              : () {},
-          style: ElevatedButton.styleFrom(
-            backgroundColor: _isButtonEnabled
-                ? context.themeColors.primary
-                : context.themeColors.primary.withValues(alpha: 0.3),
-            foregroundColor: _isButtonEnabled ? Colors.white : Colors.white.withValues(alpha: 0.5),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-          ),
-          child: const Text('Сохранить'),
-        ),
-      ],
+      confirmText: 'Сохранить',
+      isConfirmEnabled: _isButtonEnabled,
+      onConfirm: () {
+        Navigator.of(context).pop(_nameController.text.trim());
+      },
     );
   }
 }

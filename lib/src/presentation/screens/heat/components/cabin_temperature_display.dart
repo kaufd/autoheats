@@ -1,3 +1,4 @@
+import 'package:autoheat/src/config/color_constants.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/mode_state_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
@@ -41,7 +42,7 @@ class CabinTemperatureDisplay extends StatelessWidget {
                     Text(
                       'Температура в салоне: ',
                       style: context.textStyle.paragraph1.copyWith(
-                        color: Colors.white,
+                        color: context.themeColors.textBody,
                       ),
                     ),
                     Text(
@@ -57,15 +58,18 @@ class CabinTemperatureDisplay extends StatelessWidget {
             },
           );
         }
-        return const SizedBox.shrink();
+        return Container(
+          margin: const EdgeInsets.only(bottom: 20),
+          height: 56,
+        );
       },
     );
   }
 
-  Color _getTemperatureColor(double temp) {
-    if (temp <= -8) return Colors.blue;
-    if (temp <= -2) return Colors.lightBlue;
-    if (temp <= 4) return Colors.orange;
-    return Colors.red;
-  }
+  Color _getTemperatureColor(double temp) => switch (temp) {
+        <= -5 => ColorConstants.systemBlue,
+        <= 5 => ColorConstants.systemLightBlue,
+        <= 25 => ColorConstants.systemOrange,
+        _ => ColorConstants.accentRed,
+      };
 }

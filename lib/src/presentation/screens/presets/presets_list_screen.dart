@@ -1,6 +1,8 @@
+import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/presentation/screens/presets/components/preset_list.dart';
+import 'package:autoheat/src/presentation/ui/error_block.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -31,42 +33,23 @@ class _PresetsListScreenState extends State<PresetsListScreen> {
         children: [
           Text(
             'Пресеты сохраняются отдельно для водителя и пассажира. Для сохранения пресета используйте кнопки в разделе "Настройки".',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.white.withValues(alpha: 0.7),
-                ),
+            style: context.textStyle.paragraph3.copyWith(color: context.themeColors.textMuted),
           ),
           const SizedBox(height: 20),
           Expanded(
             child: BlocBuilder<PresetCubit, PresetState>(
               builder: (context, state) {
                 if (state.isLoading) {
-                  return const Center(
+                  return Center(
                     child: CircularProgressIndicator(
-                      color: Colors.white,
+                      color: context.themeColors.primary,
                     ),
                   );
                 }
 
                 if (state.error != null) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.error,
-                          color: Colors.red,
-                          size: 48,
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'Ошибка загрузки пресетов',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Colors.white,
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
+                  return const ErrorBlock(
+                    message: 'Ошибка загрузки пресетов',
                   );
                 }
 

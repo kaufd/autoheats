@@ -1,6 +1,8 @@
 import 'package:autoheat/src/app_enums.dart';
+import 'package:autoheat/src/config/color_constants.dart';
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
+import 'package:autoheat/src/presentation/ui/custom_alert_dialog.dart';
 import 'package:flutter/material.dart';
 
 class PresetList extends StatelessWidget {
@@ -27,21 +29,15 @@ class PresetList extends StatelessWidget {
             Icon(
               Icons.bookmark_outline,
               size: 48,
-              color: Colors.white.withValues(alpha: 0.5),
+              color: context.themeColors.textMuted,
             ),
             const SizedBox(height: 16),
             Text(
               'Нет сохраненных пресетов',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.7),
-                  ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Сохраните текущие настройки как пресет',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.white.withValues(alpha: 0.5),
-                  ),
+              style: context.textStyle.textNav.copyWith(
+                color: context.themeColors.textMuted,
+                fontWeight: FontWeight.w400,
+              ),
             ),
           ],
         ),
@@ -51,70 +47,36 @@ class PresetList extends StatelessWidget {
     final driverPresets = presets.where((p) => p.userType == UserType.driver).toList();
     final passengerPresets = presets.where((p) => p.userType == UserType.passenger).toList();
 
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
+    return SingleChildScrollView(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildPresetSection(context, 'Водитель', driverPresets),
+            const SizedBox(width: 16),
+            _buildPresetSection(context, 'Пассажир', passengerPresets),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetSection(BuildContext context, String title, List<Preset> presets) {
+    return Expanded(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Center(
-                    child: Text(
-                      'Водитель',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                          ),
-                    ),
-                  ),
-                ),
-                if (driverPresets.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.1),
-                      ),
-                    ),
-                    child: Center(
-                      child: Text(
-                        'Нет пресетов',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.5),
-                            ),
-                      ),
-                    ),
-                  )
-                else
-                  ...driverPresets.map((preset) => _buildPresetItem(context, preset)),
-              ],
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Center(
+              child: Text(
+                title,
+                style: context.textStyle.paragraph3.copyWith(fontWeight: FontWeight.w600),
+              ),
             ),
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Center(
-                    child: Text(
-                      'Пассажир',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: Colors.white,
-                          ),
-                    ),
-                  ),
-                ),
-                ...passengerPresets.map((preset) => _buildPresetItem(context, preset)),
-              ],
-            ),
-          ),
+          ...presets.map((preset) => _buildPresetItem(context, preset)),
         ],
       ),
     );
@@ -151,27 +113,42 @@ class PresetList extends StatelessWidget {
                     children: [
                       Text(
                         preset.name,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: context.textStyle.paragraph1,
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Создан: ${_formatDate(preset.createdAt)}',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.white.withValues(alpha: 0.6),
+                      const SizedBox(height: 8),
+                      RichText(
+                        text: TextSpan(
+                          children: [
+                            TextSpan(
+                              text: 'Создан: ',
+                              style: context.textStyle.paragraph3
+                                  .copyWith(color: context.themeColors.primary),
                             ),
-                      ),
-                      if (preset.lastUsed != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          'Использован: ${_formatDate(preset.lastUsed!)}',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: context.themeColors.primary.withValues(alpha: 0.8),
-                              ),
+                            TextSpan(
+                              text: _formatDate(preset.createdAt),
+                              style: context.textStyle.paragraph3,
+                            ),
+                          ],
                         ),
-                      ],
+                      ),
+                      // if (preset.lastUsed != null) ...[
+                      //   const SizedBox(height: 2),
+                      //   RichText(
+                      //     text: TextSpan(
+                      //       children: [
+                      //         TextSpan(
+                      //           text: 'Использован: ',
+                      //           style: context.textStyle.paragraph2
+                      //               .copyWith(color: context.themeColors.primary),
+                      //         ),
+                      //         TextSpan(
+                      //           text: _formatDate(preset.lastUsed!),
+                      //           style: context.textStyle.paragraph2,
+                      //         ),
+                      //       ],
+                      //     ),
+                      //   ),
+                      // ],
                     ],
                   ),
                 ),
@@ -179,7 +156,7 @@ class PresetList extends StatelessWidget {
                   onPressed: () => _showDeleteDialog(context, preset),
                   icon: Icon(
                     Icons.delete_outline,
-                    color: Colors.red.withValues(alpha: 0.7),
+                    color: ColorConstants.error,
                   ),
                   tooltip: 'Удалить пресет',
                 ),
@@ -192,68 +169,33 @@ class PresetList extends StatelessWidget {
   }
 
   String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
+    final differenceInDays = DateTime.now().difference(date).inDays;
 
-    if (difference.inDays == 0) {
-      return 'Сегодня';
-    } else if (difference.inDays == 1) {
-      return 'Вчера';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays} дн. назад';
-    } else {
-      return '${date.day}.${date.month}.${date.year}';
-    }
+    return switch (differenceInDays) {
+      0 => 'сегодня',
+      1 => 'вчера',
+      < 7 => '$differenceInDays дн. назад',
+      _ => '${date.day}.${date.month}.${date.year}',
+    };
   }
 
   void _showDeleteDialog(BuildContext context, Preset preset) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: Colors.black.withValues(alpha: 0.9),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: BorderSide(
-            color: context.themeColors.primary.withValues(alpha: 0.3),
-            width: 1,
+      builder: (context) => CustomAlertDialog(
+        content: Padding(
+          padding: EdgeInsets.only(bottom: 32),
+          child: Text(
+            'Удалить пресет "${preset.name}"?',
+            textAlign: TextAlign.center,
+            style: context.textStyle.paragraph1,
           ),
         ),
-        title: Text(
-          'Удалить пресет',
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-        ),
-        content: Text(
-          'Вы уверены, что хотите удалить пресет "${preset.name}"?',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.white70,
-              ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(
-              'Отмена',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.7)),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop();
-              onPresetDeleted(preset);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('Удалить'),
-          ),
-        ],
+        confirmText: 'Удалить',
+        onConfirm: () {
+          Navigator.of(context).pop();
+          onPresetDeleted(preset);
+        },
       ),
     );
   }

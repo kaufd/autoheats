@@ -22,7 +22,7 @@ class HeatScreen extends StatelessWidget {
                 width: (MediaQuery.of(context).size.width - 66) / 2,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     Column(
                       children: [
@@ -42,7 +42,7 @@ class HeatScreen extends StatelessWidget {
                 width: (MediaQuery.of(context).size.width - 66) / 2,
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
                     SeatBlock(userType: UserType.passenger),
                     Column(

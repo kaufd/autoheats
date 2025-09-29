@@ -8,12 +8,12 @@ import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-class PresetsScreen extends StatelessWidget {
+class PresetsSettings extends StatelessWidget {
   final ManualSettingsState settingsState;
   final Function(AutoHeatLevel, int, UserType) onAutoHeatLevelChanged;
   final Function(double, UserType) onTemperatureThresholdChanged;
 
-  const PresetsScreen({
+  const PresetsSettings({
     super.key,
     required this.settingsState,
     required this.onAutoHeatLevelChanged,
@@ -87,21 +87,16 @@ class PresetsScreen extends StatelessWidget {
   }
 
   Widget _buildSavePresetButton(BuildContext context, UserType userType) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: () => _savePresetForUser(context, userType),
-        icon: const Icon(Icons.save),
-        label:
-            Text('Сохранить пресет для ${userType == UserType.driver ? 'водителя' : 'пассажира'}'),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: context.themeColors.primary,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+    return TextButton(
+      onPressed: () => _savePresetForUser(context, userType),
+      style: ButtonStyle(
+        foregroundColor: WidgetStatePropertyAll(context.themeColors.textButtonPrimary),
+        backgroundColor: WidgetStatePropertyAll(context.themeColors.primary),
+        side: WidgetStatePropertyAll(
+          BorderSide(color: context.themeColors.primary, width: 0.5),
         ),
       ),
+      child: const Text('Сохранить'),
     );
   }
 
@@ -127,7 +122,7 @@ class PresetsScreen extends StatelessWidget {
         SnackBar(
           content: Text(
               'Пресет "$result" сохранен для ${userType == UserType.driver ? 'водителя' : 'пассажира'}'),
-          backgroundColor: context.themeColors.primary,
+          backgroundColor: context.themeColors.primary.withValues(alpha: 0.8),
         ),
       );
     }

@@ -27,23 +27,15 @@ class ManualSettingsSection extends StatelessWidget {
           final index = entry.key;
           final autoHeatLevel = entry.value;
 
-          String durationLabel;
-          switch (index) {
-            case 0:
-              durationLabel = 'Уровень 1';
-              break;
-            case 1:
-              durationLabel = 'Уровень 2';
-              break;
-            case 2:
-              durationLabel = 'Уровень 3';
-              break;
-            default:
-              durationLabel = 'Уровень ${index + 1}';
-          }
+          final durationLabel = switch (index) {
+            0 => 'Уровень 1',
+            1 => 'Уровень 2',
+            2 => 'Уровень 3',
+            _ => throw StateError('Unexpected index: $index'),
+          };
 
           return Padding(
-            padding: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(vertical: 16),
             child: AutoHeatLevelSlider(
               autoHeatLevel: autoHeatLevel,
               durationLabel: durationLabel,
@@ -54,25 +46,11 @@ class ManualSettingsSection extends StatelessWidget {
             ),
           );
         }),
-
         const SizedBox(height: 16),
-
         TemperatureThresholdSlider(
           temperatureThreshold: settings.temperatureThreshold,
           onTemperatureChanged: onTemperatureThresholdChanged,
         ),
-
-        const SizedBox(height: 16),
-
-        // Center(
-        //   child: Text(
-        //     userType == UserType.driver ? 'Водитель' : 'Пассажир',
-        //     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-        //           color: Colors.white,
-        //           fontWeight: FontWeight.w600,
-        //         ),
-        //   ),
-        // ),
       ],
     );
   }
