@@ -90,18 +90,19 @@ class PresetList extends StatelessWidget {
       child: Material(
         color: isSelected
             ? context.themeColors.primary.withValues(alpha: 0.2)
-            : Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(12),
+            : ColorConstants.systemWhite.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(35),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () => onPresetSelected(preset),
           child: Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(35),
               border: Border.all(
-                color:
-                    isSelected ? context.themeColors.primary : Colors.white.withValues(alpha: 0.1),
+                color: isSelected
+                    ? context.themeColors.primary
+                    : ColorConstants.systemWhite.withValues(alpha: 0.1),
                 width: isSelected ? 2 : 1,
               ),
             ),

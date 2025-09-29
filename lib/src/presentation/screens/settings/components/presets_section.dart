@@ -31,10 +31,10 @@ class PresetsSection extends StatelessWidget {
 
         return Container(
           decoration: BoxDecoration(
-            color: ColorConstants.systemBlack.withValues(alpha: 0.8),
+            color: ColorConstants.systemBlack.withValues(alpha: 0.5),
             borderRadius: BorderRadius.circular(35),
             border: Border.all(
-              color: context.themeColors.primary.withValues(alpha: 0.3),
+              color: context.themeColors.primary.withValues(alpha: 0.5),
               width: 1,
             ),
           ),

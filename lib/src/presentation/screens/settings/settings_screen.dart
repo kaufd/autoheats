@@ -38,7 +38,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             const PresetsSection(),
             const SizedBox(height: 20),
             Row(
