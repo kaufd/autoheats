@@ -1,3 +1,30 @@
+// FILE: lib/src/services/background_service.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Foreground-service flutter_background_service — живёт пока приложение
+//            в фоне; слушает ignition, синхронизирует ModeCubit в своём изоляте.
+//   SCOPE: конфигурация AndroidConfiguration, onStart entry-point, реакция на
+//          ignition ON/OFF, restart-backoff, остановка сервиса.
+//   DEPENDS: M-PLUGIN, M-MODE, M-HVAC, M-DI
+//   LINKS: M-BACKGROUND, V-M-BACKGROUND, DF-BACKGROUND
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   initializeBackgroundService - конфигурация (channel my_foreground, id 888) + startService
+//   onStart - @pragma('vm:entry-point'); ensureInitialized + setupServiceLocator + подписки
+//   _androidAutomotivePlugin - локальный плагин background-изолята
+//   _modeCubit - ModeCubit, поднятый в background-изоляте
+//   _isServiceRunning / _restartAttempts / _maxRestartAttempts - состояние restart-backoff
+//   _onCarSensorEvent - обработка ignition: при OFF сбрасывает уровни в 0
+//   stopBackgroundService - сброс уровней и остановка сервиса
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+// END_CHANGE_SUMMARY
+
 import 'dart:async';
 import 'dart:ui';
 
