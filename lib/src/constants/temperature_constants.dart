@@ -1,3 +1,33 @@
+// FILE: lib/src/constants/temperature_constants.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Маппинг температуры салона в TemperatureRange и HeatSequence —
+//            источник расписаний авторежима и значений слайдера порога.
+//   SCOPE: пороги диапазонов, расписания warm/cool/cold/freezing/extreme,
+//          pure-функции getTemperatureRange и getHeatSequence.
+//   DEPENDS: none
+//   LINKS: M-CONSTANTS-TEMPERATURE, V-M-CONSTANTS-TEMPERATURE
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   TemperatureRange - enum off|warm|cool|cold|freezing|extreme
+//   HeatSequence - длительности уровней 3/2/1 (минуты)
+//   TemperatureConstants - контейнер порогов, расписаний и pure-функций
+//   temperatureThresholds - нижние границы диапазонов (порядок итерации значим)
+//   sliderMin / sliderMax / sliderDivisions - параметры слайдера порога
+//   sliderValues / sliderLabels - значения и подписи слайдера [-5..15]
+//   defaultTemperatureThreshold - 5.0, порог авторежима по умолчанию
+//   temperatureSequences - HeatSequence по диапазонам (без off)
+//   getTemperatureRange - °C -> TemperatureRange по temperatureThresholds
+//   getHeatSequence - °C -> HeatSequence? (null при range.off)
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+// END_CHANGE_SUMMARY
+
 enum TemperatureRange {
   off, // > 10°C
   warm, // 5°C до 10°C
