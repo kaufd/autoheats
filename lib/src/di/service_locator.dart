@@ -1,3 +1,25 @@
+// FILE: lib/src/di/service_locator.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Регистрация SharedPreferences и всех сервисов/кубитов в GetIt —
+//            единый bootstrap DI для UI- и background-изолята.
+//   SCOPE: setupServiceLocator (async), глобальный locator.
+//   DEPENDS: M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME
+//   LINKS: M-DI, V-M-DI, DF-BACKGROUND
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   locator - GetIt.instance, глобальный контейнер зависимостей
+//   setupServiceLocator - регистрирует SharedPreferences, сервисы и кубиты;
+//                         вызывается И в UI-, И в background-изоляте
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+// END_CHANGE_SUMMARY
+
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
