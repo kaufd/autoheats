@@ -1,3 +1,33 @@
+// FILE: lib/src/services/hvac_service.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Централизованная обёртка над AndroidAutomotivePlugin для UI и
+//            AutoHeatService — единственная точка доступа приложения к HVAC.
+//   SCOPE: ленивый connect(), setSeatHeatLevel, getCabinTemperature,
+//          конверсия (raw - 84) / 2, проброс события температуры салона.
+//   DEPENDS: M-PLUGIN, M-ENUMS
+//   LINKS: M-HVAC, V-M-HVAC, DF-SET-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   HvacService - singleton-обёртка плагина (регистрируется в GetIt)
+//   HvacService() - конструктор: создаёт плагин и onHvacChangeEventCallback
+//   initialize - ленивый connect(); идемпотентен через гард _isInitialized
+//   isInitialized - геттер флага инициализации
+//   androidAutomotivePlugin - геттер плагина (нужен background-изоляту)
+//   setSeatHeatLevel(UserType, int) - запись уровня через CarHvacManager
+//   getCabinTemperature - чтение температуры салона (°C); fallback 20.0 при ошибке
+//   onCabinTemperatureChanged - callback изменения температуры (единственный потребитель)
+//   _convertToCelsius - (raw - 84) / 2 -> °C
+//   dispose - сброс _isInitialized и снятие onHvacChangeEventCallback
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+// END_CHANGE_SUMMARY
+
 import 'package:android_automotive_plugin/android_automotive_plugin.dart';
 import 'package:android_automotive_plugin/car/hvac_manager.dart';
 import 'package:android_automotive_plugin/car/car_property_value.dart';
