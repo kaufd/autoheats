@@ -26,8 +26,8 @@
         <fn-initializeCallCount PURPOSE="Счётчик вызовов initialize" />
       </api>
     </harness-1>
-    <harness-2 name="AutomotiveMethodChannelMock" location="test/_helpers/fake_plugin.dart" status="deferred-to-step-3">
-      <purpose>НЕ инжектируемый фейк-объект: HvacService создаёт собственный AndroidAutomotivePlugin в конструкторе (hvac_service.dart:15). Плагин общается с нативным слоем только через const MethodChannel('android_automotive_plugin'). Поэтому harness — это набор MethodChannel-хелперов: setMockMethodCallHandler для исходящих (connect/getHvacIntProperty/setHvacIntProperty) и handlePlatformMessage для входящих (onHvacChangeEvent). Создаётся в step-3 рядом с первым тестом V-M-HVAC/V-M-PLUGIN, который валидирует codec/инъекцию реальным прогоном (flutter analyze это не ловит).</purpose>
+    <harness-2 name="AutomotiveMethodChannelMock" location="test/_helpers/fake_plugin.dart" status="created">
+      <purpose>Мок const MethodChannel('android_automotive_plugin'): setMockMethodCallHandler перехватывает исходящие invokeMethod (connect/getHvacIntProperty/setHvacIntProperty, запись в outgoingCalls), handlePlatformMessage инжектирует входящее onHvacChangeEvent. Создан в Phase-2 step-5, валидирован прогоном V-M-HVAC (13 тестов зелёные). Подойдёт и для будущего V-M-PLUGIN.</purpose>
     </harness-2>
     <harness-3 name="SharedPreferencesMock" location="setUp: SharedPreferences.setMockInitialValues({...})">
       <purpose>Изоляция Cubit-тестов от файловой системы.</purpose>
@@ -123,7 +123,7 @@
 
     <V-M-ENUMS MODULE="M-ENUMS" PRIORITY="high">
       <test-files>
-        <file>test/unit/app_enums_test.dart (запланирован)</file>
+        <file>test/unit/app_enums_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/app_enums_test.dart</check-1>
@@ -193,7 +193,7 @@
 
     <V-M-CONSTANTS-TEMPERATURE MODULE="M-CONSTANTS-TEMPERATURE" PRIORITY="high">
       <test-files>
-        <file>test/unit/temperature_constants_test.dart (запланирован)</file>
+        <file>test/unit/temperature_constants_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/temperature_constants_test.dart</check-1>
@@ -223,32 +223,34 @@
 
     <V-M-HVAC MODULE="M-HVAC" PRIORITY="high">
       <test-files>
-        <file>test/unit/hvac_service_test.dart (запланирован)</file>
+        <file>test/unit/hvac_service_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/hvac_service_test.dart</check-1>
       </module-checks>
       <evidence-types>
-        <type-1>deterministic</type-1>
-        <type-2>trace (mocktail.verify, verifyInOrder)</type-2>
-        <type-3>forbidden (mocktail.verifyNever)</type-3>
-        <type-4>boundary</type-4>
+        <type-1>deterministic — AutomotiveMethodChannelMock.outgoingMethods, captured callback values</type-1>
+        <type-2>trace — порядок outgoing invokeMethod (connect перед setHvacIntProperty)</type-2>
+        <type-3>boundary — конверсия граничных raw</type-3>
       </evidence-types>
+      <api-note>HvacService не инжектирует плагин — тесты идут через мок const MethodChannel('android_automotive_plugin'): setMockMethodCallHandler (исходящие) + handlePlatformMessage (входящие onHvacChangeEvent). Harness — test/_helpers/fake_plugin.dart (AutomotiveMethodChannelMock).</api-note>
       <scenarios>
-        <scenario-1 kind="success">Первый вызов setSeatHeatLevel(driver, 2) → mocktail.verifyInOrder([plugin.connect(), hvacManager.setSeatHeatLevel(true, 2)]).</scenario-1>
-        <scenario-2 kind="success">Конверсия: эмиссия CarPropertyValue(propertyId=ID_HVAC_IN_OUT_TEMP, areaId=InOutCAR_INSIDE, value=124) через FakeAndroidAutomotivePlugin → onCabinTemperatureChanged вызван ровно один раз с 20.0.</scenario-2>
-        <scenario-3 kind="boundary">Конверсия граничных raw: 84→0.0; 74→-5.0; 124→20.0; 0→-42.0; 200→58.0. Все double сравнения с точностью ±0.0001.</scenario-3>
-        <scenario-4 kind="failure">CarPropertyValue с areaId != InOutCAR_INSIDE НЕ вызывает callback (mocktail.verifyNever).</scenario-4>
-        <scenario-5 kind="failure">CarPropertyValue с propertyId != ID_HVAC_IN_OUT_TEMP НЕ вызывает callback.</scenario-5>
-        <scenario-6 kind="failure">getCabinTemperature при бросе плагина возвращает 20.0 (fallback) и НЕ rethrow'ит.</scenario-6>
-        <scenario-7 kind="failure">setSeatHeatLevel при бросе CarHvacManager.setSeatHeatLevel — rethrow ИСХОДНОЕ исключение (контракт — UI должен поймать).</scenario-7>
-        <scenario-8 kind="invariant">Двойной initialize(): plugin.connect() вызван ровно ОДИН раз. verify(connect()).called(1) после initialize() + initialize().</scenario-8>
-        <scenario-9 kind="invariant">Внутри onHvacChangeEventCallback исключение НЕ должно крашить процесс — текущая catch-блок 'ignore' остаётся (тест: эмиссия с value: null или невалидным типом не валит изолят).</scenario-9>
+        <scenario-1 kind="success">Первый setSeatHeatLevel(driver, 2) → outgoingMethods == ['connect', 'setHvacIntProperty'] (порядок).</scenario-1>
+        <scenario-2 kind="success">Эмиссия onHvacChangeEvent(propertyId=ID_HVAC_IN_OUT_TEMP, areaId=InOutCAR_INSIDE, value=124) → onCabinTemperatureChanged вызван один раз с 20.0.</scenario-2>
+        <scenario-3 kind="boundary">Конверсия граничных raw: 84→0.0; 74→-5.0; 124→20.0; 0→-42.0; 200→58.0.</scenario-3>
+        <scenario-4 kind="failure">Событие areaId=InOutCAR_OUTSIDE НЕ вызывает callback.</scenario-4>
+        <scenario-5 kind="failure">Событие с чужим propertyId НЕ вызывает callback.</scenario-5>
+        <scenario-6 kind="failure">getCabinTemperature при бросе плагина (getHvacIntProperty) возвращает 20.0 fallback, НЕ rethrow'ит.</scenario-6>
+        <scenario-7 kind="removed">УДАЛЁН. Изначально: "setSeatHeatLevel rethrow при ошибке плагина". Находка step-5: плагин setHvacIntProperty/connect — fire-and-forget (invokeMethod без await/return), ошибки записи не доходят до HvacService. Поведение, которое описывал scenario-7, не существует; см. finding F-1.</scenario-7>
+        <scenario-8 kind="invariant">Двойной initialize() → connect() в outgoingMethods ровно один раз.</scenario-8>
+        <scenario-9 kind="invariant">Событие с value=null не валит изолят (catch в onHvacChangeEventCallback), callback не вызван.</scenario-9>
       </scenarios>
+      <findings>
+        <F-1>Плагин AndroidAutomotivePlugin.setHvacIntProperty/connect/setHvacFloatProperty — fire-and-forget: вызывают methodChannel.invokeMethod БЕЗ await/return. Ошибки записи и подключения никогда не доходят до вызывающего кода. Следствие: HvacService.setSeatHeatLevel и initialize() имеют catch/rethrow, но для записи/connect это мёртвый код — исключение не возникает. Только read-путь (getHvacIntProperty) реально await-ит канал. UI не узнает о неуспешной записи уровня подогрева. Кандидат на Phase-Deferred: либо await в плагине, либо обёртка в HvacService.</F-1>
+      </findings>
       <forbidden-markers>
         <forbidden-1>plugin.connect() НЕ должен вызываться больше одного раза за жизненный цикл HvacService.</forbidden-1>
-        <forbidden-2>onCabinTemperatureChanged НЕ должен срабатывать на не-InOutCAR_INSIDE событиях.</forbidden-2>
-        <forbidden-3>setSeatHeatLevel НЕ должен глотать исключения (в отличие от getCabinTemperature).</forbidden-3>
+        <forbidden-2>onCabinTemperatureChanged НЕ должен срабатывать на не-InOutCAR_INSIDE и чужих propertyId событиях.</forbidden-2>
       </forbidden-markers>
       <required-log-markers>
         <marker-1 activated-in="Phase-3">[HvacService][initialize][BLOCK_INITIALIZE]</marker-1>
@@ -266,7 +268,7 @@
 
     <V-M-AUTO-HEAT MODULE="M-AUTO-HEAT" PRIORITY="high">
       <test-files>
-        <file>test/unit/auto_heat_service_test.dart (запланирован)</file>
+        <file>test/unit/auto_heat_service_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/auto_heat_service_test.dart</check-1>
@@ -311,41 +313,40 @@
 
     <V-M-MODE MODULE="M-MODE" PRIORITY="high">
       <test-files>
-        <file>test/unit/mode_cubit_test.dart (запланирован)</file>
-        <file>test/unit/mode_service_test.dart (запланирован)</file>
+        <file>test/unit/mode_cubit_test.dart</file>
+        <file>test/unit/mode_service_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/mode_cubit_test.dart test/unit/mode_service_test.dart</check-1>
       </module-checks>
       <evidence-types>
-        <type-1>bloc_test (emits, act, verify)</type-1>
-        <type-2>deterministic SharedPreferences round-trip</type-2>
-        <type-3>trace (mocktail.verify, verifyInOrder для HvacService и AutoHeatService)</type-3>
-        <type-4>forbidden (verifyNever когда состояние не меняется)</type-4>
+        <type-1>deterministic — реальный ModeService + SharedPreferences.setMockInitialValues, проверка cubit.state и prefs напрямую</type-1>
+        <type-2>FakeHvacService.recordedSetSeatHeatCalls для проверки команд на HVAC</type-2>
+        <type-3>behavioral — авторежим проверяется через emitTemperature + наблюдаемое изменение состояния (AutoHeatService — синглтон, не мокается)</type-3>
       </evidence-types>
-      <setup>SharedPreferences.setMockInitialValues({}); locator.reset(); регистрация FakeHvacService через GetIt.</setup>
+      <api-note>Фактический API ModeCubit: setMode(UserType, String newMode) — НЕ setHeatMode; setHeatLevel(UserType, int); toggleHeatLevel(UserType). Ключи ModeService: driver_mode / driver_heat_level / passenger_mode / passenger_heat_level. Сценарии ниже исправлены по факту кода (план изначально содержал угаданные имена).</api-note>
+      <setup>SharedPreferences.setMockInitialValues({}); сидирование через prefs API; реальные ModeService + AutoHeatService(синглтон), FakeHvacService. ВАЖНО: тесты с emitTemperature идут последними (синглтон не сбрасывает _currentTemperature в null).</setup>
       <scenarios>
-        <scenario-1 kind="success">setHeatLevel(driver, 2) на чистом старте: blocTest emits ModesState с driver.heatLevel==2; mocktail.verify(fakeHvac.setSeatHeatLevel(UserType.driver, 2)).called(1); SharedPreferences.getInt('heatLevel_driver') == 2.</scenario-1>
-        <scenario-2 kind="success">setHeatMode(driver, HeatMode.auto): verify(fakeAutoHeat.startAutoHeat(UserType.driver, any())).called(1); SharedPreferences.getString('heatMode_driver') == 'auto'.</scenario-2>
-        <scenario-3 kind="success">Переход auto → manual: verify(fakeAutoHeat.stopAutoHeat(UserType.driver)).called(1).</scenario-3>
-        <scenario-4 kind="success">Auto mode конец-в-конец: setHeatMode(driver, auto); fakeHvacService.emitTemperature(-3.0); FakeAsync.elapse(6m); ожидание: state.driver.heatLevel == 2 (callback из AutoHeatService отработал и обновил ModeCubit).</scenario-4>
-        <scenario-5 kind="boundary">Холодный старт с пустым SharedPreferences: ModesState == ModesState(states: [ModeState(driver, manual, 0), ModeState(passenger, manual, 0)]).</scenario-5>
-        <scenario-6 kind="boundary">Холодный старт с SharedPreferences.setMockInitialValues({'heatMode_driver': 'auto', 'heatLevel_driver': 1}) → driver восстановлен с heatMode=auto, heatLevel=1.</scenario-6>
-        <scenario-7 kind="failure">SharedPreferences с garbage value 'heatMode_driver': 'xxx' → fromString orElse → HeatMode.manual; ModeCubit не падает.</scenario-7>
-        <scenario-8 kind="idempotency">setHeatLevel(driver, 2) дважды подряд: первый раз emit + setSeatHeatLevel; второй — emit с тем же state, но verifyNever(setSeatHeatLevel при втором вызове) — ИЛИ принять, что вызов идемпотентен (текущий код вызывает всегда; решить в Phase-2 step-5: оптимизировать или зафиксировать как есть). См. open-question O-1.</scenario-8>
+        <scenario-5 kind="boundary">Холодный старт с пустым prefs → оба сиденья ModeState(manual, 0); recordedSetSeatHeatCalls пуст.</scenario-5>
+        <scenario-6 kind="boundary">Восстановление: prefs {driver_mode:'auto', driver_heat_level:1} → driver(auto,1), passenger(manual,0).</scenario-6>
+        <scenario-7 kind="failure">prefs {driver_mode:'garbage'} → fromString orElse → driver heatMode=manual; ModeCubit не падает.</scenario-7>
+        <scenario-1 kind="success">setHeatLevel(driver, 2) → state.driver.heatLevel==2; FakeHvacService.recordedSetSeatHeatCalls==[(driver,2)]; prefs.getInt('driver_heat_level')==2.</scenario-1>
+        <scenario-8 kind="idempotency">setHeatLevel(driver, 2) дважды → recordedSetSeatHeatCalls имеет 2 записи (текущий код вызывает HVAC всегда — см. O-1).</scenario-8>
+        <scenario-2 kind="success">setMode(driver, 'auto') → state.driver.heatMode==auto; prefs.getString('driver_mode')=='auto'.</scenario-2>
+        <scenario-3 kind="success">setMode auto → setMode manual → stopAutoHeat: после emitTemperature(-3) уровень driver не меняется, recordedSetSeatHeatCalls пуст.</scenario-3>
+        <scenario-4 kind="success">setMode(driver,'auto') + emitTemperature(-3.0) → callback AutoHeatService → setHeatLevel → state.driver.heatLevel==3, recordedSetSeatHeatCalls содержит (driver,3).</scenario-4>
       </scenarios>
       <forbidden-markers>
-        <forbidden-1>При переключении на HeatMode.manual ModeCubit НЕ должен оставлять активные подписки в AutoHeatService (verifyNever(startAutoHeat) после явного перехода).</forbidden-1>
-        <forbidden-2>setHeatLevel не должен вызывать setSeatHeatLevel дважды для одного и того же уровня в рамках одного эмита (см. scenario-8).</forbidden-2>
-        <forbidden-3>Сериализация enum через .name; .toString() НЕ должен использоваться (он добавит префикс 'HeatMode.').</forbidden-3>
+        <forbidden-1>После setMode manual событие датчика НЕ должно менять уровень driver (stopAutoHeat отработал) — scenario-3.</forbidden-1>
+        <forbidden-2>Сериализация enum через .name; .toString() НЕ используется.</forbidden-2>
       </forbidden-markers>
       <required-log-markers>
         <marker-1 activated-in="Phase-3">[ModeCubit][setHeatLevel][BLOCK_SET_HEAT_LEVEL] userType=$userType level=$level</marker-1>
-        <marker-2 activated-in="Phase-3">[ModeCubit][setHeatMode][BLOCK_SET_HEAT_MODE] userType=$userType mode=$mode</marker-2>
+        <marker-2 activated-in="Phase-3">[ModeCubit][setMode][BLOCK_SET_MODE] userType=$userType mode=$mode</marker-2>
       </required-log-markers>
       <required-trace-assertions>
-        <assertion-1>verifyInOrder для setHeatLevel: ModeService.setHeatLevel ДО HvacService.setSeatHeatLevel ДО emit.</assertion-1>
-        <assertion-2>При HeatMode.auto AutoHeatService.startAutoHeat вызывается; callback приводит к setHeatLevel.</assertion-2>
+        <assertion-1>setHeatLevel пишет и в SharedPreferences, и в HvacService, и эмитит новое состояние (scenario-1).</assertion-1>
+        <assertion-2>setMode auto подключает авторежим, setMode manual — отключает (scenario-3, scenario-4).</assertion-2>
       </required-trace-assertions>
       <open-questions>
         <O-1>Должен ли setHeatLevel ранним выходом блокировать повторную запись того же уровня? Сейчас код вызывает setSeatHeatLevel всегда. Решение: оставить как есть (плагин дешёвый, идемпотентность на нижнем слое). Tests отражают текущее поведение в scenario-8.</O-1>
@@ -659,7 +660,7 @@
   <AutonomyReadiness>
     <summary>
       <ready-for-execute>V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS, V-M-LOGGER — самодостаточные, pure-friendly, &lt; 1 сек на проверку.</ready-for-execute>
-      <ready-for-execute-with-harness>V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE, V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS — требуют FakeHvacService (создан) / AutomotiveMethodChannelMock (создаётся в step-3) / SharedPreferencesMock. Безопасны для параллельной волны после Phase-2 step-0.</ready-for-execute-with-harness>
+      <ready-for-execute-with-harness>V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS — требуют SharedPreferencesMock. V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE — ВЫПОЛНЕНЫ в Phase-2 (FakeHvacService и AutomotiveMethodChannelMock созданы и валидированы).</ready-for-execute-with-harness>
       <ready-for-execute-manual-only>V-M-BACKGROUND, V-M-ACCESSIBILITY и эмпирическая сверка формулы (raw - 84) / 2 на голове — нужен физический head unit. Не блокируют автономные волны на остальных модулях.</ready-for-execute-manual-only>
       <not-ready>n/a — все запланированные V-M-* имеют чёткий next step.</not-ready>
     </summary>
@@ -674,15 +675,16 @@
     </required-packet-fields-before-autonomous-run>
     <recommended-execution-order>
       <step-1 status="done">Phase-2 step-0: scaffold TestInfrastructure. DONE: dev_deps (fake_async/bloc_test/mocktail) установлены; test/_helpers/fake_hvac_service.dart создан. AutomotiveMethodChannelMock (harness-2) перенесён в step-3 — валидируется реальным тестом, а не только analyze.</step-1>
-      <step-2>Phase-2 steps 1-3: V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS параллельно (independent pure functions). Можно multiagent-execute.</step-2>
-      <step-3>Phase-2 steps 3-5: V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE последовательно (M-MODE depends on harness fakes from M-HVAC/M-AUTO-HEAT) — sequential execute.</step-3>
+      <step-2 status="done">Phase-2 steps 1-2: V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS — 36 тестов. DONE.</step-2>
+      <step-3 status="done">Phase-2 steps 3-5: V-M-AUTO-HEAT (10), V-M-MODE (16), V-M-HVAC (13). DONE. fake_plugin.dart создан в step-5. Находка F-1 (fire-and-forget записи плагина).</step-3>
       <step-4>Phase-2 step-6: V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS, V-M-THEME — параллельно (независимые JSON round-trip).</step-4>
       <step-5>Phase-3 step-1: V-M-LOGGER (sequential, foundation для последующего sweep).</step-5>
       <step-6>Phase-3 step-2: sweep print → Logger в M-HVAC, M-AUTO-HEAT, M-MODE, M-BACKGROUND, M-PLUGIN. Параллельная волна, каждый воркер активирует TODO(phase-3) marker-assertions в своём модуле.</step-6>
       <step-7>Manual smoke на голове: V-M-BACKGROUND, V-M-ACCESSIBILITY, эмпирическая сверка формулы (raw - 84) / 2.</step-7>
     </recommended-execution-order>
     <known-gaps>
-      <gap-1 module="M-PLUGIN, M-HVAC">HvacService создаёт собственный AndroidAutomotivePlugin в конструкторе — не инжектируем. Тестирование HvacService и плагина идёт через мок const MethodChannel('android_automotive_plugin'): setMockMethodCallHandler (исходящие) + handlePlatformMessage (входящие onHvacChangeEvent). Плагин использует только MethodChannel, EventChannel нет. Harness AutomotiveMethodChannelMock создаётся в step-3 (см. TestInfrastructure harness-2).</gap-1>
+      <gap-1 module="M-PLUGIN, M-HVAC" status="resolved">HvacService не инжектирует плагин — тестируется через мок MethodChannel. Harness AutomotiveMethodChannelMock создан и валидирован в Phase-2 step-5 (V-M-HVAC зелёный). Подход переносим на будущий V-M-PLUGIN.</gap-1>
+      <gap-4 module="M-HVAC, M-PLUGIN">Находка F-1: плагин setHvacIntProperty/connect — fire-and-forget; ошибки записи/подключения не доходят до HvacService. setSeatHeatLevel "молча успешен" при недоступном HVAC. Кандидат на Phase-Deferred. См. V-M-HVAC/findings.</gap-4>
       <gap-2 module="M-BACKGROUND">Полное верификационное покрытие невозможно без головы: flutter_background_service не имеет тестового режима. Принимаем как known-gap; mitigation — конфиг-уровень assert + manual smoke.</gap-2>
       <gap-3 module="ALL">Log-marker assertions выключены до Phase-3 step-3. Этот gap намеренный и зафиксирован в GlobalPolicy/log-marker-activation.</gap-3>
     </known-gaps>
