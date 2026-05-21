@@ -1,3 +1,32 @@
+// FILE: lib/src/services/mode_service.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Persistence режима (manual/presets/auto) и уровня подогрева для
+//            driver/passenger в SharedPreferences — слой данных модуля M-MODE.
+//   SCOPE: чтение/запись режима и уровня по стабильным ключам, засев дефолтов.
+//   DEPENDS: M-ENUMS
+//   LINKS: M-MODE, V-M-MODE
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   ModeService - CRUD режимов и уровней через SharedPreferences
+//   ModeService(SharedPreferences) - конструктор с инъекцией prefs
+//   _driverModeKey / _passengerModeKey - ключи режима (стабильный контракт)
+//   _driverHeatLevelKey / _passengerHeatLevelKey - ключи уровня (стабильный контракт)
+//   getMode(UserType) - чтение HeatMode; дефолт manual
+//   setMode(UserType, HeatMode) - запись HeatMode по .name
+//   getHeatLevel(UserType) - чтение уровня; дефолт 0
+//   setHeatLevel(UserType, int) - запись уровня
+//   initializeDefaults - засев отсутствующих ключей дефолтами
+//   getAllModes - снимок режим+уровень для обоих UserType
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+// END_CHANGE_SUMMARY
+
 import 'package:autoheat/src/app_enums.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

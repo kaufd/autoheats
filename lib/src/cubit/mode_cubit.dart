@@ -1,3 +1,37 @@
+// FILE: lib/src/cubit/mode_cubit.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Bloc-слой режима подогрева — синхронизирует ModeService (persistence),
+//            HvacService (команды HVAC) и AutoHeatService (авторежим).
+//   SCOPE: setMode, setHeatLevel, toggleHeatLevel, восстановление состояния,
+//          публикация ModesState для UI.
+//   DEPENDS: M-HVAC, M-AUTO-HEAT, M-ENUMS
+//   LINKS: M-MODE, V-M-MODE, DF-SET-HEAT, DF-AUTO-HEAT
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   ModeCubit - Cubit<ModesState> поверх ModeService/HvacService/AutoHeatService
+//   ModeCubit(ModeService, HvacService) - конструктор; запускает _initialize
+//   _initialize - дефолты, подписка AutoHeatService, восстановление состояния
+//   _getStateByUser - выбрать ModeState для UserType
+//   _updateUserState - пересобрать и эмитить ModesState
+//   getModeByUser - имя текущего HeatMode для UserType
+//   getHeatLevelByUser - текущий уровень для UserType
+//   setMode(UserType, String) - сменить режим, persist, управлять авторежимом
+//   setHeatLevel(UserType, int) - persist + HvacService.setSeatHeatLevel + emit
+//   toggleHeatLevel - циклический перебор уровня в режиме manual
+//   cabinTemperature - геттер температуры из AutoHeatService
+//   _manageAutoHeat - старт/стоп AutoHeatService по HeatMode
+//   _initializeHeatModes - применить восстановленные режимы при старте
+//   close - dispose AutoHeatService и закрытие Cubit
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+// END_CHANGE_SUMMARY
+
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
