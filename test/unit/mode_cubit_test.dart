@@ -69,7 +69,7 @@ void main() {
 
   // START_BLOCK_RESTORE_FROM_PREFS
   test('scenario-6: восстановление driver(auto, 1) из prefs', () async {
-    final (cubit, _, __) = await buildCubit({
+    final (cubit, _, _) = await buildCubit({
       'driver_mode': 'auto',
       'driver_heat_level': 1,
     });
@@ -82,7 +82,7 @@ void main() {
   // START_BLOCK_GARBAGE_PREFS
   test('scenario-7: мусорное значение режима в prefs -> manual, без падения',
       () async {
-    final (cubit, _, __) = await buildCubit({'driver_mode': 'garbage'});
+    final (cubit, _, _) = await buildCubit({'driver_mode': 'garbage'});
     expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.manual);
   });
   // END_BLOCK_GARBAGE_PREFS
