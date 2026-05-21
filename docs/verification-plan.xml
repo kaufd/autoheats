@@ -489,7 +489,7 @@
         <assertion-1>В background-изоляте не должно быть обращений к UI-уровневым synchronizer'ам или ThemeCubit.</assertion-1>
       </required-trace-assertions>
       <wave-follow-up>Smoke на голове после изменения onStart.</wave-follow-up>
-      <phase-follow-up>Регрессия после апдейтов flutter_background_service.</phase-follow-up>
+      <phase-follow-up>Регрессия после апдейтов flutter_background_service. Отдельно: cold-boot smoke — проверить, что нотификация 'AutoHeat Service' появляется после рестарта головы (см. development-plan risk-4 про удалённый Future.delayed(1s)).</phase-follow-up>
     </V-M-BACKGROUND>
 
     <V-M-ACCESSIBILITY MODULE="M-ACCESSIBILITY" PRIORITY="medium">

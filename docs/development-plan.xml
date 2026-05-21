@@ -6,6 +6,7 @@
     <risk-1>Background-изолят имеет собственный DI: любое новое добавление в DI должно повторяться в onStart background-service, иначе фон молча перестаёт реагировать.</risk-1>
     <risk-2>Колбэк onHvacChangeEventCallback устанавливается в HvacService один раз. AutoHeatService подписывается через onCabinTemperatureChanged — только один потребитель. Добавление новых потребителей требует расширения HvacService до multi-listener.</risk-2>
     <risk-3>Формула температуры (raw-84)/2 унаследована от автора плагина abuharsky и разработчиком autoheat не верифицирована на реальной голове; точность и зависимость от модели Changan неизвестны.</risk-3>
+    <risk-4 commit-ref="See `git log --grep=Remove ServiceStatus`">В main.dart удалён `Future.delayed(Duration(milliseconds: 1000), () =&gt; initializeBackgroundService())` — изначальный комментарий гласил «чтобы канал уведомлений успел создаться». Возможный workaround под Android 13+ / конкретный head unit Changan. Если cold-boot foreground-service не поднимается (нет нотификации 'AutoHeat Service' после рестарта), вернуть задержку — это первая гипотеза. Smoke-проверка в V-M-BACKGROUND phase-follow-up.</risk-4>
   </ArchitectureNotes>
 
   <Modules>
