@@ -1,3 +1,36 @@
+// FILE: lib/src/services/auto_heat_service.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Реализация авторежима — по температуре салона запускает расписание
+//            уровней подогрева 3->2->1->0 индивидуально для driver/passenger.
+//   SCOPE: подписка на onCabinTemperatureChanged, per-UserType Timer-каскады,
+//          startAutoHeat/stopAutoHeat, ручная setTemperature для тестов.
+//   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE
+//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   AutoHeatService - синглтон авторежима
+//   AutoHeatService() - factory, возвращает единственный _instance
+//   initialize(HvacService) - подписка на onCabinTemperatureChanged
+//   setTemperature(double) - ручная установка температуры (тесты/диагностика)
+//   currentTemperature - геттер последней известной температуры салона
+//   startAutoHeat(UserType, callback) - регистрация колбэка уровня и старт расписания
+//   stopAutoHeat(UserType) - отмена Timer'а и удаление колбэка для UserType
+//   _updateAutoHeatForAllUsers - пересчёт расписания для всех активных UserType
+//   _updateAutoHeatForUser - отмена старого Timer'а и старт нового расписания
+//   _startHeatSequence - callback(3) и планирование перехода на уровень 2
+//   _scheduleNextLevel - каскадный Timer-переход 2->1->0 по HeatSequence
+//   _getSequence - HeatSequence для текущей температуры (null при range.off)
+//   dispose - отмена всех Timer'ов и очистка колбэков
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+// END_CHANGE_SUMMARY
+
 import 'dart:async';
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/constants/temperature_constants.dart';
