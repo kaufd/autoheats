@@ -705,20 +705,20 @@
       <step-19 module="M-MAIN" status="done" verification="V-M-MAIN">main.dart — точка входа: setupServiceLocator → инициализация кубитов → accessibility/background-service → runApp(AutoheatApp)</step-19>
     </Phase-1>
 
-    <Phase-2 name="Verification baseline" status="in-progress">
+    <Phase-2 name="Verification baseline" status="done">
       <goal>Покрыть критические pure-функции и контракты сервисов unit-тестами; ввести семантическую разметку в исходники.</goal>
       <step-1 module="M-CONSTANTS-TEMPERATURE" status="done" verification="V-M-CONSTANTS-TEMPERATURE">Тесты getTemperatureRange / getHeatSequence на граничных значениях — 23 теста</step-1>
       <step-2 module="M-ENUMS" status="done" verification="V-M-ENUMS">Тесты round-trip enum.name ↔ fromString — 13 тестов</step-2>
       <step-3 module="M-MODE" status="done" verification="V-M-MODE">Тесты ModeService + ModeCubit (FakeHvacService, SharedPreferences mock) — 16 тестов</step-3>
       <step-4 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Тесты расписания через FakeAsync — 10 тестов</step-4>
       <step-5 module="M-HVAC" status="done" verification="V-M-HVAC">Тесты конверсии и событий через MethodChannel-мок — 13 тестов; находка F-1</step-5>
-      <step-6 module="M-HVAC" status="pending" verification="V-M-HVAC">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/hvac_service.dart</step-6>
-      <step-7 module="M-AUTO-HEAT" status="pending" verification="V-M-AUTO-HEAT">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/auto_heat_service.dart</step-7>
-      <step-8 module="M-MODE" status="pending" verification="V-M-MODE">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/mode_service.dart и lib/src/cubit/mode_cubit.dart</step-8>
-      <step-9 module="M-BACKGROUND" status="pending" verification="V-M-BACKGROUND">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/background_service.dart</step-9>
-      <step-10 module="M-CONSTANTS-TEMPERATURE" status="pending" verification="V-M-CONSTANTS-TEMPERATURE">Добавить START_MODULE_CONTRACT/MAP в lib/src/constants/temperature_constants.dart</step-10>
-      <step-11 module="M-ENUMS" status="pending" verification="V-M-ENUMS">Добавить START_MODULE_CONTRACT/MAP в lib/src/app_enums.dart</step-11>
-      <step-12 module="M-DI" status="pending" verification="V-M-DI">Добавить START_MODULE_CONTRACT/MAP в lib/src/di/service_locator.dart</step-12>
+      <step-6 module="M-HVAC" status="done" verification="V-M-HVAC">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/hvac_service.dart</step-6>
+      <step-7 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/auto_heat_service.dart</step-7>
+      <step-8 module="M-MODE" status="done" verification="V-M-MODE">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/mode_service.dart и lib/src/cubit/mode_cubit.dart</step-8>
+      <step-9 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/background_service.dart</step-9>
+      <step-10 module="M-CONSTANTS-TEMPERATURE" status="done" verification="V-M-CONSTANTS-TEMPERATURE">Добавить START_MODULE_CONTRACT/MAP в lib/src/constants/temperature_constants.dart</step-10>
+      <step-11 module="M-ENUMS" status="done" verification="V-M-ENUMS">Добавить START_MODULE_CONTRACT/MAP в lib/src/app_enums.dart</step-11>
+      <step-12 module="M-DI" status="done" verification="V-M-DI">Добавить START_MODULE_CONTRACT/MAP в lib/src/di/service_locator.dart</step-12>
     </Phase-2>
 
     <Phase-3 name="Reliability hardening" status="pending">
