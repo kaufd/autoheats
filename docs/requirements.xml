@@ -1,0 +1,92 @@
+<RequirementsAnalysis VERSION="0.2.0">
+  <Project>
+    <name>autoheat</name>
+    <annotation>Flutter-приложение для автоматического управления подогревом сидений в автомобиле Changan. Работает на головном устройстве под Android Automotive OS, общается с HVAC и датчиками через локальный path-плагин android_automotive_plugin (взят с GitHub abuharsky/changan_car_flutter_library, переложен в packages/ ради удобства локальной модификации), переключает уровни подогрева по датчику температуры салона или по пользовательским режимам/пресетам, продолжает работать в фоне через foreground-service. Проект — переработка предыдущей версии autoheat_old.</annotation>
+    <keywords>flutter, dart, android-automotive, changan, hvac, seat-heating, head-unit, foreground-service, bloc, cubit</keywords>
+  </Project>
+
+  <Actors>
+    <actor-Driver>Водитель — основной пользователь, управляет подогревом своего сиденья через UI.</actor-Driver>
+    <actor-Passenger>Передний пассажир — второй пользователь с независимым уровнем подогрева.</actor-Passenger>
+    <actor-System>Фоновый сервис, реагирующий на ignition и события датчика температуры салона.</actor-System>
+    <actor-Car>Автомобиль Changan (HVAC и датчики), доступный через android.car.* API.</actor-Car>
+  </Actors>
+
+  <UseCases>
+    <UC-001>
+      <Actor>Driver, Passenger</Actor>
+      <Action>Выбирает уровень подогрева (0–3) для своего сиденья в режиме manual</Action>
+      <Goal>Получить ожидаемый уровень нагрева сразу же</Goal>
+      <Preconditions>Приложение подключено к AndroidAutomotivePlugin, режим = manual</Preconditions>
+      <AcceptanceCriteria>HVAC сразу принимает соответствующее значение свойства; уровень сохранён в SharedPreferences; UI обновлён</AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-SET-HEAT</RelatedFlows>
+    </UC-001>
+    <UC-002>
+      <Actor>System</Actor>
+      <Action>Автоматически включает подогрев по расписанию (3 → 2 → 1 → off) на основе температуры салона</Action>
+      <Goal>Прогреть сиденье соразмерно холоду без участия пользователя</Goal>
+      <Preconditions>Режим = auto, есть значение температуры салона</Preconditions>
+      <AcceptanceCriteria>Используется HeatSequence из TemperatureConstants, переходы происходят по таймеру; при выходе температуры из диапазона расписание сбрасывается</AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-AUTO-HEAT, DF-INIT-TEMP</RelatedFlows>
+    </UC-002>
+    <UC-003>
+      <Actor>Driver, Passenger</Actor>
+      <Action>Сохраняет и применяет пресет (комбинация настроек подогрева)</Action>
+      <Goal>Быстро восстановить привычную конфигурацию</Goal>
+      <Preconditions>Пресет сохранён в SharedPreferences</Preconditions>
+      <AcceptanceCriteria>При активации пресета все уровни/режимы выставляются как сохранены; HVAC принимает новые значения</AcceptanceCriteria>
+      <Priority>medium</Priority>
+      <RelatedFlows>DF-PRESET-APPLY</RelatedFlows>
+    </UC-003>
+    <UC-004>
+      <Actor>System</Actor>
+      <Action>Поднимает foreground-service при загрузке и удерживает его при свёрнутом приложении</Action>
+      <Goal>Автоподогрев продолжает работать, даже если приложение не на переднем плане</Goal>
+      <Preconditions>Android 13+, заведённое устройство, разрешения POST_NOTIFICATIONS и FOREGROUND_SERVICE_DATA_SYNC</Preconditions>
+      <AcceptanceCriteria>Уведомление 'AutoHeat Service' видно; сервис не убивается системой; при потере соединения с плагином — перезапуск с backoff</AcceptanceCriteria>
+      <Priority>high</Priority>
+      <RelatedFlows>DF-BACKGROUND</RelatedFlows>
+    </UC-004>
+    <UC-005>
+      <Actor>Driver</Actor>
+      <Action>Переключает тему интерфейса</Action>
+      <Goal>Адаптировать UI под дневной/ночной режим головного устройства</Goal>
+      <Preconditions>Тема сохраняется в SharedPreferences</Preconditions>
+      <AcceptanceCriteria>Цвета/стили перерисовываются мгновенно через ThemeCubit</AcceptanceCriteria>
+      <Priority>low</Priority>
+      <RelatedFlows />
+    </UC-005>
+  </UseCases>
+
+  <NonGoals>
+    <item-1>Никакой адаптивной вёрстки под телефоны/планшеты — UI рассчитан на фиксированное разрешение головного устройства.</item-1>
+    <item-2>Не управлять климатом целиком — только подогревом сидений (driver + passenger).</item-2>
+    <item-3>Не интегрироваться с облаком, аккаунтами, OTA-обновлениями.</item-3>
+  </NonGoals>
+
+  <Constraints>
+    <constraint-1>Минимальная Android API 23, целевая платформа — Automotive head unit (Changan; конкретные модели разработчиком autoheat не верифицированы).</constraint-1>
+    <constraint-2>Для доступа к android.car.* APK должен быть установлен как системный/подписан платформенным ключом; иначе AndroidAutomotivePlugin.connect() падает.</constraint-2>
+    <constraint-3>Формула температуры салона: celsius = (raw - 84) / 2. Все слайдеры и пороги UI работают в °C.</constraint-3>
+    <constraint-4>Все настройки и пресеты сериализуются через SharedPreferences по стабильным строковым ключам и enum.name (HeatMode, UserType) — переименование требует миграции пользовательских данных.</constraint-4>
+    <constraint-5>Интерфейс и пользовательские строки/логи — на русском.</constraint-5>
+    <constraint-6>Foreground-service обязателен (Android 13+), notificationChannelId 'my_foreground', id 888.</constraint-6>
+  </Constraints>
+
+  <Risks>
+    <risk-1>AndroidAutomotivePlugin может падать вне головы или после OTA-обновления Android Automotive — нужен graceful fallback (логирование + дефолтные значения, не крашить процесс).</risk-1>
+    <risk-2>Background-изолят имеет собственный DI-контейнер: забыть DartPluginRegistrant.ensureInitialized() или setupServiceLocator() в onStart — и сервис молча перестаёт реагировать на события датчиков.</risk-2>
+    <risk-3>Таймеры расписания автоподогрева могут конфликтовать при быстрой смене температуры; нужна корректная отмена старого Timer перед стартом нового.</risk-3>
+    <risk-4>Свойства HVAC через CarPropertyValue могут возвращать значения с другим масштабом на разных прошивках Changan — формула температуры (raw - 84) / 2 унаследована от автора плагина и не верифицирована на реальной машине разработчиком autoheat.</risk-4>
+    <risk-5>При отсутствии нотификации канала 'my_foreground' Android 13+ убьёт сервис без логов.</risk-5>
+  </Risks>
+
+  <OpenQuestions>
+    <question-1>Нужна ли отдельная диагностическая страница с raw-значениями HVAC и состоянием соединения с плагином?</question-1>
+    <question-2>Должно ли приложение само останавливать подогрев при выключении ignition или это сделает HVAC?</question-2>
+    <question-3>Формула raw → °C ((raw - 84) / 2) унаследована от автора плагина abuharsky и не верифицирована разработчиком autoheat на реальной машине. До первого smoke-теста на голове неизвестно, насколько она точна и зависит ли от модели Changan. Триггер для extraction в отдельный модуль (M-TEMPERATURE-CONVERSION или CarProfile) — deferred-3 в development-plan.</question-3>
+    <question-4>Нужен ли встроенный диагностический экран без adb/logcat? Сейчас отложен (deferred-2) до появления конкретного запроса от пользователей головы.</question-4>
+  </OpenQuestions>
+</RequirementsAnalysis>

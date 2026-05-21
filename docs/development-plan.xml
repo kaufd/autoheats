@@ -1,0 +1,749 @@
+<DevelopmentPlan VERSION="0.2.0">
+  <ArchitectureNotes>
+    <objective>Зафиксировать фактическую архитектуру существующего MVP autoheat в GRACE-формате, чтобы будущие изменения проходили через контракты, графы и верификацию.</objective>
+    <non-goal>Не реинжинирить рабочую кодовую базу — на этом этапе план описывает уже существующие модули как STATUS="implemented".</non-goal>
+    <objective-2>Подготовить базу для следующих волн: добавление тестов (test/), переход на структурированный логгер, диагностический экран HVAC.</objective-2>
+    <risk-1>Background-изолят имеет собственный DI: любое новое добавление в DI должно повторяться в onStart background-service, иначе фон молча перестаёт реагировать.</risk-1>
+    <risk-2>Колбэк onHvacChangeEventCallback устанавливается в HvacService один раз. AutoHeatService подписывается через onCabinTemperatureChanged — только один потребитель. Добавление новых потребителей требует расширения HvacService до multi-listener.</risk-2>
+    <risk-3>Формула температуры (raw-84)/2 унаследована от автора плагина abuharsky и разработчиком autoheat не верифицирована на реальной голове; точность и зависимость от модели Changan неизвестны.</risk-3>
+  </ArchitectureNotes>
+
+  <Modules>
+    <M-PLUGIN NAME="AndroidAutomotivePlugin" TYPE="INTEGRATION" LAYER="0" ORDER="1" STATUS="implemented">
+      <contract>
+        <purpose>Локальная Flutter-обёртка над android.car.* (HVAC, sensors, ignition). Единственная точка доступа к авто.</purpose>
+        <inputs>
+          <param name="propertyId" type="int" />
+          <param name="areaId" type="int" />
+          <param name="value" type="int" />
+        </inputs>
+        <outputs>
+          <param name="CarPropertyValue" type="event" />
+          <param name="propertyValue" type="int" />
+        </outputs>
+        <errors>
+          <error code="PLUGIN_NOT_CONNECTED" />
+          <error code="CAR_PROPERTY_UNAVAILABLE" />
+        </errors>
+      </contract>
+      <interface>
+        <export-connect PURPOSE="Подключиться к Car API" />
+        <export-getHvacIntProperty PURPOSE="Прочитать целочисленное HVAC-свойство по propertyId/areaId" />
+        <export-setHvacIntProperty PURPOSE="Записать целочисленное HVAC-свойство" />
+        <export-onHvacChangeEventCallback PURPOSE="Колбэк изменения HVAC-свойства" />
+        <export-setCallbackHandle PURPOSE="Регистрация системного entry-point для пробуждения" />
+        <export-CarHvacManager PURPOSE="setSeatHeatLevel(isDriver, level), getInsideTemperature" />
+      </interface>
+      <depends>none</depends>
+      <target>
+        <source>packages/android_automotive_plugin/lib/android_automotive_plugin.dart</source>
+        <source>packages/android_automotive_plugin/lib/car/hvac_manager.dart</source>
+        <source>packages/android_automotive_plugin/lib/car/hvac_property_ids.dart</source>
+        <source>packages/android_automotive_plugin/lib/car/vehicle_area_in_out_car.dart</source>
+        <source>packages/android_automotive_plugin/lib/car/sensor_manager.dart</source>
+        <source>packages/android_automotive_plugin/android/</source>
+        <tests>packages/android_automotive_plugin/test/ (отсутствует)</tests>
+      </target>
+      <observability>
+        <log-prefix>[AndroidAutomotivePlugin]</log-prefix>
+        <critical-block>BLOCK_CONNECT</critical-block>
+        <critical-block>BLOCK_HVAC_PROPERTY_EVENT</critical-block>
+      </observability>
+      <verification-ref>V-M-PLUGIN</verification-ref>
+      <notes>
+        <note-1>Локальный path-плагин, исходник с GitHub abuharsky/changan_car_flutter_library. На head unit без системных привилегий connect() ожидаемо падает.</note-1>
+      </notes>
+    </M-PLUGIN>
+
+    <M-ENUMS NAME="AppEnums" TYPE="UTILITY" LAYER="0" ORDER="2" STATUS="implemented">
+      <contract>
+        <purpose>Стабильные enum-ы режима подогрева и типа сиденья.</purpose>
+        <inputs>
+          <param name="value" type="String" />
+        </inputs>
+        <outputs>
+          <param name="HeatMode" type="enum" />
+          <param name="UserType" type="enum" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-HeatMode PURPOSE="manual|presets|auto" />
+        <export-UserType PURPOSE="driver|passenger" />
+        <export-HeatModeExtension.fromString PURPOSE="Стабильная десериализация по .name" />
+        <export-UserTypeExtension.fromString PURPOSE="Стабильная десериализация по .name" />
+      </interface>
+      <depends>none</depends>
+      <target>
+        <source>lib/src/app_enums.dart</source>
+        <tests>test/unit/app_enums_test.dart (запланирован)</tests>
+      </target>
+      <observability>
+        <log-prefix>n/a</log-prefix>
+      </observability>
+      <verification-ref>V-M-ENUMS</verification-ref>
+      <notes>
+        <note-1>Имена enum-ов входят в публичный контракт SharedPreferences и не должны переименовываться без миграции.</note-1>
+      </notes>
+    </M-ENUMS>
+
+    <M-LOGGER NAME="Logger" TYPE="UTILITY" LAYER="0" ORDER="4" STATUS="planned">
+      <contract>
+        <purpose>Единая точка структурированного логирования с форматом [Module][fn][BLOCK]. Реализуется без сторонних библиотек (поверх print + dart:io).</purpose>
+        <inputs>
+          <param name="level" type="LogLevel (debug|info|warn|error)" />
+          <param name="module" type="String" />
+          <param name="fn" type="String" />
+          <param name="block" type="String" />
+          <param name="message" type="String" />
+          <param name="fields" type="Map&lt;String, Object?&gt;?" />
+        </inputs>
+        <outputs>
+          <param name="-" type="void" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-Logger PURPOSE="Статический фасад: Logger.info(...), Logger.warn(...), Logger.error(...)" />
+        <export-LogLevel PURPOSE="enum уровней" />
+        <export-installTestSink PURPOSE="Для тестов: подменить sink на буфер" />
+        <export-defaultSink PURPOSE="Стандартный sink через print()" />
+      </interface>
+      <depends>none</depends>
+      <target>
+        <source>lib/src/utils/logger.dart</source>
+        <tests>test/unit/logger_test.dart</tests>
+      </target>
+      <observability>
+        <log-prefix>[Logger]</log-prefix>
+        <self-log>true</self-log>
+      </observability>
+      <verification-ref>V-M-LOGGER</verification-ref>
+      <notes>
+        <note-1>Никаких пакетов типа logger/logging — только print. Это решено осознанно, чтобы не тянуть зависимости и сохранить детерминизм в тестах.</note-1>
+        <note-2>redaction: при выводе fields обязан маскировать ключ 'rawCarPropertyValue' если уровень != debug.</note-2>
+      </notes>
+    </M-LOGGER>
+
+    <M-CONSTANTS-TEMPERATURE NAME="TemperatureConstants" TYPE="UTILITY" LAYER="0" ORDER="3" STATUS="implemented">
+      <contract>
+        <purpose>Маппинг температуры салона в TemperatureRange и HeatSequence для авторежима.</purpose>
+        <inputs>
+          <param name="temperature" type="double" />
+        </inputs>
+        <outputs>
+          <param name="TemperatureRange" type="enum" />
+          <param name="HeatSequence?" type="value" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-getTemperatureRange PURPOSE="°C → TemperatureRange" />
+        <export-getHeatSequence PURPOSE="°C → HeatSequence?" />
+        <export-temperatureSequences PURPOSE="Готовые расписания warm/cool/cold/freezing/extreme" />
+        <export-defaultTemperatureThreshold PURPOSE="5.0" />
+        <export-sliderValues PURPOSE="[-5,0,5,10,15]" />
+      </interface>
+      <depends>none</depends>
+      <target>
+        <source>lib/src/constants/temperature_constants.dart</source>
+        <tests>test/unit/temperature_constants_test.dart (запланирован)</tests>
+      </target>
+      <observability>
+        <log-prefix>n/a</log-prefix>
+      </observability>
+      <verification-ref>V-M-CONSTANTS-TEMPERATURE</verification-ref>
+      <notes>
+        <note-1>Чистые pure-функции — идеальный кандидат на ранние unit-тесты.</note-1>
+      </notes>
+    </M-CONSTANTS-TEMPERATURE>
+
+    <M-HVAC NAME="HvacService" TYPE="CORE_LOGIC" LAYER="1" ORDER="1" STATUS="implemented">
+      <contract>
+        <purpose>Единая точка взаимодействия приложения с AndroidAutomotivePlugin: установка уровня подогрева, чтение температуры салона, callback изменения температуры.</purpose>
+        <inputs>
+          <param name="userType" type="UserType" />
+          <param name="level" type="int (0..3)" />
+        </inputs>
+        <outputs>
+          <param name="cabinTemperatureCelsius" type="double" />
+          <param name="onCabinTemperatureChanged" type="callback(double)" />
+        </outputs>
+        <errors>
+          <error code="PLUGIN_INIT_FAILED" />
+          <error code="HVAC_WRITE_FAILED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-HvacService PURPOSE="Singleton-сервис, регистрируемый в GetIt" />
+        <export-initialize PURPOSE="Ленивая connect() плагина" />
+        <export-setSeatHeatLevel PURPOSE="Прокинуть уровень через CarHvacManager.setSeatHeatLevel" />
+        <export-getCabinTemperature PURPOSE="Прочитать температуру салона; fallback 20.0 °C при ошибке" />
+        <export-onCabinTemperatureChanged PURPOSE="Колбэк, вызываемый при изменении ID_HVAC_IN_OUT_TEMP для InOutCAR_INSIDE" />
+      </interface>
+      <depends>M-PLUGIN, M-ENUMS</depends>
+      <target>
+        <source>lib/src/services/hvac_service.dart</source>
+        <tests>test/unit/hvac_service_test.dart (запланирован)</tests>
+      </target>
+      <observability>
+        <log-prefix>[HvacService]</log-prefix>
+        <critical-block>BLOCK_INITIALIZE</critical-block>
+        <critical-block>BLOCK_SET_SEAT_HEAT_LEVEL</critical-block>
+        <critical-block>BLOCK_HANDLE_TEMPERATURE_EVENT</critical-block>
+      </observability>
+      <verification-ref>V-M-HVAC</verification-ref>
+      <notes>
+        <note-1>Сейчас onCabinTemperatureChanged — одиночный колбэк. При добавлении новых потребителей расширить до multi-listener.</note-1>
+        <note-2>Метод dispose() предусмотрен, но в текущем коде не вызывается явно из main.</note-2>
+      </notes>
+    </M-HVAC>
+
+    <M-AUTO-HEAT NAME="AutoHeatService" TYPE="CORE_LOGIC" LAYER="2" ORDER="1" STATUS="implemented">
+      <contract>
+        <purpose>Реализация авторежима: запускать расписание уровней 3→2→1→0 индивидуально для driver/passenger в зависимости от температуры салона.</purpose>
+        <inputs>
+          <param name="hvacService" type="HvacService" />
+          <param name="userType" type="UserType" />
+          <param name="onHeatLevelChanged" type="callback(int)" />
+        </inputs>
+        <outputs>
+          <param name="heatLevel" type="int" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-AutoHeatService PURPOSE="Синглтон" />
+        <export-initialize PURPOSE="Подписаться на onCabinTemperatureChanged" />
+        <export-startAutoHeat PURPOSE="Зарегистрировать колбэк уровня и запустить расписание" />
+        <export-stopAutoHeat PURPOSE="Отменить таймеры и удалить колбэк" />
+        <export-setTemperature PURPOSE="Ручная установка температуры (для тестов/диагностики)" />
+      </interface>
+      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE</depends>
+      <target>
+        <source>lib/src/services/auto_heat_service.dart</source>
+        <tests>test/unit/auto_heat_service_test.dart (запланирован)</tests>
+      </target>
+      <observability>
+        <log-prefix>[AutoHeatService]</log-prefix>
+        <critical-block>BLOCK_START_HEAT_SEQUENCE</critical-block>
+        <critical-block>BLOCK_SCHEDULE_NEXT_LEVEL</critical-block>
+      </observability>
+      <verification-ref>V-M-AUTO-HEAT</verification-ref>
+      <notes>
+        <note-1>Таймеры хранятся per-UserType — отмена обязательна перед новым стартом, иначе наложение каскадов.</note-1>
+      </notes>
+    </M-AUTO-HEAT>
+
+    <M-MODE NAME="ModeDomain" TYPE="CORE_LOGIC" LAYER="2" ORDER="2" STATUS="implemented">
+      <contract>
+        <purpose>Управление режимом (manual/presets/auto) и уровнем подогрева для driver/passenger с persistence и командами на HVAC.</purpose>
+        <inputs>
+          <param name="userType" type="UserType" />
+          <param name="mode" type="HeatMode" />
+          <param name="level" type="int" />
+        </inputs>
+        <outputs>
+          <param name="ModesState" type="bloc-state" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-ModeService PURPOSE="CRUD режимов/уровней через SharedPreferences" />
+        <export-ModeCubit PURPOSE="setHeatMode, setHeatLevel, getCurrentSeatHeatLevel" />
+        <export-ModeState PURPOSE="userType + heatMode + heatLevel" />
+        <export-ModesState PURPOSE="Список ModeState для driver+passenger" />
+      </interface>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS</depends>
+      <target>
+        <source>lib/src/services/mode_service.dart</source>
+        <source>lib/src/cubit/mode_cubit.dart</source>
+        <source>lib/src/cubit/mode_state_cubit.dart</source>
+        <tests>test/unit/mode_cubit_test.dart (запланирован)</tests>
+      </target>
+      <observability>
+        <log-prefix>[ModeCubit]</log-prefix>
+        <critical-block>BLOCK_SET_HEAT_LEVEL</critical-block>
+        <critical-block>BLOCK_SET_HEAT_MODE</critical-block>
+      </observability>
+      <verification-ref>V-M-MODE</verification-ref>
+      <notes>
+        <note-1>SharedPreferences-ключи и enum.name — стабильный контракт.</note-1>
+      </notes>
+    </M-MODE>
+
+    <M-MANUAL-SETTINGS NAME="ManualSettingsDomain" TYPE="CORE_LOGIC" LAYER="2" ORDER="3" STATUS="implemented">
+      <contract>
+        <purpose>Хранение параметров ручного режима.</purpose>
+        <inputs>
+          <param name="ManualSettings" type="model" />
+        </inputs>
+        <outputs>
+          <param name="ManualSettings" type="model" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-ManualSettingsService PURPOSE="JSON-сериализация через SharedPreferences" />
+        <export-ManualSettingsCubit PURPOSE="Состояние ручных настроек" />
+        <export-ManualSettings PURPOSE="Модель @JsonSerializable" />
+      </interface>
+      <depends>M-ENUMS</depends>
+      <target>
+        <source>lib/src/services/manual_settings_service.dart</source>
+        <source>lib/src/cubit/manual_settings_cubit.dart</source>
+        <source>lib/src/models/manual_settings.dart</source>
+        <source>lib/src/models/manual_settings.g.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[ManualSettings]</log-prefix>
+      </observability>
+      <verification-ref>V-M-MANUAL-SETTINGS</verification-ref>
+    </M-MANUAL-SETTINGS>
+
+    <M-PRESET NAME="PresetDomain" TYPE="CORE_LOGIC" LAYER="3" ORDER="1" STATUS="implemented">
+      <contract>
+        <purpose>CRUD пользовательских пресетов и их применение к ModeCubit.</purpose>
+        <inputs>
+          <param name="Preset" type="model" />
+        </inputs>
+        <outputs>
+          <param name="List&lt;Preset&gt;" type="bloc-state" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-PresetService PURPOSE="JSON-CRUD пресетов в SharedPreferences" />
+        <export-PresetCubit PURPOSE="Состояние списка и активного пресета" />
+        <export-Preset PURPOSE="Модель @JsonSerializable" />
+      </interface>
+      <depends>M-MODE</depends>
+      <target>
+        <source>lib/src/services/preset_service.dart</source>
+        <source>lib/src/cubit/preset_cubit.dart</source>
+        <source>lib/src/models/preset.dart</source>
+        <source>lib/src/models/preset.g.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[Preset]</log-prefix>
+      </observability>
+      <verification-ref>V-M-PRESET</verification-ref>
+    </M-PRESET>
+
+    <M-SETTINGS NAME="SettingsDomain" TYPE="CORE_LOGIC" LAYER="2" ORDER="4" STATUS="implemented">
+      <contract>
+        <purpose>Хранение глобальных пользовательских настроек (порог авторежима и пр.).</purpose>
+        <inputs>
+          <param name="threshold" type="double" />
+        </inputs>
+        <outputs>
+          <param name="SettingsState" type="bloc-state" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-SettingsService PURPOSE="Persistence порога температуры" />
+        <export-SettingsCubit PURPOSE="initialize(); хранит и публикует настройки" />
+      </interface>
+      <depends>M-CONSTANTS-TEMPERATURE</depends>
+      <target>
+        <source>lib/src/services/settings_service.dart</source>
+        <source>lib/src/cubit/settings_cubit.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[Settings]</log-prefix>
+      </observability>
+      <verification-ref>V-M-SETTINGS</verification-ref>
+    </M-SETTINGS>
+
+    <M-THEME NAME="ThemeDomain" TYPE="UI_COMPONENT" LAYER="2" ORDER="5" STATUS="implemented">
+      <contract>
+        <purpose>Выбор и применение визуальной темы.</purpose>
+        <inputs>
+          <param name="themeType" type="ThemeType" />
+        </inputs>
+        <outputs>
+          <param name="ThemeData" type="value" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-ThemeService PURPOSE="Persistence выбранной темы" />
+        <export-ThemeCubit PURPOSE="initialize(); getCurrentTheme(context)" />
+        <export-ThemeConfigurator PURPOSE="Сборка ThemeData" />
+        <export-ThemeType PURPOSE="enum доступных тем" />
+      </interface>
+      <depends>none</depends>
+      <target>
+        <source>lib/src/presentation/themes/theme_service.dart</source>
+        <source>lib/src/presentation/themes/theme_cubit.dart</source>
+        <source>lib/src/presentation/themes/theme_configurator.dart</source>
+        <source>lib/src/presentation/themes/theme_name.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[Theme]</log-prefix>
+      </observability>
+      <verification-ref>V-M-THEME</verification-ref>
+    </M-THEME>
+
+    <M-DI NAME="ServiceLocator" TYPE="UTILITY" LAYER="3" ORDER="2" STATUS="implemented">
+      <contract>
+        <purpose>Регистрация SharedPreferences и всех сервисов/кубитов в GetIt.</purpose>
+        <inputs>
+          <param name="-" type="-" />
+        </inputs>
+        <outputs>
+          <param name="locator" type="GetIt" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-setupServiceLocator PURPOSE="Async bootstrap DI; должен вызываться И в UI-, И в background-изоляте" />
+        <export-locator PURPOSE="GetIt.instance" />
+      </interface>
+      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME</depends>
+      <target>
+        <source>lib/src/di/service_locator.dart</source>
+        <source>lib/src/di/app_bloc_providers.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[ServiceLocator]</log-prefix>
+      </observability>
+      <verification-ref>V-M-DI</verification-ref>
+    </M-DI>
+
+    <M-BACKGROUND NAME="BackgroundService" TYPE="INTEGRATION" LAYER="4" ORDER="1" STATUS="implemented">
+      <contract>
+        <purpose>Foreground-service flutter_background_service: жить, пока приложение в фоне; слушать ignition и события HVAC, синхронизировать ModeCubit.</purpose>
+        <inputs>
+          <param name="ServiceInstance" type="flutter_background_service" />
+        </inputs>
+        <outputs>
+          <param name="ongoingNotification" type="android-notification" />
+        </outputs>
+        <errors>
+          <error code="SERVICE_RESTART" />
+          <error code="MAX_RESTART_REACHED" />
+        </errors>
+      </contract>
+      <interface>
+        <export-initializeBackgroundService PURPOSE="Конфигурация и autoStart" />
+        <export-onStart PURPOSE="@pragma('vm:entry-point'); ensureInitialized + setupServiceLocator + подписки" />
+      </interface>
+      <depends>M-PLUGIN, M-MODE, M-HVAC, M-DI</depends>
+      <target>
+        <source>lib/src/services/background_service.dart</source>
+        <source>android/app/src/main/AndroidManifest.xml</source>
+      </target>
+      <observability>
+        <log-prefix>[BackgroundService]</log-prefix>
+        <critical-block>BLOCK_ON_START</critical-block>
+        <critical-block>BLOCK_HANDLE_IGNITION</critical-block>
+        <critical-block>BLOCK_RESTART_BACKOFF</critical-block>
+      </observability>
+      <verification-ref>V-M-BACKGROUND</verification-ref>
+      <notes>
+        <note-1>Канал нотификации 'my_foreground', id 888. Без него Android 13+ убивает процесс.</note-1>
+        <note-2>В onStart обязательно DartPluginRegistrant.ensureInitialized() и повторный setupServiceLocator() — изолят отдельный.</note-2>
+      </notes>
+    </M-BACKGROUND>
+
+    <M-ACCESSIBILITY NAME="AccessibilityService" TYPE="INTEGRATION" LAYER="4" ORDER="2" STATUS="implemented">
+      <contract>
+        <purpose>Регистрация системного callback handle через AndroidAutomotivePlugin для пробуждения background-service.</purpose>
+        <inputs>
+          <param name="-" type="-" />
+        </inputs>
+        <outputs>
+          <param name="-" type="-" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-initializeAccessibilityService PURPOSE="setCallbackHandle" />
+        <export-_accessibilityServiceCallback PURPOSE="@pragma('vm:entry-point'); поднимает foreground-service" />
+      </interface>
+      <depends>M-PLUGIN, M-BACKGROUND</depends>
+      <target>
+        <source>lib/src/services/accessibility_service.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[AccessibilityService]</log-prefix>
+      </observability>
+      <verification-ref>V-M-ACCESSIBILITY</verification-ref>
+    </M-ACCESSIBILITY>
+
+    <M-MAIN NAME="AppEntry" TYPE="ENTRY_POINT" LAYER="5" ORDER="0" STATUS="implemented">
+      <contract>
+        <purpose>Точка входа Flutter-приложения: bootstrap DI, темы, accessibility-callback, background-service и запуск AutoheatApp.</purpose>
+        <inputs>
+          <param name="-" type="-" />
+        </inputs>
+        <outputs>
+          <param name="runApp" type="widget" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-main PURPOSE="WidgetsFlutterBinding.ensureInitialized + setupServiceLocator + initializeAccessibilityService + initializeBackgroundService + runApp" />
+        <export-AutoheatApp PURPOSE="Корневой MaterialApp с BlocBuilder&lt;ThemeCubit&gt;" />
+      </interface>
+      <depends>M-DI, M-BLOC-PROVIDERS, M-THEME, M-SETTINGS, M-ACCESSIBILITY, M-BACKGROUND, M-UI-APP</depends>
+      <target>
+        <source>lib/main.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[AppEntry]</log-prefix>
+      </observability>
+      <verification-ref>V-M-MAIN</verification-ref>
+      <notes>
+        <note-1>Порядок инициализации значим: setupServiceLocator → ThemeCubit.initialize → SettingsCubit.initialize → initializeAccessibilityService → initializeBackgroundService → runApp. Изменение порядка ломает background-isolate setup.</note-1>
+      </notes>
+    </M-MAIN>
+
+    <M-BLOC-PROVIDERS NAME="AppBlocProviders" TYPE="UTILITY" LAYER="4" ORDER="3" STATUS="implemented">
+      <contract>
+        <purpose>Список BlocProvider'ов для корневого MultiBlocProvider в AutoheatApp.</purpose>
+        <inputs>
+          <param name="-" type="-" />
+        </inputs>
+        <outputs>
+          <param name="providers" type="List&lt;BlocProvider&gt;" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-BlockProviders.initiateBlocs PURPOSE="Массив BlocProvider'ов на базе locator-singletons" />
+      </interface>
+      <depends>M-DI, M-THEME, M-MODE, M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET</depends>
+      <target>
+        <source>lib/src/di/app_bloc_providers.dart</source>
+      </target>
+      <observability>
+        <log-prefix>n/a</log-prefix>
+      </observability>
+      <verification-ref>V-M-BLOC-PROVIDERS</verification-ref>
+    </M-BLOC-PROVIDERS>
+
+    <M-UI-APP NAME="UiAppShell" TYPE="UI_COMPONENT" LAYER="4" ORDER="4" STATUS="implemented">
+      <contract>
+        <purpose>Корневой контейнер навигации Heat/Presets/Settings.</purpose>
+        <inputs>
+          <param name="ThemeData" type="value" />
+        </inputs>
+        <outputs>
+          <param name="Widget" type="flutter" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-AppContent PURPOSE="Главный StatefulWidget с табами" />
+      </interface>
+      <depends>M-UI-HEAT, M-UI-PRESETS, M-UI-SETTINGS, M-THEME</depends>
+      <target>
+        <source>lib/src/presentation/app_content.dart</source>
+        <source>lib/main.dart</source>
+      </target>
+      <observability>
+        <log-prefix>[AppContent]</log-prefix>
+      </observability>
+      <verification-ref>V-M-UI-APP</verification-ref>
+    </M-UI-APP>
+
+    <M-UI-HEAT NAME="HeatScreen" TYPE="UI_COMPONENT" LAYER="5" ORDER="1" STATUS="implemented">
+      <contract>
+        <purpose>Главный экран управления подогревом: уровни, индикатор температуры салона, переключатель режима.</purpose>
+        <inputs>
+          <param name="ModesState" type="bloc-state" />
+        </inputs>
+        <outputs>
+          <param name="UserAction" type="event" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-HeatScreen PURPOSE="Главный экран" />
+        <export-ModeToggler PURPOSE="Переключатель manual/presets/auto" />
+        <export-CabinTemperatureDisplay PURPOSE="Индикатор температуры салона" />
+        <export-Seat PURPOSE="Виджет сиденья с уровнями подогрева" />
+      </interface>
+      <depends>M-MODE, M-HVAC</depends>
+      <target>
+        <source>lib/src/presentation/screens/heat/heat_screen.dart</source>
+        <source>lib/src/presentation/screens/heat/components/</source>
+      </target>
+      <observability>
+        <log-prefix>[HeatScreen]</log-prefix>
+      </observability>
+      <verification-ref>V-M-UI-HEAT</verification-ref>
+    </M-UI-HEAT>
+
+    <M-UI-PRESETS NAME="PresetsScreen" TYPE="UI_COMPONENT" LAYER="5" ORDER="2" STATUS="implemented">
+      <contract>
+        <purpose>Список пресетов с применением и удалением.</purpose>
+        <inputs>
+          <param name="presets" type="List&lt;Preset&gt;" />
+        </inputs>
+        <outputs>
+          <param name="UserAction" type="event" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-PresetsListScreen PURPOSE="Экран списка" />
+        <export-PresetList PURPOSE="Виджет списка" />
+      </interface>
+      <depends>M-PRESET</depends>
+      <target>
+        <source>lib/src/presentation/screens/presets/</source>
+      </target>
+      <observability>
+        <log-prefix>[PresetsScreen]</log-prefix>
+      </observability>
+      <verification-ref>V-M-UI-PRESETS</verification-ref>
+    </M-UI-PRESETS>
+
+    <M-UI-SETTINGS NAME="SettingsScreen" TYPE="UI_COMPONENT" LAYER="5" ORDER="3" STATUS="implemented">
+      <contract>
+        <purpose>Экран настроек: тема, порог автоподогрева, пресеты, ручные настройки.</purpose>
+        <inputs>
+          <param name="SettingsState" type="bloc-state" />
+        </inputs>
+        <outputs>
+          <param name="UserAction" type="event" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-SettingsScreen PURPOSE="Контейнер настроек" />
+        <export-TemperatureThresholdSlider PURPOSE="Слайдер порога" />
+        <export-ThemeSelector PURPOSE="Выбор темы" />
+        <export-PresetsSection PURPOSE="Секция пресетов" />
+        <export-ManualSettingsSection PURPOSE="Секция ручных настроек" />
+      </interface>
+      <depends>M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET, M-THEME</depends>
+      <target>
+        <source>lib/src/presentation/screens/settings/</source>
+      </target>
+      <observability>
+        <log-prefix>[SettingsScreen]</log-prefix>
+      </observability>
+      <verification-ref>V-M-UI-SETTINGS</verification-ref>
+    </M-UI-SETTINGS>
+  </Modules>
+
+  <DataFlow>
+    <DF-SET-HEAT NAME="UserSetsHeatLevel" TRIGGER="UI button tap in HeatScreen">
+      <step-1>Виджет вызывает ModeCubit.setHeatLevel(userType, level)</step-1>
+      <step-2>ModeCubit пишет уровень и режим в SharedPreferences через ModeService</step-2>
+      <step-3>ModeCubit вызывает HvacService.setSeatHeatLevel(userType, level)</step-3>
+      <step-4>HvacService → CarHvacManager.setSeatHeatLevel(isDriver, level)</step-4>
+      <step-5>CarHvacManager → AndroidAutomotivePlugin.setHvacIntProperty(...) → android.car.*</step-5>
+      <step-6>ModeCubit emit'ит новый ModesState; UI перерисовывается</step-6>
+      <evidence>Лог [HvacService][setSeatHeatLevel] и обновлённый ModesState в bloc-логах</evidence>
+    </DF-SET-HEAT>
+
+    <DF-AUTO-HEAT NAME="AutoHeatBySensor" TRIGGER="HVAC change event ID_HVAC_IN_OUT_TEMP">
+      <step-1>android.car.* эмитит изменение температуры салона</step-1>
+      <step-2>AndroidAutomotivePlugin вызывает onHvacChangeEventCallback с CarPropertyValue</step-2>
+      <step-3>HvacService фильтрует propertyId == ID_HVAC_IN_OUT_TEMP && areaId == InOutCAR_INSIDE</step-3>
+      <step-4>HvacService конвертирует через _convertToCelsius и зовёт onCabinTemperatureChanged</step-4>
+      <step-5>AutoHeatService для каждого активного UserType строит HeatSequence через TemperatureConstants.getHeatSequence</step-5>
+      <step-6>AutoHeatService отменяет старый Timer и стартует расписание: callback(3) → Timer level3 → callback(2) → ... → callback(0)</step-6>
+      <step-7>Callback в ModeCubit вызывает setHeatLevel, и поток продолжается как DF-SET-HEAT</step-7>
+      <evidence>Лог [AutoHeatService][startHeatSequence] с уровнем и оставшейся длительностью; последовательность изменений ModeState</evidence>
+    </DF-AUTO-HEAT>
+
+    <DF-INIT-TEMP NAME="InitialCabinTemperature" TRIGGER="App start (deferred initialize of HvacService)">
+      <step-1>UI или AutoHeatService вызывает HvacService.getCabinTemperature()</step-1>
+      <step-2>HvacService.initialize() → AndroidAutomotivePlugin.connect()</step-2>
+      <step-3>CarHvacManager.getInsideTemperature() → AndroidAutomotivePlugin.getHvacIntProperty(...)</step-3>
+      <step-4>_convertToCelsius даёт начальное значение; при ошибке fallback 20.0 °C</step-4>
+      <evidence>Лог [HvacService][getCabinTemperature]</evidence>
+    </DF-INIT-TEMP>
+
+    <DF-BACKGROUND NAME="ForegroundServiceLifecycle" TRIGGER="App launch / boot / accessibility wake">
+      <step-1>main.dart → initializeBackgroundService() конфигурирует AndroidConfiguration и startService</step-1>
+      <step-2>В background-изоляте Flutter вызывает onStart(ServiceInstance)</step-2>
+      <step-3>DartPluginRegistrant.ensureInitialized()</step-3>
+      <step-4>setupServiceLocator() поднимает DI в изоляте</step-4>
+      <step-5>Создаётся локальный AndroidAutomotivePlugin и подписки на sensors/ignition</step-5>
+      <step-6>При ignition ON/OFF обновляется состояние подогрева через ModeCubit</step-6>
+      <evidence>Уведомление 'AutoHeat Service' видно; лог [BackgroundService][onStart]; счётчик _restartAttempts &lt; _maxRestartAttempts</evidence>
+    </DF-BACKGROUND>
+
+    <DF-PRESET-APPLY NAME="ApplyPreset" TRIGGER="UI tap on preset">
+      <step-1>PresetCubit.apply(preset) читает сохранённую конфигурацию</step-1>
+      <step-2>Через ModeCubit выставляются heatMode и heatLevel для driver/passenger</step-2>
+      <step-3>HvacService применяет уровни как в DF-SET-HEAT</step-3>
+      <evidence>Лог [PresetCubit][apply] и серия [HvacService][setSeatHeatLevel]</evidence>
+    </DF-PRESET-APPLY>
+  </DataFlow>
+
+  <ImplementationOrder>
+    <Phase-1 name="Foundation (existing)" status="done">
+      <goal>Зафиксировать существующий MVP в GRACE-формате.</goal>
+      <step-1 module="M-PLUGIN" status="done" verification="V-M-PLUGIN">Локальный path-плагин android_automotive_plugin (исходник с GitHub abuharsky/changan_car_flutter_library)</step-1>
+      <step-2 module="M-ENUMS" status="done" verification="V-M-ENUMS">HeatMode/UserType + .fromString</step-2>
+      <step-3 module="M-CONSTANTS-TEMPERATURE" status="done" verification="V-M-CONSTANTS-TEMPERATURE">Диапазоны и HeatSequence</step-3>
+      <step-4 module="M-HVAC" status="done" verification="V-M-HVAC">Обёртка над плагином и колбэк температуры</step-4>
+      <step-5 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Расписание авторежима</step-5>
+      <step-6 module="M-MODE" status="done" verification="V-M-MODE">ModeService + ModeCubit</step-6>
+      <step-7 module="M-SETTINGS" status="done" verification="V-M-SETTINGS">SettingsService + SettingsCubit</step-7>
+      <step-8 module="M-MANUAL-SETTINGS" status="done" verification="V-M-MANUAL-SETTINGS">ManualSettingsService + Cubit</step-8>
+      <step-9 module="M-PRESET" status="done" verification="V-M-PRESET">PresetService + Cubit</step-9>
+      <step-10 module="M-THEME" status="done" verification="V-M-THEME">ThemeService/Cubit/Configurator</step-10>
+      <step-11 module="M-DI" status="done" verification="V-M-DI">service_locator.dart</step-11>
+      <step-12 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">Foreground-service + onStart</step-12>
+      <step-13 module="M-ACCESSIBILITY" status="done" verification="V-M-ACCESSIBILITY">Системный callback handle</step-13>
+      <step-14 module="M-BLOC-PROVIDERS" status="done" verification="V-M-BLOC-PROVIDERS">app_bloc_providers.dart — список BlocProvider'ов для MultiBlocProvider</step-14>
+      <step-15 module="M-UI-APP" status="done" verification="V-M-UI-APP">AppContent — корневой контейнер навигации Heat/Presets/Settings</step-15>
+      <step-16 module="M-UI-HEAT" status="done" verification="V-M-UI-HEAT">Главный экран</step-16>
+      <step-17 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">Экран пресетов</step-17>
+      <step-18 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">Экран настроек</step-18>
+      <step-19 module="M-MAIN" status="done" verification="V-M-MAIN">main.dart — точка входа: setupServiceLocator → инициализация кубитов → accessibility/background-service → runApp(AutoheatApp)</step-19>
+    </Phase-1>
+
+    <Phase-2 name="Verification baseline" status="pending">
+      <goal>Покрыть критические pure-функции и контракты сервисов unit-тестами; ввести семантическую разметку в исходники.</goal>
+      <step-1 module="M-CONSTANTS-TEMPERATURE" status="pending" verification="V-M-CONSTANTS-TEMPERATURE">Тесты getTemperatureRange / getHeatSequence на граничных значениях</step-1>
+      <step-2 module="M-ENUMS" status="pending" verification="V-M-ENUMS">Тесты round-trip enum.name ↔ fromString</step-2>
+      <step-3 module="M-MODE" status="pending" verification="V-M-MODE">Тесты ModeCubit с фейк-HvacService и SharedPreferences.setMockInitialValues</step-3>
+      <step-4 module="M-AUTO-HEAT" status="pending" verification="V-M-AUTO-HEAT">Тесты расписания через FakeAsync</step-4>
+      <step-5 module="M-HVAC" status="pending" verification="V-M-HVAC">Тесты конверсии температуры и обработки события</step-5>
+      <step-6 module="M-HVAC" status="pending" verification="V-M-HVAC">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/hvac_service.dart</step-6>
+      <step-7 module="M-AUTO-HEAT" status="pending" verification="V-M-AUTO-HEAT">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/auto_heat_service.dart</step-7>
+      <step-8 module="M-MODE" status="pending" verification="V-M-MODE">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/mode_service.dart и lib/src/cubit/mode_cubit.dart</step-8>
+      <step-9 module="M-BACKGROUND" status="pending" verification="V-M-BACKGROUND">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/background_service.dart</step-9>
+      <step-10 module="M-CONSTANTS-TEMPERATURE" status="pending" verification="V-M-CONSTANTS-TEMPERATURE">Добавить START_MODULE_CONTRACT/MAP в lib/src/constants/temperature_constants.dart</step-10>
+      <step-11 module="M-ENUMS" status="pending" verification="V-M-ENUMS">Добавить START_MODULE_CONTRACT/MAP в lib/src/app_enums.dart</step-11>
+      <step-12 module="M-DI" status="pending" verification="V-M-DI">Добавить START_MODULE_CONTRACT/MAP в lib/src/di/service_locator.dart</step-12>
+    </Phase-2>
+
+    <Phase-3 name="Reliability hardening" status="pending">
+      <goal>Структурированные логи без сторонних библиотек. Никаких других преждевременных абстракций: M-UI-DIAG, M-HVAC multi-listener и extraction формулы температуры сознательно отложены до появления реального триггера.</goal>
+      <step-1 module="M-LOGGER" status="pending" verification="V-M-LOGGER">Создать lib/src/utils/logger.dart с форматом [Module][fn][BLOCK]; покрыть unit-тестом, включая redaction.</step-1>
+      <step-2 module="M-HVAC" status="pending" verification="V-M-HVAC">Sweep print() → Logger в hvac_service.dart; активировать TODO(phase-3) marker-assertions в test/unit/hvac_service_test.dart.</step-2>
+      <step-3 module="M-AUTO-HEAT" status="pending" verification="V-M-AUTO-HEAT">Sweep print() → Logger в auto_heat_service.dart; активировать TODO(phase-3) в тесте.</step-3>
+      <step-4 module="M-MODE" status="pending" verification="V-M-MODE">Sweep print() → Logger в mode_cubit.dart и mode_service.dart; активировать TODO(phase-3) в тестах.</step-4>
+      <step-5 module="M-BACKGROUND" status="pending" verification="V-M-BACKGROUND">Sweep print() → Logger в background_service.dart.</step-5>
+      <step-6 module="M-PLUGIN" status="pending" verification="V-M-PLUGIN">Sweep print() → Logger в локальном плагине (если применимо; иначе пропустить с note).</step-6>
+    </Phase-3>
+
+    <Phase-Deferred name="Deferred architectural changes" status="deferred">
+      <goal>Зафиксированы как replan-triggers — выполняются только при появлении конкретного триггера.</goal>
+      <deferred-1 trigger="Появление второго потребителя onCabinTemperatureChanged">M-HVAC: переход с single-callback на add/removeCabinTemperatureListener. До триггера single-callback — корректное решение.</deferred-1>
+      <deferred-2 trigger="Запрос на встроенную диагностику без adb/logcat">M-UI-DIAG: read-only inspector состояния плагина и HVAC; потянет M-HVAC multi-listener.</deferred-2>
+      <deferred-3 trigger="Эмпирически подтверждённая неточность формулы (raw - 84) / 2 или различие между моделями Changan">Extraction _convertToCelsius из HvacService в отдельный модуль (например, M-TEMPERATURE-CONVERSION или CarProfile). До smoke-теста на голове формула остаётся в HvacService.</deferred-3>
+    </Phase-Deferred>
+  </ImplementationOrder>
+
+  <ExecutionPolicy>
+    <default-profile>balanced</default-profile>
+    <controller-owns>docs/development-plan.xml, docs/knowledge-graph.xml, docs/verification-plan.xml, docs/operational-packets.xml, docs/requirements.xml, docs/technology.xml</controller-owns>
+    <worker-owns>lib/src/&lt;module&gt;/, packages/android_automotive_plugin/lib/ (только когда модуль явно затронут), test/ в пределах модуля.</worker-owns>
+    <max-fix-attempts-per-step>2</max-fix-attempts-per-step>
+    <replan-trigger>Изменение public API android_automotive_plugin; эмпирически подтверждённая неточность формулы (raw - 84) / 2 или зависимость от модели Changan (триггер deferred-3); нарушение enum/SharedPreferences-контракта; появление второго потребителя HvacService.onCabinTemperatureChanged (триггер deferred-1: переход на multi-listener); появление встроенного диагностического экрана (триггер deferred-2).</replan-trigger>
+    <checkpoint-requirement>Каждый шаг фиксирует: затронутые SharedPreferences-ключи, изменённые свойства HVAC, новые/убранные подписки плагина, состояние background-изолята.</checkpoint-requirement>
+  </ExecutionPolicy>
+</DevelopmentPlan>

@@ -1,0 +1,276 @@
+<KnowledgeGraph>
+  <Project NAME="autoheat" VERSION="0.2.0">
+    <keywords>flutter, dart, android-automotive, changan, hvac, seat-heating, head-unit, foreground-service, bloc, cubit</keywords>
+    <annotation>Flutter-приложение для автоматического подогрева сидений в Changan через головное устройство на Android Automotive. Граф отражает фактическое состояние кода на момент grace-init. Локальный плагин android_automotive_plugin — исходник с GitHub abuharsky/changan_car_flutter_library, переложен в packages/. Проект — переработка autoheat_old.</annotation>
+
+    <M-MAIN NAME="AppEntry" TYPE="ENTRY_POINT" STATUS="implemented">
+      <purpose>Точка входа Flutter, бутстрап DI, тем, accessibility и background-service</purpose>
+      <path>lib/main.dart</path>
+      <depends>M-DI, M-THEME, M-SETTINGS, M-BACKGROUND, M-ACCESSIBILITY, M-UI-APP</depends>
+      <verification-ref>V-M-MAIN</verification-ref>
+      <annotations>
+        <fn-main PURPOSE="WidgetsFlutterBinding + setupServiceLocator + initializeAccessibilityService + initializeBackgroundService + runApp" />
+        <class-AutoheatApp PURPOSE="Корневой MaterialApp с BlocBuilder&lt;ThemeCubit&gt;" />
+      </annotations>
+    </M-MAIN>
+
+    <M-DI NAME="ServiceLocator" TYPE="UTILITY" STATUS="implemented">
+      <purpose>GetIt-регистрация всех сервисов и кубитов</purpose>
+      <path>lib/src/di/service_locator.dart</path>
+      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME</depends>
+      <verification-ref>V-M-DI</verification-ref>
+      <annotations>
+        <fn-setupServiceLocator PURPOSE="Регистрирует SharedPreferences и все singletons; вызывается и в UI- и в background-изоляте" />
+        <const-locator PURPOSE="GetIt.instance" />
+      </annotations>
+    </M-DI>
+
+    <M-BLOC-PROVIDERS NAME="AppBlocProviders" TYPE="UTILITY" STATUS="implemented">
+      <purpose>Список BlocProvider'ов для корневого MultiBlocProvider</purpose>
+      <path>lib/src/di/app_bloc_providers.dart</path>
+      <depends>M-DI</depends>
+      <verification-ref>V-M-BLOC-PROVIDERS</verification-ref>
+      <annotations>
+        <class-BlockProviders PURPOSE="initiateBlocs() — массив BlocProvider'ов" />
+      </annotations>
+    </M-BLOC-PROVIDERS>
+
+    <M-PLUGIN NAME="AndroidAutomotivePlugin" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Локальный path-плагин: обёртка над android.car.* (HVAC, sensors, ignition). Единственная точка доступа к авто. Исходник с GitHub abuharsky/changan_car_flutter_library.</purpose>
+      <path>packages/android_automotive_plugin/</path>
+      <depends>none</depends>
+      <verification-ref>V-M-PLUGIN</verification-ref>
+      <annotations>
+        <class-AndroidAutomotivePlugin PURPOSE="connect, getHvacIntProperty, setHvacIntProperty, onHvacChangeEventCallback, setCallbackHandle" />
+        <class-CarHvacManager PURPOSE="setSeatHeatLevel(isDriver, level), getInsideTemperature" />
+        <class-CarPropertyValue PURPOSE="DTO события HVAC (propertyId, areaId, value)" />
+        <const-CarHvacPropertyIds PURPOSE="ID_HVAC_IN_OUT_TEMP и др." />
+        <const-VehicleAreaInOutCAR PURPOSE="InOutCAR_INSIDE и др." />
+        <class-CarSensorManager PURPOSE="Подписка на сенсоры, в т.ч. ignition" />
+      </annotations>
+    </M-PLUGIN>
+
+    <M-HVAC NAME="HvacService" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Централизованная обёртка над AndroidAutomotivePlugin для UI и AutoHeatService. Конверсия температуры (raw - 84) / 2 и проброс событий датчика.</purpose>
+      <path>lib/src/services/hvac_service.dart</path>
+      <depends>M-PLUGIN, M-ENUMS</depends>
+      <verification-ref>V-M-HVAC</verification-ref>
+      <annotations>
+        <class-HvacService PURPOSE="Singleton-обёртка; ленивая initialize(), setSeatHeatLevel, getCabinTemperature, onCabinTemperatureChanged callback" />
+        <fn-_convertToCelsius PURPOSE="(value - 84) / 2 → °C" />
+      </annotations>
+    </M-HVAC>
+
+    <M-AUTO-HEAT NAME="AutoHeatService" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Реализация авторежима: по температуре салона запускает расписание уровней 3→2→1→0 по таймерам, индивидуально для driver/passenger.</purpose>
+      <path>lib/src/services/auto_heat_service.dart</path>
+      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE</depends>
+      <verification-ref>V-M-AUTO-HEAT</verification-ref>
+      <annotations>
+        <class-AutoHeatService PURPOSE="Синглтон; initialize(hvacService) подписывает onCabinTemperatureChanged" />
+        <fn-startAutoHeat PURPOSE="Регистрация callback изменения уровня для UserType и запуск расписания" />
+        <fn-stopAutoHeat PURPOSE="Снятие callback и отмена таймеров" />
+        <fn-_startHeatSequence PURPOSE="Старт с уровня 3 и каскадные переходы по Timer" />
+      </annotations>
+    </M-AUTO-HEAT>
+
+    <M-MODE NAME="ModeDomain" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Состояние режимов (manual/presets/auto) и уровня подогрева для driver/passenger. Persistence и команда на HVAC.</purpose>
+      <path>lib/src/services/mode_service.dart, lib/src/cubit/mode_cubit.dart, lib/src/cubit/mode_state_cubit.dart</path>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-DI</depends>
+      <verification-ref>V-M-MODE</verification-ref>
+      <annotations>
+        <class-ModeService PURPOSE="Чтение/запись режимов и уровней в SharedPreferences" />
+        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel; синхронизирует SharedPreferences, HvacService и AutoHeatService" />
+        <class-ModeState PURPOSE="userType + heatMode + heatLevel" />
+        <class-ModesState PURPOSE="Список ModeState (driver + passenger)" />
+      </annotations>
+    </M-MODE>
+
+    <M-PRESET NAME="PresetDomain" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Сохранение и применение пользовательских пресетов конфигурации подогрева.</purpose>
+      <path>lib/src/services/preset_service.dart, lib/src/cubit/preset_cubit.dart, lib/src/models/preset.dart</path>
+      <depends>M-MODE</depends>
+      <verification-ref>V-M-PRESET</verification-ref>
+      <annotations>
+        <class-PresetService PURPOSE="CRUD пресетов через SharedPreferences (JSON-сериализация)" />
+        <class-PresetCubit PURPOSE="Состояние списка пресетов и активного пресета" />
+        <type-Preset PURPOSE="Модель пресета (@JsonSerializable)" />
+      </annotations>
+    </M-PRESET>
+
+    <M-SETTINGS NAME="SettingsDomain" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Глобальные настройки (например, порог температуры для авторежима).</purpose>
+      <path>lib/src/services/settings_service.dart, lib/src/cubit/settings_cubit.dart</path>
+      <depends>M-CONSTANTS-TEMPERATURE</depends>
+      <verification-ref>V-M-SETTINGS</verification-ref>
+      <annotations>
+        <class-SettingsService PURPOSE="Persistence порога температуры (defaultTemperatureThreshold = 5.0)" />
+        <class-SettingsCubit PURPOSE="initialize(); экспонирует пороги для UI" />
+      </annotations>
+    </M-SETTINGS>
+
+    <M-MANUAL-SETTINGS NAME="ManualSettingsDomain" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>Параметры ручного режима для driver/passenger.</purpose>
+      <path>lib/src/services/manual_settings_service.dart, lib/src/cubit/manual_settings_cubit.dart, lib/src/models/manual_settings.dart</path>
+      <depends>M-ENUMS</depends>
+      <verification-ref>V-M-MANUAL-SETTINGS</verification-ref>
+      <annotations>
+        <class-ManualSettingsService PURPOSE="Persistence ManualSettings через SharedPreferences" />
+        <class-ManualSettingsCubit PURPOSE="Состояние ручных настроек" />
+        <type-ManualSettings PURPOSE="Модель ручных настроек (@JsonSerializable)" />
+      </annotations>
+    </M-MANUAL-SETTINGS>
+
+    <M-THEME NAME="ThemeDomain" TYPE="UI_COMPONENT" STATUS="implemented">
+      <purpose>Выбор и применение визуальной темы.</purpose>
+      <path>lib/src/presentation/themes/</path>
+      <depends>none</depends>
+      <verification-ref>V-M-THEME</verification-ref>
+      <annotations>
+        <class-ThemeService PURPOSE="Persistence выбранной темы" />
+        <class-ThemeCubit PURPOSE="initialize(); getCurrentTheme(context)" />
+        <class-ThemeConfigurator PURPOSE="Сборка ThemeData из ThemeType" />
+        <type-ThemeType PURPOSE="enum имеющихся тем" />
+      </annotations>
+    </M-THEME>
+
+    <M-BACKGROUND NAME="BackgroundService" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Foreground-service flutter_background_service. Поднимает плагин и ModeCubit в отдельном изоляте, реагирует на ignition и события HVAC.</purpose>
+      <path>lib/src/services/background_service.dart</path>
+      <depends>M-PLUGIN, M-MODE, M-HVAC, M-DI</depends>
+      <verification-ref>V-M-BACKGROUND</verification-ref>
+      <annotations>
+        <fn-initializeBackgroundService PURPOSE="Конфигурация AndroidConfiguration (channel 'my_foreground', id 888) и startService" />
+        <fn-onStart PURPOSE="@pragma('vm:entry-point'); DartPluginRegistrant.ensureInitialized + восстановление DI + подписка на ignition/sensor" />
+      </annotations>
+    </M-BACKGROUND>
+
+    <M-ACCESSIBILITY NAME="AccessibilityService" TYPE="INTEGRATION" STATUS="implemented">
+      <purpose>Регистрация системного callback handle через AndroidAutomotivePlugin для пробуждения foreground-service.</purpose>
+      <path>lib/src/services/accessibility_service.dart</path>
+      <depends>M-PLUGIN, M-BACKGROUND</depends>
+      <verification-ref>V-M-ACCESSIBILITY</verification-ref>
+      <annotations>
+        <fn-initializeAccessibilityService PURPOSE="plugin.setCallbackHandle(_accessibilityServiceCallback)" />
+        <fn-_accessibilityServiceCallback PURPOSE="@pragma('vm:entry-point'); поднимает background-service при системных событиях" />
+      </annotations>
+    </M-ACCESSIBILITY>
+
+    <M-LOGGER NAME="Logger" TYPE="UTILITY" STATUS="planned">
+      <purpose>Тонкий wrapper над print() с форматом [Module][fn][BLOCK] + структурированные поля. Без сторонних библиотек.</purpose>
+      <path>lib/src/utils/logger.dart (запланирован)</path>
+      <depends>none</depends>
+      <verification-ref>V-M-LOGGER</verification-ref>
+      <annotations>
+        <fn-log PURPOSE="Записать структурированное событие (level, module, fn, block, fields)" />
+        <fn-installTestSink PURPOSE="Для тестов: подменить sink на буфер" />
+        <type-LogLevel PURPOSE="enum debug|info|warn|error" />
+        <const-defaultSink PURPOSE="dart:io stdout через print()" />
+      </annotations>
+    </M-LOGGER>
+
+    <M-CONSTANTS-TEMPERATURE NAME="TemperatureConstants" TYPE="UTILITY" STATUS="implemented">
+      <purpose>Диапазоны температур и расписания HeatSequence (level3/level2/level1 длительности) для авторежима.</purpose>
+      <path>lib/src/constants/temperature_constants.dart</path>
+      <depends>none</depends>
+      <verification-ref>V-M-CONSTANTS-TEMPERATURE</verification-ref>
+      <annotations>
+        <type-TemperatureRange PURPOSE="enum off|warm|cool|cold|freezing|extreme" />
+        <type-HeatSequence PURPOSE="level3Duration, level2Duration, level1Duration (минуты)" />
+        <fn-getTemperatureRange PURPOSE="Маппинг °C → TemperatureRange по temperatureThresholds" />
+        <fn-getHeatSequence PURPOSE="Маппинг °C → HeatSequence (null при TemperatureRange.off)" />
+        <const-sliderValues PURPOSE="[-5, 0, 5, 10, 15] — значения слайдера порога" />
+        <const-defaultTemperatureThreshold PURPOSE="5.0 — порог по умолчанию" />
+      </annotations>
+    </M-CONSTANTS-TEMPERATURE>
+
+    <M-ENUMS NAME="AppEnums" TYPE="TYPES" STATUS="implemented">
+      <purpose>HeatMode (manual|presets|auto) и UserType (driver|passenger) + строковые расширения.</purpose>
+      <path>lib/src/app_enums.dart</path>
+      <depends>none</depends>
+      <verification-ref>V-M-ENUMS</verification-ref>
+      <annotations>
+        <type-HeatMode PURPOSE="enum режима подогрева" />
+        <type-UserType PURPOSE="enum сиденья" />
+        <fn-HeatModeExtension.fromString PURPOSE="Десериализация enum по .name из SharedPreferences" />
+        <fn-UserTypeExtension.fromString PURPOSE="Десериализация enum по .name из SharedPreferences" />
+      </annotations>
+    </M-ENUMS>
+
+    <M-UI-APP NAME="UiAppShell" TYPE="UI_COMPONENT" STATUS="implemented">
+      <purpose>Корневой AppContent и навигация между экранами Heat/Presets/Settings.</purpose>
+      <path>lib/src/presentation/app_content.dart</path>
+      <depends>M-UI-HEAT, M-UI-PRESETS, M-UI-SETTINGS, M-THEME</depends>
+      <verification-ref>V-M-UI-APP</verification-ref>
+      <annotations>
+        <class-AppContent PURPOSE="Основной layout с вкладками" />
+      </annotations>
+    </M-UI-APP>
+
+    <M-UI-HEAT NAME="HeatScreen" TYPE="UI_COMPONENT" STATUS="implemented">
+      <purpose>Главный экран управления подогревом — кнопки уровней, индикатор температуры салона, переключатель режима.</purpose>
+      <path>lib/src/presentation/screens/heat/</path>
+      <depends>M-MODE, M-HVAC</depends>
+      <verification-ref>V-M-UI-HEAT</verification-ref>
+      <annotations>
+        <class-HeatScreen PURPOSE="Связывает ModeCubit с виджетами Seat/CabinTemperatureDisplay/ModeToggler" />
+      </annotations>
+    </M-UI-HEAT>
+
+    <M-UI-PRESETS NAME="PresetsScreen" TYPE="UI_COMPONENT" STATUS="implemented">
+      <purpose>Список сохранённых пресетов с возможностью применения и удаления.</purpose>
+      <path>lib/src/presentation/screens/presets/</path>
+      <depends>M-PRESET</depends>
+      <verification-ref>V-M-UI-PRESETS</verification-ref>
+      <annotations>
+        <class-PresetsListScreen PURPOSE="UI поверх PresetCubit" />
+      </annotations>
+    </M-UI-PRESETS>
+
+    <M-UI-SETTINGS NAME="SettingsScreen" TYPE="UI_COMPONENT" STATUS="implemented">
+      <purpose>Экран настроек: тема, порог автоподогрева, пресеты, ручные настройки.</purpose>
+      <path>lib/src/presentation/screens/settings/</path>
+      <depends>M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET, M-THEME</depends>
+      <verification-ref>V-M-UI-SETTINGS</verification-ref>
+      <annotations>
+        <class-SettingsScreen PURPOSE="Композиция секций settings/components" />
+        <class-TemperatureThresholdSlider PURPOSE="Слайдер порога авторежима (sliderValues)" />
+        <class-ThemeSelector PURPOSE="Выбор темы" />
+      </annotations>
+    </M-UI-SETTINGS>
+
+    <CrossLink from="M-MAIN" to="M-DI" relation="bootstrap" />
+    <CrossLink from="M-MAIN" to="M-BACKGROUND" relation="bootstrap" />
+    <CrossLink from="M-MAIN" to="M-ACCESSIBILITY" relation="bootstrap" />
+    <CrossLink from="M-MAIN" to="M-THEME" relation="initialize" />
+    <CrossLink from="M-MAIN" to="M-SETTINGS" relation="initialize" />
+    <CrossLink from="M-DI" to="M-HVAC" relation="registers-singleton" />
+    <CrossLink from="M-DI" to="M-MODE" relation="registers-cubit" />
+    <CrossLink from="M-DI" to="M-PRESET" relation="registers-cubit" />
+    <CrossLink from="M-DI" to="M-SETTINGS" relation="registers-cubit" />
+    <CrossLink from="M-DI" to="M-MANUAL-SETTINGS" relation="registers-cubit" />
+    <CrossLink from="M-DI" to="M-THEME" relation="registers-cubit" />
+    <CrossLink from="M-HVAC" to="M-PLUGIN" relation="wraps" />
+    <CrossLink from="M-HVAC" to="M-LOGGER" relation="logs-via" />
+    <CrossLink from="M-AUTO-HEAT" to="M-LOGGER" relation="logs-via" />
+    <CrossLink from="M-MODE" to="M-LOGGER" relation="logs-via" />
+    <CrossLink from="M-BACKGROUND" to="M-LOGGER" relation="logs-via" />
+    <CrossLink from="M-AUTO-HEAT" to="M-HVAC" relation="subscribes-to-temperature" />
+    <CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-heat-sequence" />
+    <CrossLink from="M-MODE" to="M-HVAC" relation="commands-seat-heat" />
+    <CrossLink from="M-MODE" to="M-AUTO-HEAT" relation="starts-stops-auto-mode" />
+    <CrossLink from="M-PRESET" to="M-MODE" relation="applies-preset" />
+    <CrossLink from="M-BACKGROUND" to="M-PLUGIN" relation="uses-in-isolate" />
+    <CrossLink from="M-BACKGROUND" to="M-MODE" relation="updates-state-from-isolate" />
+    <CrossLink from="M-ACCESSIBILITY" to="M-BACKGROUND" relation="wakes-service" />
+    <CrossLink from="M-UI-HEAT" to="M-MODE" relation="reads-and-commands" />
+    <CrossLink from="M-UI-HEAT" to="M-HVAC" relation="reads-cabin-temperature" />
+    <CrossLink from="M-UI-SETTINGS" to="M-SETTINGS" relation="edits" />
+    <CrossLink from="M-UI-SETTINGS" to="M-MANUAL-SETTINGS" relation="edits" />
+    <CrossLink from="M-UI-SETTINGS" to="M-PRESET" relation="edits" />
+    <CrossLink from="M-UI-SETTINGS" to="M-THEME" relation="edits" />
+    <CrossLink from="M-UI-PRESETS" to="M-PRESET" relation="reads-and-applies" />
+
+  </Project>
+</KnowledgeGraph>

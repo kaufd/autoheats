@@ -1,0 +1,162 @@
+<OperationalPackets VERSION="0.1.0">
+  <ExecutionPacketTemplate>
+    <ExecutionPacket>
+      <module-id>M-AUTO-HEAT</module-id>
+      <module-name>AutoHeatService</module-name>
+      <purpose>Пример пакета: расширить AutoHeatService новой логикой без архитектурного дрейфа.</purpose>
+      <write-scope>
+        <file-1>lib/src/services/auto_heat_service.dart</file-1>
+        <file-2>test/unit/auto_heat_service_test.dart</file-2>
+      </write-scope>
+      <contract-excerpt><![CDATA[
+M-AUTO-HEAT (LAYER=2, ORDER=1):
+- depends: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE
+- exports: AutoHeatService(), initialize(hvac), startAutoHeat(userType, cb), stopAutoHeat(userType), setTemperature(double)
+- inputs: HvacService instance, UserType, callback(int)
+- outputs: callback(int) c уровнями 3→2→1→0 по HeatSequence
+- invariants:
+  * Один Timer per UserType; перед стартом нового — отмена старого.
+  * Если getHeatSequence(temp) == null → callback(0) и Timer не создаётся.
+      ]]></contract-excerpt>
+      <graph-entry-excerpt><![CDATA[
+<M-AUTO-HEAT NAME="AutoHeatService" TYPE="CORE_LOGIC" STATUS="implemented">
+  <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE</depends>
+  <verification-ref>V-M-AUTO-HEAT</verification-ref>
+</M-AUTO-HEAT>
+<CrossLink from="M-AUTO-HEAT" to="M-HVAC" relation="subscribes-to-temperature" />
+<CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-heat-sequence" />
+      ]]></graph-entry-excerpt>
+      <dependency-contract-summaries>
+        <dependency-1 module="M-HVAC">HvacService.onCabinTemperatureChanged — единственный потребитель колбэка температуры. Не вешать сюда второго listener'а без расширения интерфейса.</dependency-1>
+        <dependency-2 module="M-CONSTANTS-TEMPERATURE">getHeatSequence(double) возвращает null для TemperatureRange.off (&gt; 10 °C). HeatSequence в минутах.</dependency-2>
+      </dependency-contract-summaries>
+      <verification-excerpt><![CDATA[
+V-M-AUTO-HEAT (priority=high):
+- module-checks: flutter test test/unit/auto_heat_service_test.dart
+- scenarios:
+  * cold (-3°C) → callback(3) сразу, потом (2,1,0) по таймеру HeatSequence(6,4,10) через FakeAsync.
+  * Промежуточное setTemperature должно отменять предыдущий Timer.
+- required-log-markers: [AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE]
+      ]]></verification-excerpt>
+      <assumptions>
+        <assumption-1>HvacService уже зарегистрирован в GetIt и initialize вызван.</assumption-1>
+        <assumption-2>Тесты используют FakeAsync для имитации Timer'ов.</assumption-2>
+      </assumptions>
+      <stop-conditions>
+        <condition-1>Стоп, если требуется новый callback в HvacService — нужно сначала расширить контракт M-HVAC до multi-listener (см. Phase-3 / replan-trigger).</condition-1>
+        <condition-2>Стоп, если новая логика затрагивает SharedPreferences-ключи или enum.name — это работа M-MODE/M-ENUMS.</condition-2>
+      </stop-conditions>
+      <retry-budget>2</retry-budget>
+      <checkpoint-fields>
+        <field-1>assumptions-kept</field-1>
+        <field-2>commands-run</field-2>
+        <field-3>evidence-captured</field-3>
+        <field-4>next-action</field-4>
+        <field-5>hvac-property-snapshot</field-5>
+        <field-6>isolate (ui|background)</field-6>
+      </checkpoint-fields>
+      <expected-graph-delta-fields>
+        <field-1>imports</field-1>
+        <field-2>exports</field-2>
+        <field-3>annotations</field-3>
+        <field-4>CrossLinks</field-4>
+      </expected-graph-delta-fields>
+      <expected-verification-delta-fields>
+        <field-1>test-files</field-1>
+        <field-2>module-checks</field-2>
+        <field-3>required-log-markers</field-3>
+        <field-4>follow-up-checks</field-4>
+      </expected-verification-delta-fields>
+      <notes>
+        <note-1>Не читать UI-слой; этот модуль — чистая CORE_LOGIC.</note-1>
+        <note-2>Учитывать, что AutoHeatService — синглтон; в тестах сбрасывать состояние явно.</note-2>
+      </notes>
+    </ExecutionPacket>
+  </ExecutionPacketTemplate>
+
+  <GraphDeltaTemplate>
+    <GraphDelta module="M-AUTO-HEAT">
+      <imports-added>
+        <import-1>M-CONSTANTS-TEMPERATURE</import-1>
+      </imports-added>
+      <imports-removed />
+      <exports-added>
+        <export-1>startAutoHeat</export-1>
+      </exports-added>
+      <exports-removed />
+      <annotations-added>
+        <annotation-1>&lt;fn-startAutoHeat PURPOSE="Зарегистрировать колбэк уровня и запустить расписание" /&gt;</annotation-1>
+      </annotations-added>
+      <annotations-removed />
+      <cross-links-added>
+        <CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-heat-sequence" />
+      </cross-links-added>
+      <cross-links-removed />
+      <notes>
+        <note-1>Только фактически добавленные/удалённые факты графа.</note-1>
+      </notes>
+    </GraphDelta>
+  </GraphDeltaTemplate>
+
+  <VerificationDeltaTemplate>
+    <VerificationDelta module="M-AUTO-HEAT">
+      <test-files-added>
+        <file-1>test/unit/auto_heat_service_test.dart</file-1>
+      </test-files-added>
+      <test-files-removed />
+      <module-checks>
+        <command-1>flutter test test/unit/auto_heat_service_test.dart</command-1>
+        <command-2>flutter analyze</command-2>
+      </module-checks>
+      <required-log-markers>
+        <marker-1>[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE]</marker-1>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>Любой переход уровня обязан соответствовать HeatSequence из TemperatureConstants.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>
+        <item-1>Связка с M-MODE: callback должен превращаться в реальный setHeatLevel и в HvacService.</item-1>
+      </wave-follow-up>
+      <phase-follow-up>
+        <item-1>Smoke на физической голове Changan при отрицательной температуре салона.</item-1>
+      </phase-follow-up>
+    </VerificationDelta>
+  </VerificationDeltaTemplate>
+
+  <FailurePacketTemplate>
+    <FailurePacket>
+      <scenario>Авторежим водителя не запускается при -3 °C: уровень остаётся 0.</scenario>
+      <contract-ref>M-AUTO-HEAT / V-M-AUTO-HEAT / scenario-1</contract-ref>
+      <expected-evidence>
+        <marker-1>[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE] level=3</marker-1>
+        <assertion-1>Callback ModeCubit получил последовательно (3,2,1,0).</assertion-1>
+      </expected-evidence>
+      <observed-evidence>
+        <log-1>[AutoHeatService] _updateAutoHeatForUser called but _currentTemperature == null</log-1>
+        <trace-1>onCabinTemperatureChanged не сработал — нет события от HvacService.</trace-1>
+      </observed-evidence>
+      <first-divergent-block>BLOCK_HANDLE_TEMPERATURE_EVENT (в M-HVAC)</first-divergent-block>
+      <suggested-next-action>Проверить, был ли вызван HvacService.initialize() в background-изоляте и зарегистрирован ли onHvacChangeEventCallback. Свериться с DF-AUTO-HEAT.</suggested-next-action>
+    </FailurePacket>
+  </FailurePacketTemplate>
+
+  <CheckpointReportTemplate>
+    <CheckpointReport>
+      <scope>M-AUTO-HEAT / Phase-2 / step-4</scope>
+      <assumptions-kept>
+        <item-1>HvacService регистрирует один колбэк; AutoHeatService — единственный потребитель.</item-1>
+        <item-2>Тесты используют FakeAsync.</item-2>
+      </assumptions-kept>
+      <commands-run>
+        <command-1>flutter test test/unit/auto_heat_service_test.dart</command-1>
+        <command-2>flutter analyze</command-2>
+      </commands-run>
+      <evidence-captured>
+        <item-1>[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE] level=3 emitted при -3°C.</item-1>
+        <item-2>FakeAsync переходы 3→2→1→0 соответствуют HeatSequence(6,4,10).</item-2>
+      </evidence-captured>
+      <retry-budget-used>0</retry-budget-used>
+      <next-action>Готово к синхронизации shared-artifacts и переходу к V-M-MODE.</next-action>
+    </CheckpointReport>
+  </CheckpointReportTemplate>
+</OperationalPackets>

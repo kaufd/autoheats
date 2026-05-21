@@ -1,0 +1,82 @@
+<TechnologyStack VERSION="0.2.0">
+  <Runtime>Flutter ^3.6.0 (Dart VM, AOT-сборка для Android)</Runtime>
+  <Language>Dart 3</Language>
+  <Framework>Flutter ^3.6.0</Framework>
+
+  <Dependencies>
+    <dep name="flutter_bloc" version="^9.0.0" purpose="Cubit-based state management для экранов и сервисов" />
+    <dep name="provider" version="^6.1.2" purpose="Лёгкий DI/InheritedWidget для UI-уровня" />
+    <dep name="get_it" version="^8.0.3" purpose="Service Locator для регистрации сервисов и кубитов" />
+    <dep name="shared_preferences" version="^2.5.2" purpose="Persistence настроек, пресетов, режимов, темы" />
+    <dep name="equatable" version="^2.0.5" purpose="Сравнение состояний кубитов" />
+    <dep name="json_annotation" version="^4.9.0" purpose="Аннотации для сериализации моделей (Preset, ManualSettings)" />
+    <dep name="flutter_background_service" version="^5.0.5" purpose="Foreground-service для работы при свёрнутом приложении" />
+    <dep name="android_automotive_plugin" version="path:packages/android_automotive_plugin" purpose="Локальный path-плагин: обёртка над android.car.* (HVAC, sensors, ignition). Снапшот апстрима github.com/abuharsky/changan_car_flutter_library (последний коммит upstream 2025-01-13; локальный снапшот добавлен 2025-02-22 как защита от заброшенности репо). Не форк; контент совпадает с upstream на момент снимка." />
+    <dep name="fake_async" version="^1.3.x" scope="dev" purpose="Детерминированное тестирование Timer-расписания AutoHeatService. Планируется добавить в Phase-2 step-1." />
+    <dep name="bloc_test" version="^9.x" scope="dev" purpose="Тестирование Cubit'ов (ModeCubit, PresetCubit, SettingsCubit). Планируется добавить в Phase-2." />
+    <dep name="mocktail" version="^1.x" scope="dev" purpose="Фейки HvacService и AndroidAutomotivePlugin без codegen. Планируется добавить в Phase-2." />
+  </Dependencies>
+
+  <VersionConstraints>
+    <constraint lib="flutter" min="3.6.0" max="3.x" reason="Используется Dart 3 синтаксис и API flutter_bloc 9.x" />
+    <constraint lib="android-min-sdk" min="23" max="34" reason="Android Automotive head unit; верхняя граница ограничена компонентами foreground-service на новых API" />
+    <constraint lib="android_automotive_plugin" min="0.0.1" max="0.x" reason="Локальный path-плагин, версии нет; единственный API доступа к авто" />
+  </VersionConstraints>
+
+  <Tooling>
+    <tool name="package-manager" value="flutter pub" version="bundled" />
+    <tool name="codegen" value="build_runner + json_serializable" version="^2.4.15 / ^6.8.0" />
+    <tool name="linter" value="flutter_lints" version="^5.0.0" />
+    <tool name="formatter" value="dart format" version="bundled" />
+    <tool name="test-runner" value="flutter_test" version="bundled" />
+    <tool name="analyzer" value="dart analyze / flutter analyze" version="bundled" />
+  </Tooling>
+
+  <PreferredAgentStack>
+    <preferred-runtime-library>flutter_bloc Cubit</preferred-runtime-library>
+    <preferred-di-library>get_it</preferred-di-library>
+    <preferred-persistence-library>shared_preferences</preferred-persistence-library>
+    <preferred-codegen-library>json_serializable</preferred-codegen-library>
+    <preferred-test-library>flutter_test + fake_async + bloc_test + mocktail (без codegen)</preferred-test-library>
+    <preferred-observability-library>print() с префиксом '[ClassName]: ' (текущая практика; миграция на logger пока не запланирована)</preferred-observability-library>
+    <discouraged-surface reason="Только локальный android_automotive_plugin даёт доступ к авто.">Прямые MethodChannel-вызовы к android.car.* в обход плагина</discouraged-surface>
+    <discouraged-surface reason="UI должен ходить через HvacService, чтобы централизовать обработку ошибок.">Вызов AndroidAutomotivePlugin из cubit'ов или виджетов</discouraged-surface>
+    <discouraged-surface reason="UI рассчитан на фиксированное разрешение головного устройства.">Адаптивная вёрстка под мобильные размеры</discouraged-surface>
+  </PreferredAgentStack>
+
+  <Testing>
+    <module-level>
+      <command>flutter test test/unit/&lt;module&gt;_test.dart</command>
+      <focus>Чистые unit-тесты сервисов (TemperatureConstants, ModeService, PresetService) с фейками HvacService</focus>
+    </module-level>
+    <wave-level>
+      <command>flutter test test/integration/</command>
+      <focus>Проверка взаимодействия Cubit ↔ Service на фейк-плагине</focus>
+    </wave-level>
+    <phase-level>
+      <command>flutter test &amp;&amp; flutter analyze</command>
+      <focus>Полный прогон тестов и анализатора</focus>
+    </phase-level>
+    <mocking-policy>Использовать ручные фейки для HvacService и AndroidAutomotivePlugin (узкий контракт). Не подменять SharedPreferences целиком — пользоваться SharedPreferences.setMockInitialValues.</mocking-policy>
+    <current-state>На момент инициализации GRACE в проекте нет каталога test/ с фактическими тестами — verification-plan описывает целевое состояние.</current-state>
+  </Testing>
+
+  <Observability>
+    <logger>Phase-1: print() напрямую. Phase-3 step-1: тонкий wrapper M-LOGGER без сторонних библиотек, см. lib/src/utils/logger.dart.</logger>
+    <log-format>[Module][function][BLOCK_NAME] message | key=value, key=value — целевой формат после M-LOGGER. Текущий код использует 'ClassName: message'.</log-format>
+    <required-fields>userType (driver|passenger), heatLevel, temperatureCelsius — при логировании операций HVAC</required-fields>
+    <redaction>Чувствительных данных нет (приложение не работает с пользовательскими аккаунтами/токенами). Не логировать raw bytes от android.car.* без необходимости.</redaction>
+    <android-channel>my_foreground (notification channel для foreground-service)</android-channel>
+  </Observability>
+
+  <AutonomyPolicy>
+    <default-execution-profile>balanced</default-execution-profile>
+    <max-fix-attempts-per-step>2</max-fix-attempts-per-step>
+    <replan-trigger>Изменение публичного API android_automotive_plugin, новая модель авто с другой формулой температуры, нарушение enum/SharedPreferences-контракта.</replan-trigger>
+    <checkpoint-requirement>После каждого изменённого сервиса фиксировать: какие SharedPreferences-ключи затронуты, какие свойства HVAC меняются, какие колбэки плагина задействованы.</checkpoint-requirement>
+  </AutonomyPolicy>
+
+  <DeliveryShape>
+    <shape>Один APK (applicationId ru.kaufd.autoheat) на головное устройство Changan. Один Dart-процесс с двумя изолятами: UI и background-service. Persistence — локальный SharedPreferences. Внешних сетевых интеграций нет.</shape>
+  </DeliveryShape>
+</TechnologyStack>

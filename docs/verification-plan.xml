@@ -1,0 +1,689 @@
+<VerificationPlan VERSION="0.2.0">
+  <GlobalPolicy>
+    <log-format>[Module][function][BLOCK_NAME] message | key=value, ... — целевой формат после M-LOGGER. До Phase-3 step-3 (sweep) log-marker assertions в тестах закомментированы или помечены skip.</log-format>
+    <deterministic-first>true</deterministic-first>
+    <module-level-focus>Чистые unit-тесты сервисов и pure-функций; mocktail-фейки HvacService и AndroidAutomotivePlugin; SharedPreferences.setMockInitialValues для cubit'ов; FakeAsync для Timer'ов.</module-level-focus>
+    <wave-level-focus>Интеграция ModeCubit ↔ HvacService ↔ AutoHeatService с фейк-плагином и FakeAsync.</wave-level-focus>
+    <phase-level-focus>Smoke на физическом head unit Changan: установка уровней, авторежим, фоновая работа, эмпирическая сверка формулы raw → °C (раньше не проверялось — это первый smoke).</phase-level-focus>
+    <autonomy-gate>До долгой автономной волны каждый high-priority модуль должен иметь: test-files, module-checks (&lt; 5 сек на исполнение), success+failure сценарии, forbidden markers, evidence-types. Pure-функции (M-CONSTANTS-TEMPERATURE, M-ENUMS) — обязательны к покрытию первыми.</autonomy-gate>
+    <redaction>Чувствительных данных в проекте нет. Logger.* при level != debug маскирует ключ 'rawCarPropertyValue' через '***'.</redaction>
+    <current-state>На момент grace-verification каталог test/ отсутствует. План описывает целевое состояние и порядок построения test-infrastructure.</current-state>
+    <log-marker-activation>Phase-2 тесты НЕ assert'ят log markers (M-LOGGER ещё не создан, print() не парсится). Phase-3 step-3 (sweep print→Logger) делает marker-assertions активными. До этого скрытно через TODO-комментарии в тестах.</log-marker-activation>
+  </GlobalPolicy>
+
+  <TestInfrastructure>
+    <required-dev-deps>
+      <dep-1 name="fake_async" purpose="Детерминированные Timer'ы AutoHeatService" />
+      <dep-2 name="bloc_test" purpose="blocTest&lt;ModeCubit, ModesState&gt;: emits, act, verify" />
+      <dep-3 name="mocktail" purpose="Фейки HvacService, CarHvacManager, AndroidAutomotivePlugin без codegen" />
+    </required-dev-deps>
+    <harness-1 name="FakeHvacService" location="test/_helpers/fake_hvac_service.dart">
+      <purpose>Mocktail-фейк HvacService с программируемой температурой, счётчиком setSeatHeatLevel-вызовов и инжекцией событий через onCabinTemperatureChanged.</purpose>
+      <api>
+        <fn-emitTemperature PURPOSE="Имитировать событие датчика" />
+        <fn-recordedSetSeatHeatCalls PURPOSE="Список (userType, level) для assertEquals" />
+      </api>
+    </harness-1>
+    <harness-2 name="FakeAndroidAutomotivePlugin" location="test/_helpers/fake_plugin.dart">
+      <purpose>MethodChannel-фейк для тестирования самого android_automotive_plugin (V-M-PLUGIN). Регистрирует setMockMethodCallHandler.</purpose>
+    </harness-2>
+    <harness-3 name="SharedPreferencesMock" location="setUp: SharedPreferences.setMockInitialValues({...})">
+      <purpose>Изоляция Cubit-тестов от файловой системы.</purpose>
+    </harness-3>
+    <harness-4 name="LoggerTestSink" location="test/_helpers/logger_test_sink.dart">
+      <purpose>Активируется в Phase-3. Logger.installTestSink(buffer) ловит все записи; тесты грепают по regex.</purpose>
+      <activation>Phase-3 step-1 (M-LOGGER создан); до этого harness не существует.</activation>
+    </harness-4>
+    <harness-5 name="GetItReset" location="setUp / tearDown">
+      <purpose>locator.reset() между тестами, иначе синглтоны утекают между сценариями.</purpose>
+    </harness-5>
+    <evidence-types>
+      <type-deterministic>Точное равенство возврата, состояния, набора вызовов.</type-deterministic>
+      <type-trace>Порядок и присутствие шагов (mock.verifyInOrder, blocTest.emits, FakeAsync.elapse + проверка callbacks).</type-trace>
+      <type-forbidden>Утверждения "X НЕ должен случиться" (mock.verifyNever, отсутствие записи в LoggerTestSink).</type-forbidden>
+      <type-boundary>Граничные значения с явным списком входов и выходов.</type-boundary>
+      <type-import>Проверка импортов файла (regex по тексту .dart) — для M-LOGGER чтобы гарантировать отсутствие сторонних библиотек.</type-import>
+      <type-manual-smoke>Шаги на голове + ожидаемые признаки в logcat. Для M-BACKGROUND, M-ACCESSIBILITY, эмпирической сверки формулы.</type-manual-smoke>
+    </evidence-types>
+  </TestInfrastructure>
+
+  <CriticalFlows>
+    <VF-001 NAME="UserSetsHeatLevel" USE_CASES="UC-001" DATA_FLOW="DF-SET-HEAT" PRIORITY="high">
+      <scenario>Пользователь нажимает уровень 2 на сиденье водителя в режиме manual.</scenario>
+      <expected-outcome>В SharedPreferences уровень driver = 2, режим = manual; HvacService.setSeatHeatLevel(driver, 2) вызван ровно один раз; ModesState содержит ModeState(driver, manual, 2).</expected-outcome>
+      <required-signals>
+        <log-marker>[HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL]</log-marker>
+        <trace-sequence>ModeCubit.setHeatLevel -&gt; ModeService.setHeatLevel -&gt; HvacService.setSeatHeatLevel -&gt; CarHvacManager.setSeatHeatLevel</trace-sequence>
+      </required-signals>
+    </VF-001>
+
+    <VF-002 NAME="AutoHeatBySensor" USE_CASES="UC-002" DATA_FLOW="DF-AUTO-HEAT" PRIORITY="high">
+      <scenario>Температура салона падает до -3 °C, у driver включён режим auto.</scenario>
+      <expected-outcome>AutoHeatService запускает HeatSequence(cold) = (6, 4, 10); сразу callback(3); через 6 минут callback(2); через ещё 4 минуты callback(1); через ещё 10 минут callback(0). При промежуточном изменении температуры старый Timer отменяется.</expected-outcome>
+      <required-signals>
+        <log-marker>[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE]</log-marker>
+        <log-marker>[AutoHeatService][scheduleNextLevel][BLOCK_SCHEDULE_NEXT_LEVEL]</log-marker>
+        <trace-sequence>HvacService.onCabinTemperatureChanged -&gt; AutoHeatService._updateAutoHeatForUser -&gt; TemperatureConstants.getHeatSequence -&gt; callback(3) -&gt; ... -&gt; callback(0)</trace-sequence>
+      </required-signals>
+    </VF-002>
+
+    <VF-003 NAME="ForegroundServiceLifecycle" USE_CASES="UC-004" DATA_FLOW="DF-BACKGROUND" PRIORITY="high">
+      <scenario>Приложение свёрнуто, головное устройство в ignition ON; затем ignition OFF.</scenario>
+      <expected-outcome>Foreground-service остаётся активным; нотификация 'AutoHeat Service' видна; при ignition OFF подогрев корректно сворачивается; при ignition ON снова применяется текущий heatMode.</expected-outcome>
+      <required-signals>
+        <log-marker>[BackgroundService][onStart][BLOCK_ON_START]</log-marker>
+        <log-marker>[BackgroundService][handleIgnition][BLOCK_HANDLE_IGNITION]</log-marker>
+      </required-signals>
+    </VF-003>
+
+    <VF-004 NAME="ApplyPreset" USE_CASES="UC-003" DATA_FLOW="DF-PRESET-APPLY" PRIORITY="medium">
+      <scenario>Пользователь применяет сохранённый пресет с driver=2/auto, passenger=1/manual.</scenario>
+      <expected-outcome>ModeCubit получает оба обновления; HvacService вызывается для обоих сидений; SharedPreferences актуален.</expected-outcome>
+      <required-signals>
+        <log-marker>[PresetCubit][apply][BLOCK_APPLY_PRESET]</log-marker>
+        <trace-sequence>PresetCubit.apply -&gt; ModeCubit.setHeatMode -&gt; ModeCubit.setHeatLevel -&gt; HvacService.setSeatHeatLevel</trace-sequence>
+      </required-signals>
+    </VF-004>
+
+    <VF-005 NAME="PluginUnavailableFallback" USE_CASES="UC-001, UC-002" DATA_FLOW="DF-INIT-TEMP" PRIORITY="high">
+      <scenario>AndroidAutomotivePlugin.connect() выбрасывает исключение (вне головного устройства).</scenario>
+      <expected-outcome>HvacService.getCabinTemperature() возвращает 20.0; setSeatHeatLevel rethrow'ит, но UI не падает; в логах есть [HvacService] ошибки без crash процесса.</expected-outcome>
+      <required-signals>
+        <log-marker>[HvacService][initialize][BLOCK_INITIALIZE] error</log-marker>
+      </required-signals>
+    </VF-005>
+  </CriticalFlows>
+
+  <ModuleVerification>
+    <V-M-PLUGIN MODULE="M-PLUGIN" PRIORITY="high">
+      <test-files>
+        <file>packages/android_automotive_plugin/test/android_automotive_plugin_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test packages/android_automotive_plugin/test/android_automotive_plugin_test.dart</check-1>
+        <check-2>cd packages/android_automotive_plugin &amp;&amp; flutter analyze</check-2>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">getHvacIntProperty возвращает int для корректных propertyId/areaId через MethodChannel-фейк.</scenario-1>
+        <scenario-2 kind="success">onHvacChangeEventCallback вызывается при поступлении CarPropertyValue через EventChannel-фейк.</scenario-2>
+        <scenario-3 kind="failure">connect() rethrow'ит исключение из нативного слоя.</scenario-3>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[AndroidAutomotivePlugin][connect][BLOCK_CONNECT]</marker-1>
+        <marker-2>[AndroidAutomotivePlugin][onHvacChangeEvent][BLOCK_HVAC_PROPERTY_EVENT]</marker-2>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>Отсутствие connect() ⇒ getHvacIntProperty не должен вызвать нативный канал.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Smoke на физической голове: connect() успешен, температура читается.</wave-follow-up>
+      <phase-follow-up>Регрессия после обновления android.car.* API на новой прошивке Changan.</phase-follow-up>
+    </V-M-PLUGIN>
+
+    <V-M-ENUMS MODULE="M-ENUMS" PRIORITY="high">
+      <test-files>
+        <file>test/unit/app_enums_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/app_enums_test.dart</check-1>
+      </module-checks>
+      <evidence-types>
+        <type-1>deterministic</type-1>
+        <type-2>boundary</type-2>
+      </evidence-types>
+      <scenarios>
+        <scenario-1 kind="success">Round-trip: для каждого HeatMode.values value.name → HeatModeExtension.fromString(value.name) == value.</scenario-1>
+        <scenario-2 kind="success">Round-trip: для каждого UserType.values value.name → UserTypeExtension.fromString(value.name) == value.</scenario-2>
+        <scenario-3 kind="failure">HeatModeExtension.fromString('garbage') == HeatMode.manual; UserTypeExtension.fromString('garbage') == UserType.driver.</scenario-3>
+        <scenario-4 kind="failure">Case-sensitive: HeatModeExtension.fromString('Manual') == HeatMode.manual (orElse — НЕ совпадает с 'manual', orElse кикает).</scenario-4>
+        <scenario-5 kind="invariant">Имена enum.name никогда не меняются: snapshot test, сравнивающий HeatMode.values.map((e) =&gt; e.name).toList() с ['manual', 'presets', 'auto'] и UserType.values с ['driver', 'passenger']. Падение этого теста — обязательная миграция SharedPreferences.</scenario-5>
+      </scenarios>
+      <forbidden-markers>
+        <forbidden-1>fromString НЕ должен бросать; всегда возвращает enum через orElse.</forbidden-1>
+        <forbidden-2>HeatMode и UserType НЕ должны переименовывать значения без миграции (см. scenario-5 как regression-snapshot).</forbidden-2>
+      </forbidden-markers>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>Pure-функции без логирования; единственное свидетельство — exact equality на возврат fromString.</assertion-1>
+        <assertion-2>scenario-5 (regression-snapshot) — если падает, дальнейшие тесты round-trip автоматически невалидны (test order: snapshot первым).</assertion-2>
+      </required-trace-assertions>
+      <wave-follow-up>SharedPreferences round-trip в V-M-MODE: prefs.setString('heatMode_driver', 'auto') → ModeCubit при холодном старте имеет heatMode == auto.</wave-follow-up>
+      <phase-follow-up>Любое изменение значений enum-имён триггерит миграционный план SharedPreferences. Без миграции — не мерджить.</phase-follow-up>
+      <autonomy-ready>YES.</autonomy-ready>
+    </V-M-ENUMS>
+
+    <V-M-LOGGER MODULE="M-LOGGER" PRIORITY="high">
+      <test-files>
+        <file>test/unit/logger_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/logger_test.dart</check-1>
+        <check-2>flutter analyze lib/src/utils/logger.dart</check-2>
+      </module-checks>
+      <evidence-types>
+        <type-1>deterministic regex match</type-1>
+        <type-2>import-check (regex по тексту .dart)</type-2>
+        <type-3>forbidden (раскрытие секретов / третьих библиотек)</type-3>
+      </evidence-types>
+      <scenarios>
+        <scenario-1 kind="success">Logger.info('HvacService', 'setSeatHeatLevel', 'BLOCK_SET_SEAT_HEAT_LEVEL', 'ok', {'level': 2}) → буфер LoggerTestSink содержит строку, матчащую регулярке `^\[HvacService\]\[setSeatHeatLevel\]\[BLOCK_SET_SEAT_HEAT_LEVEL\] ok \| level=2$`.</scenario-1>
+        <scenario-2 kind="success">installTestSink(buffer) ловит все 4 уровня (debug/info/warn/error). После dispose harness возвращается defaultSink.</scenario-2>
+        <scenario-3 kind="success">Redaction default: Logger.info(..., {'rawCarPropertyValue': 42}) → в выводе 'rawCarPropertyValue=***'.</scenario-3>
+        <scenario-4 kind="success">Redaction debug-override: Logger.debug(..., {'rawCarPropertyValue': 42}) → в выводе 'rawCarPropertyValue=42' (на debug-уровне маскирование снимается).</scenario-4>
+        <scenario-5 kind="failure">Logger.info('', '', '', 'msg') → не падает; вывод '[unknown][unknown][unknown] msg'.</scenario-5>
+        <scenario-6 kind="failure">Logger.info(... ,{'k': null}) → 'k=null' без NPE.</scenario-6>
+        <scenario-7 kind="invariant">Порядок полей в fields сохраняется (LinkedHashMap iteration order) — критично для regex-проверок в других V-M-*.</scenario-7>
+        <scenario-8 kind="import-check">Чтение текста lib/src/utils/logger.dart и assert НЕ содержит подстрок: 'package:logger', 'package:logging', 'package:flutter/foundation.dart' (debugPrint). Только dart:core/dart:io/dart:async допустимы.</scenario-8>
+      </scenarios>
+      <forbidden-markers>
+        <forbidden-1>Logger.dart НЕ должен импортировать сторонние пакеты (см. scenario-8).</forbidden-1>
+        <forbidden-2>Logger НЕ должен делать I/O ассинхронно (тесты должны видеть запись синхронно сразу после вызова).</forbidden-2>
+        <forbidden-3>Logger.error НЕ должен бросать исключение, даже если sink бросает (защитный catch внутри _write).</forbidden-3>
+      </forbidden-markers>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>Никаких сторонних зависимостей в импортах logger.dart.</assertion-1>
+        <assertion-2>defaultSink использует print(); НЕ stderr и НЕ debugPrint.</assertion-2>
+      </required-trace-assertions>
+      <wave-follow-up>После Phase-3 step-3 (sweep) — пересчитать совпадение marker-regex в V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE.</wave-follow-up>
+      <phase-follow-up>n/a — детерминированный, без I/O.</phase-follow-up>
+      <autonomy-ready>YES. Самодостаточный модуль без зависимостей.</autonomy-ready>
+    </V-M-LOGGER>
+
+    <V-M-CONSTANTS-TEMPERATURE MODULE="M-CONSTANTS-TEMPERATURE" PRIORITY="high">
+      <test-files>
+        <file>test/unit/temperature_constants_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/temperature_constants_test.dart</check-1>
+      </module-checks>
+      <evidence-types>
+        <type-1>deterministic</type-1>
+        <type-2>boundary</type-2>
+      </evidence-types>
+      <scenarios>
+        <scenario-1 kind="boundary">getTemperatureRange: 15.0→off; 10.0→off (граница включена в off); 9.999→warm; 5.0→warm; 4.999→cool; 0.0→cool; -0.001→cold; -5.0→cold; -5.001→freezing; -10.0→freezing; -10.001→extreme.</scenario-1>
+        <scenario-2 kind="success">getHeatSequence(15.0) == null; getHeatSequence(10.0) == null (range.off); getHeatSequence(7.0) == HeatSequence(2,2,6); getHeatSequence(0.0) == HeatSequence(4,2,8); getHeatSequence(-3.0) == HeatSequence(6,4,10); getHeatSequence(-7.0) == HeatSequence(8,6,12); getHeatSequence(-15.0) == HeatSequence(10,8,15).</scenario-2>
+        <scenario-3 kind="invariant">Сумма всех durations для cold == 20; для freezing == 26; для extreme == 33. Документация в комментариях должна совпадать с константами.</scenario-3>
+      </scenarios>
+      <forbidden-markers>
+        <forbidden-1>getHeatSequence на TemperatureRange.off возвращает null, НЕ HeatSequence(0,0,0).</forbidden-1>
+        <forbidden-2>temperatureThresholds.entries при итерации сохраняет порядок off→warm→cool→cold→freezing→extreme (Dart Map insertion order); тест явно проверяет, что getTemperatureRange полагается на этот порядок.</forbidden-2>
+      </forbidden-markers>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>Pure-функции не логируют; единственное свидетельство — exact equality (expect(actual, equals(expected))) на возвращаемые значения, см. scenarios 1-2.</assertion-1>
+        <assertion-2>scenario-3 (invariant sum) — это cross-check между документацией и константами; падение указывает на расхождение docstring и реального значения HeatSequence.</assertion-2>
+      </required-trace-assertions>
+      <wave-follow-up>Cross-verification с V-M-AUTO-HEAT scenario-3: суммы durations должны совпадать.</wave-follow-up>
+      <phase-follow-up>При появлении необходимости поддержать другую модель Changan с другими температурными порогами — пересмотреть scenario-1 (триггер deferred-3).</phase-follow-up>
+      <autonomy-ready>YES — детерминированные pure-функции, нет внешних зависимостей, &lt; 1 сек.</autonomy-ready>
+    </V-M-CONSTANTS-TEMPERATURE>
+
+    <V-M-HVAC MODULE="M-HVAC" PRIORITY="high">
+      <test-files>
+        <file>test/unit/hvac_service_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/hvac_service_test.dart</check-1>
+      </module-checks>
+      <evidence-types>
+        <type-1>deterministic</type-1>
+        <type-2>trace (mocktail.verify, verifyInOrder)</type-2>
+        <type-3>forbidden (mocktail.verifyNever)</type-3>
+        <type-4>boundary</type-4>
+      </evidence-types>
+      <scenarios>
+        <scenario-1 kind="success">Первый вызов setSeatHeatLevel(driver, 2) → mocktail.verifyInOrder([plugin.connect(), hvacManager.setSeatHeatLevel(true, 2)]).</scenario-1>
+        <scenario-2 kind="success">Конверсия: эмиссия CarPropertyValue(propertyId=ID_HVAC_IN_OUT_TEMP, areaId=InOutCAR_INSIDE, value=124) через FakeAndroidAutomotivePlugin → onCabinTemperatureChanged вызван ровно один раз с 20.0.</scenario-2>
+        <scenario-3 kind="boundary">Конверсия граничных raw: 84→0.0; 74→-5.0; 124→20.0; 0→-42.0; 200→58.0. Все double сравнения с точностью ±0.0001.</scenario-3>
+        <scenario-4 kind="failure">CarPropertyValue с areaId != InOutCAR_INSIDE НЕ вызывает callback (mocktail.verifyNever).</scenario-4>
+        <scenario-5 kind="failure">CarPropertyValue с propertyId != ID_HVAC_IN_OUT_TEMP НЕ вызывает callback.</scenario-5>
+        <scenario-6 kind="failure">getCabinTemperature при бросе плагина возвращает 20.0 (fallback) и НЕ rethrow'ит.</scenario-6>
+        <scenario-7 kind="failure">setSeatHeatLevel при бросе CarHvacManager.setSeatHeatLevel — rethrow ИСХОДНОЕ исключение (контракт — UI должен поймать).</scenario-7>
+        <scenario-8 kind="invariant">Двойной initialize(): plugin.connect() вызван ровно ОДИН раз. verify(connect()).called(1) после initialize() + initialize().</scenario-8>
+        <scenario-9 kind="invariant">Внутри onHvacChangeEventCallback исключение НЕ должно крашить процесс — текущая catch-блок 'ignore' остаётся (тест: эмиссия с value: null или невалидным типом не валит изолят).</scenario-9>
+      </scenarios>
+      <forbidden-markers>
+        <forbidden-1>plugin.connect() НЕ должен вызываться больше одного раза за жизненный цикл HvacService.</forbidden-1>
+        <forbidden-2>onCabinTemperatureChanged НЕ должен срабатывать на не-InOutCAR_INSIDE событиях.</forbidden-2>
+        <forbidden-3>setSeatHeatLevel НЕ должен глотать исключения (в отличие от getCabinTemperature).</forbidden-3>
+      </forbidden-markers>
+      <required-log-markers>
+        <marker-1 activated-in="Phase-3">[HvacService][initialize][BLOCK_INITIALIZE]</marker-1>
+        <marker-2 activated-in="Phase-3">[HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL] level=$level userType=$userType</marker-2>
+        <marker-3 activated-in="Phase-3">[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] celsius=$celsius</marker-3>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>Двойной initialize() не дёргает connect() повторно (_isInitialized гард).</assertion-1>
+        <assertion-2>Порядок: initialize() → connect() ДОЛЖЕН произойти ДО первого setSeatHeatLevel call в CarHvacManager.</assertion-2>
+      </required-trace-assertions>
+      <wave-follow-up>Интеграция с AutoHeatService через FakeAsync (V-M-AUTO-HEAT scenario-1).</wave-follow-up>
+      <phase-follow-up>Ручной smoke на голове: подключение, реальный raw датчика, эмпирическая сверка формулы (raw - 84) / 2; при значимом расхождении триггерится deferred-3.</phase-follow-up>
+      <autonomy-ready>YES после Phase-2 (state-only). Полная (с marker assertions) — после Phase-3.</autonomy-ready>
+    </V-M-HVAC>
+
+    <V-M-AUTO-HEAT MODULE="M-AUTO-HEAT" PRIORITY="high">
+      <test-files>
+        <file>test/unit/auto_heat_service_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/auto_heat_service_test.dart</check-1>
+      </module-checks>
+      <evidence-types>
+        <type-1>deterministic (callback захвачен в List&lt;int&gt;)</type-1>
+        <type-2>trace (порядок вызовов callback через FakeAsync.elapse)</type-2>
+        <type-3>forbidden (callback не вызывается после stopAutoHeat / после завершения)</type-3>
+      </evidence-types>
+      <setup>AutoHeatService — синглтон. В каждом setUp обязательно AutoHeatService().dispose() и пересоздать состояние через initialize(fakeHvacService).</setup>
+      <scenarios>
+        <scenario-1 kind="success">cold sequence: setTemperature(-3.0) + startAutoHeat(driver, captureCallback) → ожидаемая trace: t=0:00 callback(3); FakeAsync.elapse(6m) → callback(2); elapse(4m) → callback(1); elapse(10m) → callback(0). Итоговый captureList == [3, 2, 1, 0].</scenario-1>
+        <scenario-2 kind="success">warm sequence: setTemperature(7.0) → captureList == [3, 2, 1, 0] с длительностями (2m, 2m, 6m). Сумма 10m.</scenario-2>
+        <scenario-3 kind="success">extreme sequence: setTemperature(-15.0) → длительности (10m, 8m, 15m). Сумма 33m.</scenario-3>
+        <scenario-4 kind="success">Отмена при смене температуры: setTemperature(-3.0) + startAutoHeat → callback(3); elapse(3m); setTemperature(12.0) → captureList == [3, 0] (предыдущий Timer отменён, переход в off).</scenario-4>
+        <scenario-5 kind="success">stopAutoHeat(driver) после callback(3): elapse(10m) → captureList == [3] (НЕ [3, 2, 1, 0]). Forbidden: callback вообще НЕ должен сработать после stopAutoHeat.</scenario-5>
+        <scenario-6 kind="invariant">Independence: startAutoHeat(driver, cbD) + startAutoHeat(passenger, cbP) с разными последовательностями. stopAutoHeat(driver) не должен отменять Timer'ы passenger'а — cbP по-прежнему получает свои уровни.</scenario-6>
+        <scenario-7 kind="invariant">Idempotency: повторный startAutoHeat(driver, cbD) во время активной последовательности отменяет старый Timer и стартует с уровня 3 заново (текущий контракт _updateAutoHeatForUser).</scenario-7>
+        <scenario-8 kind="boundary">setTemperature(10.0) → callback(0) сразу; setTemperature(9.999) → cold/warm sequence стартует.</scenario-8>
+        <scenario-9 kind="failure">startAutoHeat когда _currentTemperature == null → callback НЕ вызывается; Timer НЕ создаётся (verifyNever через FakeAsync.elapse(60m)).</scenario-9>
+      </scenarios>
+      <forbidden-markers>
+        <forbidden-1>После прохождения [3,2,1,0] активных Timer'ов в FakeAsync НЕ должно остаться (fakeAsync.pendingTimers.isEmpty).</forbidden-1>
+        <forbidden-2>После stopAutoHeat(userType) callback НЕ должен срабатывать ни разу при любой последующей elapse.</forbidden-2>
+        <forbidden-3>Timer одного userType НЕ должен влиять на другого (см. scenario-6).</forbidden-3>
+        <forbidden-4>callback(level) НЕ должен повторяться для одного и того же уровня в рамках одной последовательности (Set(captureList).length == 4 для полной последовательности).</forbidden-4>
+      </forbidden-markers>
+      <required-log-markers>
+        <marker-1 activated-in="Phase-3">[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE] userType=$userType level=3</marker-1>
+        <marker-2 activated-in="Phase-3">[AutoHeatService][scheduleNextLevel][BLOCK_SCHEDULE_NEXT_LEVEL] userType=$userType level=$level duration=$min</marker-2>
+        <marker-3 activated-in="Phase-3">[AutoHeatService][stopAutoHeat][BLOCK_STOP] userType=$userType</marker-3>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>captureList для полной последовательности всегда [3, 2, 1, 0] в этом порядке.</assertion-1>
+        <assertion-2>Timer.cancel() вызывается перед созданием нового Timer для того же userType.</assertion-2>
+        <assertion-3>Сумма durations совпадает с HeatSequence из TemperatureConstants (cross-verification с V-M-CONSTANTS-TEMPERATURE).</assertion-3>
+      </required-trace-assertions>
+      <wave-follow-up>Связка с ModeCubit (V-M-MODE wave-1): callback из AutoHeatService должен превращаться в setHeatLevel + setSeatHeatLevel на FakeHvacService.</wave-follow-up>
+      <phase-follow-up>Smoke на голове с реальным датчиком при отрицательной температуре салона; проверить, что последовательность не сбрасывается из-за шумов сенсора.</phase-follow-up>
+      <autonomy-ready>YES после Phase-2 step-4 (FakeAsync покрывает trajectory). Marker assertions активируются в Phase-3.</autonomy-ready>
+    </V-M-AUTO-HEAT>
+
+    <V-M-MODE MODULE="M-MODE" PRIORITY="high">
+      <test-files>
+        <file>test/unit/mode_cubit_test.dart (запланирован)</file>
+        <file>test/unit/mode_service_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/mode_cubit_test.dart test/unit/mode_service_test.dart</check-1>
+      </module-checks>
+      <evidence-types>
+        <type-1>bloc_test (emits, act, verify)</type-1>
+        <type-2>deterministic SharedPreferences round-trip</type-2>
+        <type-3>trace (mocktail.verify, verifyInOrder для HvacService и AutoHeatService)</type-3>
+        <type-4>forbidden (verifyNever когда состояние не меняется)</type-4>
+      </evidence-types>
+      <setup>SharedPreferences.setMockInitialValues({}); locator.reset(); регистрация FakeHvacService через GetIt.</setup>
+      <scenarios>
+        <scenario-1 kind="success">setHeatLevel(driver, 2) на чистом старте: blocTest emits ModesState с driver.heatLevel==2; mocktail.verify(fakeHvac.setSeatHeatLevel(UserType.driver, 2)).called(1); SharedPreferences.getInt('heatLevel_driver') == 2.</scenario-1>
+        <scenario-2 kind="success">setHeatMode(driver, HeatMode.auto): verify(fakeAutoHeat.startAutoHeat(UserType.driver, any())).called(1); SharedPreferences.getString('heatMode_driver') == 'auto'.</scenario-2>
+        <scenario-3 kind="success">Переход auto → manual: verify(fakeAutoHeat.stopAutoHeat(UserType.driver)).called(1).</scenario-3>
+        <scenario-4 kind="success">Auto mode конец-в-конец: setHeatMode(driver, auto); fakeHvacService.emitTemperature(-3.0); FakeAsync.elapse(6m); ожидание: state.driver.heatLevel == 2 (callback из AutoHeatService отработал и обновил ModeCubit).</scenario-4>
+        <scenario-5 kind="boundary">Холодный старт с пустым SharedPreferences: ModesState == ModesState(states: [ModeState(driver, manual, 0), ModeState(passenger, manual, 0)]).</scenario-5>
+        <scenario-6 kind="boundary">Холодный старт с SharedPreferences.setMockInitialValues({'heatMode_driver': 'auto', 'heatLevel_driver': 1}) → driver восстановлен с heatMode=auto, heatLevel=1.</scenario-6>
+        <scenario-7 kind="failure">SharedPreferences с garbage value 'heatMode_driver': 'xxx' → fromString orElse → HeatMode.manual; ModeCubit не падает.</scenario-7>
+        <scenario-8 kind="idempotency">setHeatLevel(driver, 2) дважды подряд: первый раз emit + setSeatHeatLevel; второй — emit с тем же state, но verifyNever(setSeatHeatLevel при втором вызове) — ИЛИ принять, что вызов идемпотентен (текущий код вызывает всегда; решить в Phase-2 step-5: оптимизировать или зафиксировать как есть). См. open-question O-1.</scenario-8>
+      </scenarios>
+      <forbidden-markers>
+        <forbidden-1>При переключении на HeatMode.manual ModeCubit НЕ должен оставлять активные подписки в AutoHeatService (verifyNever(startAutoHeat) после явного перехода).</forbidden-1>
+        <forbidden-2>setHeatLevel не должен вызывать setSeatHeatLevel дважды для одного и того же уровня в рамках одного эмита (см. scenario-8).</forbidden-2>
+        <forbidden-3>Сериализация enum через .name; .toString() НЕ должен использоваться (он добавит префикс 'HeatMode.').</forbidden-3>
+      </forbidden-markers>
+      <required-log-markers>
+        <marker-1 activated-in="Phase-3">[ModeCubit][setHeatLevel][BLOCK_SET_HEAT_LEVEL] userType=$userType level=$level</marker-1>
+        <marker-2 activated-in="Phase-3">[ModeCubit][setHeatMode][BLOCK_SET_HEAT_MODE] userType=$userType mode=$mode</marker-2>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>verifyInOrder для setHeatLevel: ModeService.setHeatLevel ДО HvacService.setSeatHeatLevel ДО emit.</assertion-1>
+        <assertion-2>При HeatMode.auto AutoHeatService.startAutoHeat вызывается; callback приводит к setHeatLevel.</assertion-2>
+      </required-trace-assertions>
+      <open-questions>
+        <O-1>Должен ли setHeatLevel ранним выходом блокировать повторную запись того же уровня? Сейчас код вызывает setSeatHeatLevel всегда. Решение: оставить как есть (плагин дешёвый, идемпотентность на нижнем слое). Tests отражают текущее поведение в scenario-8.</O-1>
+      </open-questions>
+      <wave-follow-up>Интеграция с PresetCubit.apply (V-M-PRESET wave): apply пресета триггерит каскад setHeatMode + setHeatLevel для обоих сидений.</wave-follow-up>
+      <phase-follow-up>Smoke на голове: вкладка Heat, переключения mode и level; проверка через logcat marker-выводов.</phase-follow-up>
+      <autonomy-ready>YES после Phase-2 step-5 — bloc_test покрывает state-машину. AutoHeat-cross-test (scenario-4) — wave-level.</autonomy-ready>
+    </V-M-MODE>
+
+    <V-M-PRESET MODULE="M-PRESET" PRIORITY="medium">
+      <test-files>
+        <file>test/unit/preset_service_test.dart (запланирован)</file>
+        <file>test/unit/preset_cubit_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/preset_service_test.dart test/unit/preset_cubit_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">save + load + delete пресета.</scenario-1>
+        <scenario-2 kind="success">apply(preset) вызывает ModeCubit.setHeatMode и setHeatLevel для обоих сидений.</scenario-2>
+        <scenario-3 kind="failure">load при битом JSON не валит изолят.</scenario-3>
+      </scenarios>
+      <required-log-markers>
+        <marker-1 activated-in="Phase-3">[PresetCubit][apply][BLOCK_APPLY_PRESET]</marker-1>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>Round-trip Preset.toJson() → jsonEncode → SharedPreferences → jsonDecode → Preset.fromJson не теряет поля (поверх кодогенерации json_serializable).</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Связка с UI PresetsScreen.</wave-follow-up>
+      <phase-follow-up>Регрессия после изменений модели Preset (codegen).</phase-follow-up>
+      <autonomy-ready>YES после Phase-2 step-6.</autonomy-ready>
+    </V-M-PRESET>
+
+    <V-M-SETTINGS MODULE="M-SETTINGS" PRIORITY="medium">
+      <test-files>
+        <file>test/unit/settings_service_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/settings_service_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Дефолтный threshold = 5.0 при отсутствии ключа.</scenario-1>
+        <scenario-2 kind="success">setThreshold(0.0) → SharedPreferences обновлён → следующий getThreshold == 0.0.</scenario-2>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>setThreshold + перезапуск SettingsCubit (с тем же SharedPreferences mock) → getThreshold возвращает сохранённое значение.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Сравнение с TemperatureConstants.sliderValues.</wave-follow-up>
+      <phase-follow-up>n/a — pure persistence.</phase-follow-up>
+    </V-M-SETTINGS>
+
+    <V-M-MANUAL-SETTINGS MODULE="M-MANUAL-SETTINGS" PRIORITY="medium">
+      <test-files>
+        <file>test/unit/manual_settings_service_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/manual_settings_service_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Сериализация-десериализация ManualSettings без потерь полей.</scenario-1>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>jsonEncode(ManualSettings.toJson()) → jsonDecode → ManualSettings.fromJson() возвращает идентичный объект (поверх json_serializable codegen).</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Связка с UI ManualSettingsSection (V-M-UI-SETTINGS).</wave-follow-up>
+      <phase-follow-up>Регрессия после изменений модели ManualSettings (codegen).</phase-follow-up>
+    </V-M-MANUAL-SETTINGS>
+
+    <V-M-THEME MODULE="M-THEME" PRIORITY="low">
+      <test-files>
+        <file>test/unit/theme_cubit_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/theme_cubit_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">initialize читает сохранённую тему; setTheme сохраняет и эмитит.</scenario-1>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>setTheme → ThemeCubit emit нового ThemeType → SharedPreferences round-trip сохраняет значение.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Интеграция с ThemeSelector в V-M-UI-SETTINGS scenario-2.</wave-follow-up>
+      <phase-follow-up>n/a — не критично для подогрева.</phase-follow-up>
+    </V-M-THEME>
+
+    <V-M-DI MODULE="M-DI" PRIORITY="medium">
+      <test-files>
+        <file>test/integration/service_locator_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/integration/service_locator_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">setupServiceLocator регистрирует все singletons и cubit'ы.</scenario-1>
+        <scenario-2 kind="success">Повторный вызов не падает (GetIt allowReassignment / reset в setUp).</scenario-2>
+      </scenarios>
+      <required-trace-assertions>
+        <assertion-1>В background-изоляте setupServiceLocator должен поднимать тот же набор зависимостей.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>После любых правок setupServiceLocator проверять и UI-, и background-изолят (V-M-BACKGROUND scenario-2).</wave-follow-up>
+      <phase-follow-up>n/a — DI стабилен, проверяется автоматически каждой waveboundary.</phase-follow-up>
+    </V-M-DI>
+
+    <V-M-BLOC-PROVIDERS MODULE="M-BLOC-PROVIDERS" PRIORITY="low">
+      <test-files>
+        <file>test/widget/app_bloc_providers_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/widget/app_bloc_providers_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">MultiBlocProvider c BlockProviders.initiateBlocs() предоставляет все ожидаемые cubit'ы дочерним виджетам.</scenario-1>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>context.read&lt;ThemeCubit&gt;(), context.read&lt;ModeCubit&gt;(), context.read&lt;PresetCubit&gt;(), context.read&lt;SettingsCubit&gt;(), context.read&lt;ManualSettingsCubit&gt;() не бросают ProviderNotFoundException в дочернем виджете.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>При добавлении нового Cubit обновить BlockProviders.initiateBlocs() и расширить scenario-1.</wave-follow-up>
+      <phase-follow-up>n/a — структурная проверка, регрессии маловероятны.</phase-follow-up>
+    </V-M-BLOC-PROVIDERS>
+
+    <V-M-BACKGROUND MODULE="M-BACKGROUND" PRIORITY="high">
+      <test-files>
+        <file>test/integration/background_service_test.dart (smoke; основная верификация — ручная)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/integration/background_service_test.dart</check-1>
+        <check-2>Ручной smoke: запуск с adb shell am start-service, наблюдение нотификации, прохождение ignition ON/OFF.</check-2>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">initializeBackgroundService выставляет правильный AndroidConfiguration (channel my_foreground, id 888, autoStart).</scenario-1>
+        <scenario-2 kind="success">onStart вызывает DartPluginRegistrant.ensureInitialized и setupServiceLocator.</scenario-2>
+        <scenario-3 kind="failure">При исключении в onStart срабатывает backoff и не превышается _maxRestartAttempts.</scenario-3>
+      </scenarios>
+      <required-log-markers>
+        <marker-1>[BackgroundService][onStart][BLOCK_ON_START]</marker-1>
+        <marker-2>[BackgroundService][onStart][BLOCK_RESTART_BACKOFF]</marker-2>
+      </required-log-markers>
+      <required-trace-assertions>
+        <assertion-1>В background-изоляте не должно быть обращений к UI-уровневым synchronizer'ам или ThemeCubit.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Smoke на голове после изменения onStart.</wave-follow-up>
+      <phase-follow-up>Регрессия после апдейтов flutter_background_service.</phase-follow-up>
+    </V-M-BACKGROUND>
+
+    <V-M-ACCESSIBILITY MODULE="M-ACCESSIBILITY" PRIORITY="medium">
+      <test-files>
+        <file>(ручная верификация на голове)</file>
+      </test-files>
+      <module-checks>
+        <check-1>Smoke: при системном событии _accessibilityServiceCallback поднимает foreground-service, если он не запущен.</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">setCallbackHandle регистрирует валидный entry-point.</scenario-1>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>Manual: при системном событии (включение системы / ignition wake) в logcat появляется индикатор того, что _accessibilityServiceCallback сработал и поднял foreground-service (нотификация 'AutoHeat Service' видна).</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>При изменении @pragma('vm:entry-point') обвязки в accessibility_service.dart — обязательный smoke на голове.</wave-follow-up>
+      <phase-follow-up>Регрессия после апдейта flutter_background_service или Android Automotive системного слоя.</phase-follow-up>
+    </V-M-ACCESSIBILITY>
+
+    <V-M-MAIN MODULE="M-MAIN" PRIORITY="medium">
+      <test-files>
+        <file>test/widget/app_smoke_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/widget/app_smoke_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">runApp(AutoheatApp) монтируется и рендерит AppContent.</scenario-1>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>Порядок инициализации в main(): WidgetsFlutterBinding.ensureInitialized → setupServiceLocator → ThemeCubit.initialize → SettingsCubit.initialize → initializeAccessibilityService → initializeBackgroundService → runApp. Изменение порядка ломает background-isolate setup.</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>При добавлении новой инициализационной функции в main — обновить assertion-1.</wave-follow-up>
+      <phase-follow-up>Ручной smoke на голове: cold start приложения, проверка времени до появления AppContent.</phase-follow-up>
+    </V-M-MAIN>
+
+    <V-M-UI-APP MODULE="M-UI-APP" PRIORITY="low">
+      <test-files>
+        <file>test/widget/app_content_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/widget/app_content_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Навигация между вкладками Heat/Presets/Settings.</scenario-1>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>WidgetTester.tap на каждой вкладке → текущий экран меняется (find.byType(HeatScreen|PresetsListScreen|SettingsScreen)).</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>При добавлении новой вкладки расширить scenario-1.</wave-follow-up>
+      <phase-follow-up>n/a — структурный shell, регрессии маловероятны.</phase-follow-up>
+    </V-M-UI-APP>
+
+    <V-M-UI-HEAT MODULE="M-UI-HEAT" PRIORITY="medium">
+      <test-files>
+        <file>test/widget/heat_screen_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/widget/heat_screen_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Тап на уровень сиденья вызывает ModeCubit.setHeatLevel.</scenario-1>
+        <scenario-2 kind="success">CabinTemperatureDisplay отражает температуру из HvacService.</scenario-2>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>WidgetTester.tap на кнопке уровня → mocktail.verify(fakeModeCubit.setHeatLevel(userType, level)).called(1).</assertion-1>
+        <assertion-2>State update в ModeCubit → CabinTemperatureDisplay содержит ожидаемый текст (find.text('20°C') и т.п.).</assertion-2>
+      </required-trace-assertions>
+      <wave-follow-up>Cross-check с V-M-MODE: тап в UI → setHeatLevel → setSeatHeatLevel через FakeHvacService.</wave-follow-up>
+      <phase-follow-up>Ручной smoke на голове: визуальная проверка состояний (driver / passenger / уровни).</phase-follow-up>
+    </V-M-UI-HEAT>
+
+    <V-M-UI-PRESETS MODULE="M-UI-PRESETS" PRIORITY="low">
+      <test-files>
+        <file>test/widget/presets_list_screen_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/widget/presets_list_screen_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Tap на пресете вызывает PresetCubit.apply.</scenario-1>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>WidgetTester.tap на ListTile пресета → mocktail.verify(fakePresetCubit.apply(preset)).called(1).</assertion-1>
+      </required-trace-assertions>
+      <wave-follow-up>Cross-check с V-M-PRESET scenario-2: apply пресета должен пройти полный каскад до HvacService.</wave-follow-up>
+      <phase-follow-up>Ручной smoke на голове: создание + применение пресета.</phase-follow-up>
+    </V-M-UI-PRESETS>
+
+    <V-M-UI-SETTINGS MODULE="M-UI-SETTINGS" PRIORITY="low">
+      <test-files>
+        <file>test/widget/settings_screen_test.dart (запланирован)</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/widget/settings_screen_test.dart</check-1>
+      </module-checks>
+      <scenarios>
+        <scenario-1 kind="success">Изменение TemperatureThresholdSlider обновляет SettingsCubit.</scenario-1>
+        <scenario-2 kind="success">ThemeSelector переключает тему через ThemeCubit.</scenario-2>
+      </scenarios>
+      <required-log-markers />
+      <required-trace-assertions>
+        <assertion-1>WidgetTester.drag на TemperatureThresholdSlider → mocktail.verify(fakeSettingsCubit.setThreshold(any())).called(1).</assertion-1>
+        <assertion-2>WidgetTester.tap на ThemeSelector → mocktail.verify(fakeThemeCubit.setTheme(any())).called(1).</assertion-2>
+      </required-trace-assertions>
+      <wave-follow-up>Cross-check с V-M-SETTINGS и V-M-THEME: после drag/tap значение должно реально сохраниться в SharedPreferences.</wave-follow-up>
+      <phase-follow-up>Ручной smoke на голове: визуальная проверка всех секций settings.</phase-follow-up>
+    </V-M-UI-SETTINGS>
+  </ModuleVerification>
+
+  <PhaseGates>
+    <Gate-Phase-1 PHASE="Phase-1">
+      <goal>Зафиксировать текущую кодовую базу под GRACE: контракты, граф, верификационный план.</goal>
+      <commands>
+        <command-1>flutter analyze</command-1>
+        <command-2>flutter pub get</command-2>
+      </commands>
+      <required-evidence>
+        <evidence-1>docs/{requirements,technology,development-plan,verification-plan,knowledge-graph,operational-packets}.xml существуют и валидны.</evidence-1>
+        <evidence-2>AGENTS.md обновлён до GRACE-формата.</evidence-2>
+      </required-evidence>
+    </Gate-Phase-1>
+
+    <Gate-Phase-2 PHASE="Phase-2">
+      <goal>Базовое покрытие тестами критических pure-функций и сервисов; harness'ы (FakeHvacService, FakeAndroidAutomotivePlugin, SharedPreferencesMock) построены.</goal>
+      <commands>
+        <command-1>flutter test</command-1>
+        <command-2>flutter analyze</command-2>
+        <command-3>flutter test --coverage (опционально, для baseline lcov)</command-3>
+      </commands>
+      <required-evidence>
+        <evidence-1>TestInfrastructure поднята: test/_helpers/{fake_hvac_service.dart, fake_plugin.dart} есть; dev_deps fake_async/bloc_test/mocktail добавлены в pubspec.yaml.</evidence-1>
+        <evidence-2>Тесты для V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS, V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE зелёные. Forbidden markers в каждом проверены.</evidence-2>
+        <evidence-3>regression-snapshot тест для enum.name (V-M-ENUMS scenario-5) есть и проходит.</evidence-3>
+        <evidence-4>В основных .dart-файлах добавлена START_MODULE_CONTRACT/MAP-разметка.</evidence-4>
+        <evidence-5>Log-marker assertions в тестах помечены TODO(phase-3) — не выполняются, но видны грепом по 'TODO(phase-3)'.</evidence-5>
+      </required-evidence>
+    </Gate-Phase-2>
+
+    <Gate-Phase-3 PHASE="Phase-3">
+      <goal>Структурированные логи без сторонних библиотек. M-UI-DIAG, multi-listener и extraction формулы температуры сознательно отложены.</goal>
+      <commands>
+        <command-1>flutter test</command-1>
+        <command-2>flutter analyze</command-2>
+        <command-3>Ручной smoke на голове с записью logcat и проверкой формата [Module][function][BLOCK]</command-3>
+      </commands>
+      <required-evidence>
+        <evidence-1>V-M-LOGGER зелёный.</evidence-1>
+        <evidence-2>print() заменён на Logger в M-HVAC, M-AUTO-HEAT, M-MODE, M-BACKGROUND, M-PLUGIN; V-M-* log-markers по-прежнему совпадают.</evidence-2>
+      </required-evidence>
+    </Gate-Phase-3>
+  </PhaseGates>
+
+  <FailurePackets>
+    <packet-template>
+      <expected-fields>scenario, expected-evidence, observed-evidence, first-divergent-block, next-action, hvac-property-snapshot, isolate (ui|background), car-profile (cs55plus|uniK), shared-preferences-initial, fake-async-elapsed-minutes</expected-fields>
+    </packet-template>
+  </FailurePackets>
+
+  <AutonomyReadiness>
+    <summary>
+      <ready-for-execute>V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS, V-M-LOGGER — самодостаточные, pure-friendly, &lt; 1 сек на проверку.</ready-for-execute>
+      <ready-for-execute-with-harness>V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE, V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS — требуют FakeHvacService / FakeAndroidAutomotivePlugin / SharedPreferencesMock. Безопасны для параллельной волны после Phase-2 step-0 (harness scaffolding).</ready-for-execute-with-harness>
+      <ready-for-execute-manual-only>V-M-BACKGROUND, V-M-ACCESSIBILITY и эмпирическая сверка формулы (raw - 84) / 2 на голове — нужен физический head unit. Не блокируют автономные волны на остальных модулях.</ready-for-execute-manual-only>
+      <not-ready>n/a — все запланированные V-M-* имеют чёткий next step.</not-ready>
+    </summary>
+    <required-packet-fields-before-autonomous-run>
+      <field-1>module-id (M-*)</field-1>
+      <field-2>verification-ref (V-M-*)</field-2>
+      <field-3>write-scope (явный список файлов; не выходить за пределы lib/src/&lt;module&gt;/ + test/)</field-3>
+      <field-4>contract-excerpt</field-4>
+      <field-5>verification-excerpt (с forbidden-markers и evidence-types)</field-5>
+      <field-6>stop-conditions (минимум: новый CrossLink, новая зависимость, изменение SharedPreferences-ключей)</field-6>
+      <field-7>car-profile (cs55plus default; uniK при необходимости)</field-7>
+      <field-8>isolate (ui|background) — для M-BACKGROUND, M-ACCESSIBILITY</field-8>
+    </required-packet-fields-before-autonomous-run>
+    <recommended-execution-order>
+      <step-1>Phase-2 step-0: scaffold TestInfrastructure (harnesses + dev_deps). Sequential, controller-owned.</step-1>
+      <step-2>Phase-2 steps 1-3: V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS параллельно (independent pure functions). Можно multiagent-execute.</step-2>
+      <step-3>Phase-2 steps 3-5: V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE последовательно (M-MODE depends on harness fakes from M-HVAC/M-AUTO-HEAT) — sequential execute.</step-3>
+      <step-4>Phase-2 step-6: V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS, V-M-THEME — параллельно (независимые JSON round-trip).</step-4>
+      <step-5>Phase-3 step-1: V-M-LOGGER (sequential, foundation для последующего sweep).</step-5>
+      <step-6>Phase-3 step-2: sweep print → Logger в M-HVAC, M-AUTO-HEAT, M-MODE, M-BACKGROUND, M-PLUGIN. Параллельная волна, каждый воркер активирует TODO(phase-3) marker-assertions в своём модуле.</step-6>
+      <step-7>Manual smoke на голове: V-M-BACKGROUND, V-M-ACCESSIBILITY, эмпирическая сверка формулы (raw - 84) / 2.</step-7>
+    </recommended-execution-order>
+    <known-gaps>
+      <gap-1 module="M-PLUGIN">FakeAndroidAutomotivePlugin требует MethodChannel/EventChannel моков; harness нужен в каталоге packages/android_automotive_plugin/test/. Сейчас этот каталог отсутствует.</gap-1>
+      <gap-2 module="M-BACKGROUND">Полное верификационное покрытие невозможно без головы: flutter_background_service не имеет тестового режима. Принимаем как known-gap; mitigation — конфиг-уровень assert + manual smoke.</gap-2>
+      <gap-3 module="ALL">Log-marker assertions выключены до Phase-3 step-3. Этот gap намеренный и зафиксирован в GlobalPolicy/log-marker-activation.</gap-3>
+    </known-gaps>
+  </AutonomyReadiness>
+</VerificationPlan>
