@@ -13,19 +13,21 @@
 
   <TestInfrastructure>
     <required-dev-deps>
-      <dep-1 name="fake_async" purpose="Детерминированные Timer'ы AutoHeatService" />
-      <dep-2 name="bloc_test" purpose="blocTest&lt;ModeCubit, ModesState&gt;: emits, act, verify" />
-      <dep-3 name="mocktail" purpose="Фейки HvacService, CarHvacManager, AndroidAutomotivePlugin без codegen" />
+      <dep-1 name="fake_async" version="^1.3.3" status="installed" purpose="Детерминированные Timer'ы AutoHeatService" />
+      <dep-2 name="bloc_test" version="^10.0.0" status="installed" purpose="blocTest&lt;ModeCubit, ModesState&gt;: emits, act, verify" />
+      <dep-3 name="mocktail" version="^1.0.5" status="installed" purpose="Mock ModeService, CarHvacManager и verify()/verifyNever()/verifyInOrder() для проверки взаимодействий. FakeHvacService — ручной фейк, не mocktail." />
     </required-dev-deps>
-    <harness-1 name="FakeHvacService" location="test/_helpers/fake_hvac_service.dart">
-      <purpose>Mocktail-фейк HvacService с программируемой температурой, счётчиком setSeatHeatLevel-вызовов и инжекцией событий через onCabinTemperatureChanged.</purpose>
+    <harness-1 name="FakeHvacService" location="test/_helpers/fake_hvac_service.dart" status="created">
+      <purpose>Ручной фейк (implements HvacService) с программируемой температурой, счётчиком setSeatHeatLevel-вызовов и инжекцией событий через emitTemperature. Не mocktail: settable-поле onCabinTemperatureChanged удобнее в ручном фейке. Создан в Phase-2 step-0.</purpose>
       <api>
-        <fn-emitTemperature PURPOSE="Имитировать событие датчика" />
-        <fn-recordedSetSeatHeatCalls PURPOSE="Список (userType, level) для assertEquals" />
+        <fn-emitTemperature PURPOSE="Имитировать событие датчика: дёргает onCabinTemperatureChanged" />
+        <fn-recordedSetSeatHeatCalls PURPOSE="List&lt;(UserType, int)&gt; — все вызовы setSeatHeatLevel" />
+        <fn-programmedTemperature PURPOSE="Значение, возвращаемое getCabinTemperature (default 20.0)" />
+        <fn-initializeCallCount PURPOSE="Счётчик вызовов initialize" />
       </api>
     </harness-1>
-    <harness-2 name="FakeAndroidAutomotivePlugin" location="test/_helpers/fake_plugin.dart">
-      <purpose>MethodChannel-фейк для тестирования самого android_automotive_plugin (V-M-PLUGIN). Регистрирует setMockMethodCallHandler.</purpose>
+    <harness-2 name="AutomotiveMethodChannelMock" location="test/_helpers/fake_plugin.dart" status="deferred-to-step-3">
+      <purpose>НЕ инжектируемый фейк-объект: HvacService создаёт собственный AndroidAutomotivePlugin в конструкторе (hvac_service.dart:15). Плагин общается с нативным слоем только через const MethodChannel('android_automotive_plugin'). Поэтому harness — это набор MethodChannel-хелперов: setMockMethodCallHandler для исходящих (connect/getHvacIntProperty/setHvacIntProperty) и handlePlatformMessage для входящих (onHvacChangeEvent). Создаётся в step-3 рядом с первым тестом V-M-HVAC/V-M-PLUGIN, который валидирует codec/инъекцию реальным прогоном (flutter analyze это не ловит).</purpose>
     </harness-2>
     <harness-3 name="SharedPreferencesMock" location="setUp: SharedPreferences.setMockInitialValues({...})">
       <purpose>Изоляция Cubit-тестов от файловой системы.</purpose>
@@ -650,14 +652,14 @@
 
   <FailurePackets>
     <packet-template>
-      <expected-fields>scenario, expected-evidence, observed-evidence, first-divergent-block, next-action, hvac-property-snapshot, isolate (ui|background), car-profile (cs55plus|uniK), shared-preferences-initial, fake-async-elapsed-minutes</expected-fields>
+      <expected-fields>scenario, expected-evidence, observed-evidence, first-divergent-block, next-action, hvac-property-snapshot, isolate (ui|background), shared-preferences-initial, fake-async-elapsed-minutes</expected-fields>
     </packet-template>
   </FailurePackets>
 
   <AutonomyReadiness>
     <summary>
       <ready-for-execute>V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS, V-M-LOGGER — самодостаточные, pure-friendly, &lt; 1 сек на проверку.</ready-for-execute>
-      <ready-for-execute-with-harness>V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE, V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS — требуют FakeHvacService / FakeAndroidAutomotivePlugin / SharedPreferencesMock. Безопасны для параллельной волны после Phase-2 step-0 (harness scaffolding).</ready-for-execute-with-harness>
+      <ready-for-execute-with-harness>V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE, V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS — требуют FakeHvacService (создан) / AutomotiveMethodChannelMock (создаётся в step-3) / SharedPreferencesMock. Безопасны для параллельной волны после Phase-2 step-0.</ready-for-execute-with-harness>
       <ready-for-execute-manual-only>V-M-BACKGROUND, V-M-ACCESSIBILITY и эмпирическая сверка формулы (raw - 84) / 2 на голове — нужен физический head unit. Не блокируют автономные волны на остальных модулях.</ready-for-execute-manual-only>
       <not-ready>n/a — все запланированные V-M-* имеют чёткий next step.</not-ready>
     </summary>
@@ -668,11 +670,10 @@
       <field-4>contract-excerpt</field-4>
       <field-5>verification-excerpt (с forbidden-markers и evidence-types)</field-5>
       <field-6>stop-conditions (минимум: новый CrossLink, новая зависимость, изменение SharedPreferences-ключей)</field-6>
-      <field-7>car-profile (cs55plus default; uniK при необходимости)</field-7>
-      <field-8>isolate (ui|background) — для M-BACKGROUND, M-ACCESSIBILITY</field-8>
+      <field-7>isolate (ui|background) — для M-BACKGROUND, M-ACCESSIBILITY</field-7>
     </required-packet-fields-before-autonomous-run>
     <recommended-execution-order>
-      <step-1>Phase-2 step-0: scaffold TestInfrastructure (harnesses + dev_deps). Sequential, controller-owned.</step-1>
+      <step-1 status="done">Phase-2 step-0: scaffold TestInfrastructure. DONE: dev_deps (fake_async/bloc_test/mocktail) установлены; test/_helpers/fake_hvac_service.dart создан. AutomotiveMethodChannelMock (harness-2) перенесён в step-3 — валидируется реальным тестом, а не только analyze.</step-1>
       <step-2>Phase-2 steps 1-3: V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS параллельно (independent pure functions). Можно multiagent-execute.</step-2>
       <step-3>Phase-2 steps 3-5: V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE последовательно (M-MODE depends on harness fakes from M-HVAC/M-AUTO-HEAT) — sequential execute.</step-3>
       <step-4>Phase-2 step-6: V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS, V-M-THEME — параллельно (независимые JSON round-trip).</step-4>
@@ -681,7 +682,7 @@
       <step-7>Manual smoke на голове: V-M-BACKGROUND, V-M-ACCESSIBILITY, эмпирическая сверка формулы (raw - 84) / 2.</step-7>
     </recommended-execution-order>
     <known-gaps>
-      <gap-1 module="M-PLUGIN">FakeAndroidAutomotivePlugin требует MethodChannel/EventChannel моков; harness нужен в каталоге packages/android_automotive_plugin/test/. Сейчас этот каталог отсутствует.</gap-1>
+      <gap-1 module="M-PLUGIN, M-HVAC">HvacService создаёт собственный AndroidAutomotivePlugin в конструкторе — не инжектируем. Тестирование HvacService и плагина идёт через мок const MethodChannel('android_automotive_plugin'): setMockMethodCallHandler (исходящие) + handlePlatformMessage (входящие onHvacChangeEvent). Плагин использует только MethodChannel, EventChannel нет. Harness AutomotiveMethodChannelMock создаётся в step-3 (см. TestInfrastructure harness-2).</gap-1>
       <gap-2 module="M-BACKGROUND">Полное верификационное покрытие невозможно без головы: flutter_background_service не имеет тестового режима. Принимаем как known-gap; mitigation — конфиг-уровень assert + manual smoke.</gap-2>
       <gap-3 module="ALL">Log-marker assertions выключены до Phase-3 step-3. Этот gap намеренный и зафиксирован в GlobalPolicy/log-marker-activation.</gap-3>
     </known-gaps>
