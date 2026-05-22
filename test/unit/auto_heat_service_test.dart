@@ -17,15 +17,22 @@ import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../_helpers/fake_hvac_service.dart';
+import '../_helpers/logger_test_sink.dart';
 
 void main() {
+  late LoggerTestSink logs;
   // AutoHeatService — синглтон. _currentTemperature нельзя сбросить в null
   // публичным API (dispose() чистит только таймеры и колбэки). Поэтому тест
   // "неизвестная температура" обязан идти ПЕРВЫМ — пока ни один тест ещё не
   // вызвал setTemperature/emitTemperature в этом изоляте.
 
+  setUp(() {
+    logs = LoggerTestSink();
+  });
+
   tearDown(() {
     AutoHeatService().dispose();
+    logs.dispose();
   });
 
   // START_BLOCK_NULL_TEMPERATURE
@@ -56,6 +63,16 @@ void main() {
         async.elapse(const Duration(minutes: 10));
         expect(captured, [3, 2, 1, 0]);
         expect(async.nonPeriodicTimerCount, 0);
+        expect(
+          logs.lines,
+          contains(
+              '[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE] started | userType=driver, level=3'),
+        );
+        expect(
+          logs.lines,
+          contains(
+              '[AutoHeatService][scheduleNextLevel][BLOCK_SCHEDULE_NEXT_LEVEL] scheduled | userType=driver, level=2, duration=6'),
+        );
         // forbidden-4: каждый уровень ровно один раз
         expect(captured.toSet().length, 4);
       });
@@ -116,6 +133,11 @@ void main() {
         async.elapse(const Duration(minutes: 30));
         expect(captured, [3]);
         expect(async.nonPeriodicTimerCount, 0);
+        expect(
+          logs.lines,
+          contains(
+              '[AutoHeatService][stopAutoHeat][BLOCK_STOP] stopped | userType=driver'),
+        );
       });
     });
   });
@@ -171,7 +193,8 @@ void main() {
   // END_BLOCK_BOUNDARY
 
   // START_BLOCK_HVAC_WIRING
-  test('initialize(hvac): emitTemperature через onCabinTemperatureChanged '
+  test(
+      'initialize(hvac): emitTemperature через onCabinTemperatureChanged '
       'запускает расписание', () {
     fakeAsync((async) {
       final fakeHvac = FakeHvacService();

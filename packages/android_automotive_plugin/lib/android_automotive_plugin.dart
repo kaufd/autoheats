@@ -4,7 +4,6 @@ import 'dart:ui';
 import 'package:android_automotive_plugin/car/car_property_value.dart';
 import 'package:android_automotive_plugin/car/car_sensor_event.dart';
 import 'package:android_automotive_plugin/car/vehicle_property_ids.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 

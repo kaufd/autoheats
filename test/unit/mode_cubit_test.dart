@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../_helpers/fake_hvac_service.dart';
+import '../_helpers/logger_test_sink.dart';
 
 // ВАЖНО ПРО ПОРЯДОК ТЕСТОВ:
 // ModeCubit создаёт AutoHeatService() — синглтон. Его _currentTemperature
@@ -30,8 +31,15 @@ import '../_helpers/fake_hvac_service.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late LoggerTestSink logs;
+
+  setUp(() {
+    logs = LoggerTestSink();
+  });
+
   tearDown(() {
     AutoHeatService().dispose();
+    logs.dispose();
   });
 
   ModeState stateOf(ModeCubit cubit, UserType user) =>
@@ -57,7 +65,8 @@ void main() {
   }
 
   // START_BLOCK_COLD_START
-  test('scenario-5: холодный старт с пустыми prefs -> оба (manual, 0)', () async {
+  test('scenario-5: холодный старт с пустыми prefs -> оба (manual, 0)',
+      () async {
     final (cubit, fakeHvac, _) = await buildCubit({});
     expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.manual);
     expect(stateOf(cubit, UserType.driver).heatLevel, 0);
@@ -95,6 +104,11 @@ void main() {
     expect(fakeHvac.recordedSetSeatHeatCalls,
         [(userType: UserType.driver, level: 2)]);
     expect(prefs.getInt('driver_heat_level'), 2);
+    expect(
+      logs.lines,
+      contains(
+          '[ModeCubit][setHeatLevel][BLOCK_SET_HEAT_LEVEL] applied | userType=driver, level=2'),
+    );
   });
 
   test('scenario-8: повторный setHeatLevel(2) вызывает HVAC каждый раз (O-1)',
@@ -115,6 +129,11 @@ void main() {
     await cubit.setMode(UserType.driver, HeatMode.auto.name);
     expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.auto);
     expect(prefs.getString('driver_mode'), 'auto');
+    expect(
+      logs.lines,
+      contains(
+          '[ModeCubit][setMode][BLOCK_SET_MODE] applied | userType=driver, mode=auto'),
+    );
   });
   // END_BLOCK_SET_MODE
 

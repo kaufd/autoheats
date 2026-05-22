@@ -88,7 +88,7 @@
       </notes>
     </M-ENUMS>
 
-    <M-LOGGER NAME="Logger" TYPE="UTILITY" LAYER="0" ORDER="4" STATUS="planned">
+    <M-LOGGER NAME="Logger" TYPE="UTILITY" LAYER="0" ORDER="4" STATUS="implemented">
       <contract>
         <purpose>Единая точка структурированного логирования с форматом [Module][fn][BLOCK]. Реализуется без сторонних библиотек (поверх print + dart:io).</purpose>
         <inputs>
@@ -721,14 +721,14 @@
       <step-12 module="M-DI" status="done" verification="V-M-DI">Добавить START_MODULE_CONTRACT/MAP в lib/src/di/service_locator.dart</step-12>
     </Phase-2>
 
-    <Phase-3 name="Reliability hardening" status="pending">
+    <Phase-3 name="Reliability hardening" status="done">
       <goal>Структурированные логи без сторонних библиотек. Никаких других преждевременных абстракций: M-UI-DIAG, M-HVAC multi-listener и extraction формулы температуры сознательно отложены до появления реального триггера.</goal>
-      <step-1 module="M-LOGGER" status="pending" verification="V-M-LOGGER">Создать lib/src/utils/logger.dart с форматом [Module][fn][BLOCK]; покрыть unit-тестом, включая redaction.</step-1>
-      <step-2 module="M-HVAC" status="pending" verification="V-M-HVAC">Sweep print() → Logger в hvac_service.dart; активировать TODO(phase-3) marker-assertions в test/unit/hvac_service_test.dart.</step-2>
-      <step-3 module="M-AUTO-HEAT" status="pending" verification="V-M-AUTO-HEAT">Sweep print() → Logger в auto_heat_service.dart; активировать TODO(phase-3) в тесте.</step-3>
-      <step-4 module="M-MODE" status="pending" verification="V-M-MODE">Sweep print() → Logger в mode_cubit.dart и mode_service.dart; активировать TODO(phase-3) в тестах.</step-4>
-      <step-5 module="M-BACKGROUND" status="pending" verification="V-M-BACKGROUND">Sweep print() → Logger в background_service.dart.</step-5>
-      <step-6 module="M-PLUGIN" status="pending" verification="V-M-PLUGIN">Sweep print() → Logger в локальном плагине (если применимо; иначе пропустить с note).</step-6>
+      <step-1 module="M-LOGGER" status="done" verification="V-M-LOGGER">Создан lib/src/utils/logger.dart с форматом [Module][fn][BLOCK]; unit-тест покрывает levels, sync sink, redaction и import-forbidden checks.</step-1>
+      <step-2 module="M-HVAC" status="done" verification="V-M-HVAC">print() → Logger в hvac_service.dart; marker-assertions активны в test/unit/hvac_service_test.dart.</step-2>
+      <step-3 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Logger markers добавлены в auto_heat_service.dart; marker-assertions активны в test/unit/auto_heat_service_test.dart.</step-3>
+      <step-4 module="M-MODE" status="done" verification="V-M-MODE">Logger markers добавлены в mode_cubit.dart и mode_service.dart; marker-assertions активны в mode_cubit/mode_service tests.</step-4>
+      <step-5 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">Logger markers добавлены в background_service.dart для onStart, restart-backoff, ignition и stop failures.</step-5>
+      <step-6 module="M-PLUGIN" status="done" verification="V-M-PLUGIN">Прямых print() в path-плагине не было; Logger не импортируется в плагин, чтобы не создавать зависимость plugin → app. Выполнена analyze-cleanup: удалён лишний flutter/foundation.dart import.</step-6>
     </Phase-3>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">

@@ -5,7 +5,7 @@
 //            HvacService (команды HVAC) и AutoHeatService (авторежим).
 //   SCOPE: setMode, setHeatLevel, toggleHeatLevel, восстановление состояния,
 //          публикация ModesState для UI.
-//   DEPENDS: M-HVAC, M-AUTO-HEAT, M-ENUMS
+//   DEPENDS: M-HVAC, M-AUTO-HEAT, M-ENUMS, M-LOGGER
 //   LINKS: M-MODE, V-M-MODE, DF-SET-HEAT, DF-AUTO-HEAT
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
@@ -19,8 +19,8 @@
 //   _updateUserState - пересобрать и эмитить ModesState
 //   getModeByUser - имя текущего HeatMode для UserType
 //   getHeatLevelByUser - текущий уровень для UserType
-//   setMode(UserType, String) - сменить режим, persist, управлять авторежимом
-//   setHeatLevel(UserType, int) - persist + HvacService.setSeatHeatLevel + emit
+//   setMode(UserType, String) - сменить режим, persist, управлять авторежимом + Logger marker
+//   setHeatLevel(UserType, int) - persist + HvacService.setSeatHeatLevel + emit + Logger marker
 //   toggleHeatLevel - циклический перебор уровня в режиме manual
 //   cabinTemperature - геттер температуры из AutoHeatService
 //   _manageAutoHeat - старт/стоп AutoHeatService по HeatMode
@@ -29,13 +29,15 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+//   LAST_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers setMode/setHeatLevel]
+//   PREVIOUS_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
+import 'package:autoheat/src/utils/logger.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'mode_state_cubit.dart';
@@ -47,8 +49,14 @@ class ModeCubit extends Cubit<ModesState> {
 
   ModeCubit(this._modeService, this._hvacService)
       : super(ModesState(states: [
-          ModeState(userType: UserType.driver, heatMode: HeatMode.manual, heatLevel: 0),
-          ModeState(userType: UserType.passenger, heatMode: HeatMode.manual, heatLevel: 0),
+          ModeState(
+              userType: UserType.driver,
+              heatMode: HeatMode.manual,
+              heatLevel: 0),
+          ModeState(
+              userType: UserType.passenger,
+              heatMode: HeatMode.manual,
+              heatLevel: 0),
         ])) {
     _initialize();
   }
@@ -84,7 +92,8 @@ class ModeCubit extends Cubit<ModesState> {
     );
 
     final updatedStates = state.states.toList();
-    final index = updatedStates.indexWhere((state) => state.userType == userType);
+    final index =
+        updatedStates.indexWhere((state) => state.userType == userType);
     updatedStates[index] = newState;
     emit(ModesState(states: updatedStates));
   }
@@ -97,28 +106,62 @@ class ModeCubit extends Cubit<ModesState> {
     return _getStateByUser(user).heatLevel;
   }
 
+  // START_CONTRACT: setMode
+  //   PURPOSE: Сменить режим сиденья, сохранить и запустить/остановить авторежим.
+  //   INPUTS: { userType: UserType, newMode: String HeatMode.name }
+  //   OUTPUTS: { Future<void> }
+  //   SIDE_EFFECTS: SharedPreferences, AutoHeatService, emit, Logger marker BLOCK_SET_MODE.
+  //   LINKS: M-MODE, M-AUTO-HEAT, M-LOGGER, V-M-MODE, DF-AUTO-HEAT
+  // END_CONTRACT: setMode
   Future<void> setMode(UserType userType, String newMode) async {
+    // START_BLOCK_SET_MODE
     final heatMode = HeatModeExtension.fromString(newMode);
     await _modeService.setMode(userType, heatMode);
 
     final currentState = _getStateByUser(userType);
-    final newHeatLevel = heatMode == HeatMode.manual ? 0 : currentState.heatLevel;
+    final newHeatLevel =
+        heatMode == HeatMode.manual ? 0 : currentState.heatLevel;
 
     _updateUserState(userType, mode: heatMode, heatLevel: newHeatLevel);
     _manageAutoHeat(userType, heatMode);
+    Logger.info(
+      'ModeCubit',
+      'setMode',
+      'BLOCK_SET_MODE',
+      'applied',
+      {'userType': userType.name, 'mode': heatMode.name},
+    );
+    // END_BLOCK_SET_MODE
   }
 
+  // START_CONTRACT: setHeatLevel
+  //   PURPOSE: Установить уровень подогрева, сохранить, отправить в HVAC и обновить state.
+  //   INPUTS: { userType: UserType, level: int (0..3) }
+  //   OUTPUTS: { Future<void> }
+  //   SIDE_EFFECTS: SharedPreferences, HvacService, emit, Logger marker BLOCK_SET_HEAT_LEVEL.
+  //   LINKS: M-MODE, M-HVAC, M-LOGGER, V-M-MODE, DF-SET-HEAT
+  // END_CONTRACT: setHeatLevel
   Future<void> setHeatLevel(UserType userType, int level) async {
+    // START_BLOCK_SET_HEAT_LEVEL
     await _modeService.setHeatLevel(userType, level);
     await _hvacService.setSeatHeatLevel(userType, level);
     _updateUserState(userType, heatLevel: level);
+    Logger.info(
+      'ModeCubit',
+      'setHeatLevel',
+      'BLOCK_SET_HEAT_LEVEL',
+      'applied',
+      {'userType': userType.name, 'level': level},
+    );
+    // END_BLOCK_SET_HEAT_LEVEL
   }
 
   void toggleHeatLevel(UserType userType) {
     final currentState = _getStateByUser(userType);
 
     if (currentState.heatMode == HeatMode.manual) {
-      final newLevel = currentState.heatLevel == 3 ? 0 : currentState.heatLevel + 1;
+      final newLevel =
+          currentState.heatLevel == 3 ? 0 : currentState.heatLevel + 1;
       setHeatLevel(userType, newLevel);
     } else {
       setMode(userType, HeatMode.manual.name);

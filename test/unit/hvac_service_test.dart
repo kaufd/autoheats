@@ -24,14 +24,17 @@ import 'package:autoheat/src/services/hvac_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../_helpers/fake_plugin.dart';
+import '../_helpers/logger_test_sink.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late AutomotiveMethodChannelMock mock;
   late HvacService hvac;
+  late LoggerTestSink logs;
 
   setUp(() {
+    logs = LoggerTestSink();
     mock = AutomotiveMethodChannelMock()..install();
     hvac = HvacService();
   });
@@ -39,14 +42,21 @@ void main() {
   tearDown(() {
     hvac.dispose();
     mock.uninstall();
+    logs.dispose();
   });
 
   // START_BLOCK_OUTGOING_CALLS
-  test('scenario-1: первый setSeatHeatLevel -> connect, затем setHvacIntProperty',
+  test(
+      'scenario-1: первый setSeatHeatLevel -> connect, затем setHvacIntProperty',
       () async {
     await hvac.setSeatHeatLevel(UserType.driver, 2);
     await pumpEventQueue();
     expect(mock.outgoingMethods, ['connect', 'setHvacIntProperty']);
+    expect(
+      logs.lines,
+      contains(
+          '[HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL] applied | level=2, userType=driver'),
+    );
   });
 
   test('scenario-8: двойной initialize -> connect ровно один раз', () async {
@@ -54,6 +64,10 @@ void main() {
     await hvac.initialize();
     await pumpEventQueue();
     expect(mock.outgoingMethods.where((m) => m == 'connect').length, 1);
+    expect(
+      logs.lines,
+      contains('[HvacService][initialize][BLOCK_INITIALIZE] initialized'),
+    );
   });
   // END_BLOCK_OUTGOING_CALLS
 
@@ -68,6 +82,11 @@ void main() {
       value: 124,
     );
     expect(captured, [20.0]);
+    expect(
+      logs.lines,
+      contains(
+          '[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] cabin temperature changed | celsius=20.0'),
+    );
   });
 
   group('scenario-3: конверсия (raw - 84) / 2', () {

@@ -1,14 +1,14 @@
 <VerificationPlan VERSION="0.2.0">
   <GlobalPolicy>
-    <log-format>[Module][function][BLOCK_NAME] message | key=value, ... — целевой формат после M-LOGGER. До Phase-3 step-3 (sweep) log-marker assertions в тестах закомментированы или помечены skip.</log-format>
+    <log-format>[Module][function][BLOCK_NAME] message | key=value, ... — текущий формат M-LOGGER; fields сохраняют insertion order для deterministic assertions.</log-format>
     <deterministic-first>true</deterministic-first>
     <module-level-focus>Чистые unit-тесты сервисов и pure-функций; mocktail-фейки HvacService и AndroidAutomotivePlugin; SharedPreferences.setMockInitialValues для cubit'ов; FakeAsync для Timer'ов.</module-level-focus>
     <wave-level-focus>Интеграция ModeCubit ↔ HvacService ↔ AutoHeatService с фейк-плагином и FakeAsync.</wave-level-focus>
     <phase-level-focus>Smoke на физическом head unit Changan: установка уровней, авторежим, фоновая работа, эмпирическая сверка формулы raw → °C (раньше не проверялось — это первый smoke).</phase-level-focus>
     <autonomy-gate>До долгой автономной волны каждый high-priority модуль должен иметь: test-files, module-checks (&lt; 5 сек на исполнение), success+failure сценарии, forbidden markers, evidence-types. Pure-функции (M-CONSTANTS-TEMPERATURE, M-ENUMS) — обязательны к покрытию первыми.</autonomy-gate>
     <redaction>Чувствительных данных в проекте нет. Logger.* при level != debug маскирует ключ 'rawCarPropertyValue' через '***'.</redaction>
-    <current-state>На момент grace-verification каталог test/ отсутствует. План описывает целевое состояние и порядок построения test-infrastructure.</current-state>
-    <log-marker-activation>Phase-2 тесты НЕ assert'ят log markers (M-LOGGER ещё не создан, print() не парсится). Phase-3 step-3 (sweep print→Logger) делает marker-assertions активными. До этого скрытно через TODO-комментарии в тестах.</log-marker-activation>
+    <current-state>Phase-3: M-LOGGER создан; unit-тесты V-M-HVAC, V-M-AUTO-HEAT и V-M-MODE assert'ят Logger marker strings через LoggerTestSink.</current-state>
+    <log-marker-activation>Phase-3 marker-assertions активированы для M-HVAC, M-AUTO-HEAT, M-MODE. M-BACKGROUND остаётся manual-smoke модулем; M-PLUGIN не импортирует Logger из-за зависимости plugin → app.</log-marker-activation>
   </GlobalPolicy>
 
   <TestInfrastructure>
@@ -155,7 +155,7 @@
 
     <V-M-LOGGER MODULE="M-LOGGER" PRIORITY="high">
       <test-files>
-        <file>test/unit/logger_test.dart (запланирован)</file>
+        <file>test/unit/logger_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/logger_test.dart</check-1>
@@ -253,9 +253,9 @@
         <forbidden-2>onCabinTemperatureChanged НЕ должен срабатывать на не-InOutCAR_INSIDE и чужих propertyId событиях.</forbidden-2>
       </forbidden-markers>
       <required-log-markers>
-        <marker-1 activated-in="Phase-3">[HvacService][initialize][BLOCK_INITIALIZE]</marker-1>
-        <marker-2 activated-in="Phase-3">[HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL] level=$level userType=$userType</marker-2>
-        <marker-3 activated-in="Phase-3">[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] celsius=$celsius</marker-3>
+        <marker-1>[HvacService][initialize][BLOCK_INITIALIZE] initialized</marker-1>
+        <marker-2>[HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL] applied | level=$level, userType=$userType</marker-2>
+        <marker-3>[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] cabin temperature changed | celsius=$celsius</marker-3>
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>Двойной initialize() не дёргает connect() повторно (_isInitialized гард).</assertion-1>
@@ -263,7 +263,7 @@
       </required-trace-assertions>
       <wave-follow-up>Интеграция с AutoHeatService через FakeAsync (V-M-AUTO-HEAT scenario-1).</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: подключение, реальный raw датчика, эмпирическая сверка формулы (raw - 84) / 2; при значимом расхождении триггерится deferred-3.</phase-follow-up>
-      <autonomy-ready>YES после Phase-2 (state-only). Полная (с marker assertions) — после Phase-3.</autonomy-ready>
+      <autonomy-ready>YES; Phase-3 marker assertions активны через LoggerTestSink.</autonomy-ready>
     </V-M-HVAC>
 
     <V-M-AUTO-HEAT MODULE="M-AUTO-HEAT" PRIORITY="high">
@@ -297,9 +297,9 @@
         <forbidden-4>callback(level) НЕ должен повторяться для одного и того же уровня в рамках одной последовательности (Set(captureList).length == 4 для полной последовательности).</forbidden-4>
       </forbidden-markers>
       <required-log-markers>
-        <marker-1 activated-in="Phase-3">[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE] userType=$userType level=3</marker-1>
-        <marker-2 activated-in="Phase-3">[AutoHeatService][scheduleNextLevel][BLOCK_SCHEDULE_NEXT_LEVEL] userType=$userType level=$level duration=$min</marker-2>
-        <marker-3 activated-in="Phase-3">[AutoHeatService][stopAutoHeat][BLOCK_STOP] userType=$userType</marker-3>
+        <marker-1>[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE] started | userType=$userType, level=3</marker-1>
+        <marker-2>[AutoHeatService][scheduleNextLevel][BLOCK_SCHEDULE_NEXT_LEVEL] scheduled | userType=$userType, level=$level, duration=$min</marker-2>
+        <marker-3>[AutoHeatService][stopAutoHeat][BLOCK_STOP] stopped | userType=$userType</marker-3>
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>captureList для полной последовательности всегда [3, 2, 1, 0] в этом порядке.</assertion-1>
@@ -308,7 +308,7 @@
       </required-trace-assertions>
       <wave-follow-up>Связка с ModeCubit (V-M-MODE wave-1): callback из AutoHeatService должен превращаться в setHeatLevel + setSeatHeatLevel на FakeHvacService.</wave-follow-up>
       <phase-follow-up>Smoke на голове с реальным датчиком при отрицательной температуре салона; проверить, что последовательность не сбрасывается из-за шумов сенсора.</phase-follow-up>
-      <autonomy-ready>YES после Phase-2 step-4 (FakeAsync покрывает trajectory). Marker assertions активируются в Phase-3.</autonomy-ready>
+      <autonomy-ready>YES; FakeAsync покрывает trajectory, Phase-3 marker assertions активны.</autonomy-ready>
     </V-M-AUTO-HEAT>
 
     <V-M-MODE MODULE="M-MODE" PRIORITY="high">
@@ -341,8 +341,10 @@
         <forbidden-2>Сериализация enum через .name; .toString() НЕ используется.</forbidden-2>
       </forbidden-markers>
       <required-log-markers>
-        <marker-1 activated-in="Phase-3">[ModeCubit][setHeatLevel][BLOCK_SET_HEAT_LEVEL] userType=$userType level=$level</marker-1>
-        <marker-2 activated-in="Phase-3">[ModeCubit][setMode][BLOCK_SET_MODE] userType=$userType mode=$mode</marker-2>
+        <marker-1>[ModeCubit][setHeatLevel][BLOCK_SET_HEAT_LEVEL] applied | userType=$userType, level=$level</marker-1>
+        <marker-2>[ModeCubit][setMode][BLOCK_SET_MODE] applied | userType=$userType, mode=$mode</marker-2>
+        <marker-3>[ModeService][setHeatLevel][BLOCK_SET_HEAT_LEVEL] persisted | userType=$userType, level=$level</marker-3>
+        <marker-4>[ModeService][setMode][BLOCK_SET_MODE] persisted | userType=$userType, mode=$mode</marker-4>
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>setHeatLevel пишет и в SharedPreferences, и в HvacService, и эмитит новое состояние (scenario-1).</assertion-1>
@@ -633,7 +635,7 @@
         <evidence-2>Тесты для V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS, V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE зелёные. Forbidden markers в каждом проверены.</evidence-2>
         <evidence-3>regression-snapshot тест для enum.name (V-M-ENUMS scenario-5) есть и проходит.</evidence-3>
         <evidence-4>В основных .dart-файлах добавлена START_MODULE_CONTRACT/MAP-разметка.</evidence-4>
-        <evidence-5>Log-marker assertions в тестах помечены TODO(phase-3) — не выполняются, но видны грепом по 'TODO(phase-3)'.</evidence-5>
+        <evidence-5>Phase-3 активировал log-marker assertions через LoggerTestSink; TODO(phase-3) markers больше не требуются.</evidence-5>
       </required-evidence>
     </Gate-Phase-2>
 
@@ -646,7 +648,7 @@
       </commands>
       <required-evidence>
         <evidence-1>V-M-LOGGER зелёный.</evidence-1>
-        <evidence-2>print() заменён на Logger в M-HVAC, M-AUTO-HEAT, M-MODE, M-BACKGROUND, M-PLUGIN; V-M-* log-markers по-прежнему совпадают.</evidence-2>
+        <evidence-2>print() заменён на Logger в M-HVAC; Logger markers добавлены в M-AUTO-HEAT, M-MODE, M-BACKGROUND. M-PLUGIN не содержит print() и не импортирует app Logger во избежание зависимости plugin → app; V-M-* log-markers совпадают.</evidence-2>
       </required-evidence>
     </Gate-Phase-3>
   </PhaseGates>
@@ -686,7 +688,7 @@
       <gap-1 module="M-PLUGIN, M-HVAC" status="resolved">HvacService не инжектирует плагин — тестируется через мок MethodChannel. Harness AutomotiveMethodChannelMock создан и валидирован в Phase-2 step-5 (V-M-HVAC зелёный). Подход переносим на будущий V-M-PLUGIN.</gap-1>
       <gap-4 module="M-HVAC, M-PLUGIN">Находка F-1: плагин setHvacIntProperty/connect — fire-and-forget; ошибки записи/подключения не доходят до HvacService. setSeatHeatLevel "молча успешен" при недоступном HVAC. Кандидат на Phase-Deferred. См. V-M-HVAC/findings.</gap-4>
       <gap-2 module="M-BACKGROUND">Полное верификационное покрытие невозможно без головы: flutter_background_service не имеет тестового режима. Принимаем как known-gap; mitigation — конфиг-уровень assert + manual smoke.</gap-2>
-      <gap-3 module="ALL">Log-marker assertions выключены до Phase-3 step-3. Этот gap намеренный и зафиксирован в GlobalPolicy/log-marker-activation.</gap-3>
+      <gap-3 module="ALL" status="resolved">Log-marker assertions активированы в Phase-3 для unit-covered modules через LoggerTestSink; M-BACKGROUND остаётся manual-smoke.</gap-3>
     </known-gaps>
   </AutonomyReadiness>
 </VerificationPlan>

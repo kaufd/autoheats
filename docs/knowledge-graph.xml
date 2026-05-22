@@ -157,14 +157,14 @@
       </annotations>
     </M-ACCESSIBILITY>
 
-    <M-LOGGER NAME="Logger" TYPE="UTILITY" STATUS="planned">
+    <M-LOGGER NAME="Logger" TYPE="UTILITY" STATUS="implemented">
       <purpose>Тонкий wrapper над print() с форматом [Module][fn][BLOCK] + структурированные поля. Без сторонних библиотек.</purpose>
-      <path>lib/src/utils/logger.dart (запланирован)</path>
+      <path>lib/src/utils/logger.dart</path>
       <depends>none</depends>
       <verification-ref>V-M-LOGGER</verification-ref>
       <annotations>
-        <fn-log PURPOSE="Записать структурированное событие (level, module, fn, block, fields)" />
-        <fn-installTestSink PURPOSE="Для тестов: подменить sink на буфер" />
+        <fn-debug-info-warn-error PURPOSE="Записать структурированное событие (level, module, fn, block, fields)" />
+        <fn-installTestSink PURPOSE="Для тестов: подменить sink на буфер и вернуть restore callback" />
         <type-LogLevel PURPOSE="enum debug|info|warn|error" />
         <const-defaultSink PURPOSE="dart:io stdout через print()" />
       </annotations>

@@ -4,7 +4,7 @@
 //   PURPOSE: Persistence режима (manual/presets/auto) и уровня подогрева для
 //            driver/passenger в SharedPreferences — слой данных модуля M-MODE.
 //   SCOPE: чтение/запись режима и уровня по стабильным ключам, засев дефолтов.
-//   DEPENDS: M-ENUMS
+//   DEPENDS: M-ENUMS, M-LOGGER
 //   LINKS: M-MODE, V-M-MODE
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
@@ -16,18 +16,20 @@
 //   _driverModeKey / _passengerModeKey - ключи режима (стабильный контракт)
 //   _driverHeatLevelKey / _passengerHeatLevelKey - ключи уровня (стабильный контракт)
 //   getMode(UserType) - чтение HeatMode; дефолт manual
-//   setMode(UserType, HeatMode) - запись HeatMode по .name
+//   setMode(UserType, HeatMode) - запись HeatMode по .name + Logger marker
 //   getHeatLevel(UserType) - чтение уровня; дефолт 0
-//   setHeatLevel(UserType, int) - запись уровня
+//   setHeatLevel(UserType, int) - запись уровня + Logger marker
 //   initializeDefaults - засев отсутствующих ключей дефолтами
 //   getAllModes - снимок режим+уровень для обоих UserType
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+//   LAST_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers persistence-записей]
+//   PREVIOUS_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
+import 'package:autoheat/src/utils/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ModeService {
@@ -41,24 +43,62 @@ class ModeService {
   static const String _passengerHeatLevelKey = 'passenger_heat_level';
 
   HeatMode getMode(UserType userType) {
-    final key = userType == UserType.driver ? _driverModeKey : _passengerModeKey;
+    final key =
+        userType == UserType.driver ? _driverModeKey : _passengerModeKey;
     final modeString = _prefs.getString(key) ?? HeatMode.manual.name;
     return HeatModeExtension.fromString(modeString);
   }
 
+  // START_CONTRACT: setMode
+  //   PURPOSE: Persist HeatMode по стабильному SharedPreferences ключу.
+  //   INPUTS: { userType: UserType, mode: HeatMode }
+  //   OUTPUTS: { Future<void> }
+  //   SIDE_EFFECTS: SharedPreferences write, Logger marker BLOCK_SET_MODE.
+  //   LINKS: M-MODE, M-ENUMS, M-LOGGER, V-M-MODE
+  // END_CONTRACT: setMode
   Future<void> setMode(UserType userType, HeatMode mode) async {
-    final key = userType == UserType.driver ? _driverModeKey : _passengerModeKey;
+    // START_BLOCK_SET_MODE
+    final key =
+        userType == UserType.driver ? _driverModeKey : _passengerModeKey;
     await _prefs.setString(key, mode.name);
+    Logger.info(
+      'ModeService',
+      'setMode',
+      'BLOCK_SET_MODE',
+      'persisted',
+      {'userType': userType.name, 'mode': mode.name},
+    );
+    // END_BLOCK_SET_MODE
   }
 
   int getHeatLevel(UserType userType) {
-    final key = userType == UserType.driver ? _driverHeatLevelKey : _passengerHeatLevelKey;
+    final key = userType == UserType.driver
+        ? _driverHeatLevelKey
+        : _passengerHeatLevelKey;
     return _prefs.getInt(key) ?? 0;
   }
 
+  // START_CONTRACT: setHeatLevel
+  //   PURPOSE: Persist heatLevel по стабильному SharedPreferences ключу.
+  //   INPUTS: { userType: UserType, level: int }
+  //   OUTPUTS: { Future<void> }
+  //   SIDE_EFFECTS: SharedPreferences write, Logger marker BLOCK_SET_HEAT_LEVEL.
+  //   LINKS: M-MODE, M-ENUMS, M-LOGGER, V-M-MODE
+  // END_CONTRACT: setHeatLevel
   Future<void> setHeatLevel(UserType userType, int level) async {
-    final key = userType == UserType.driver ? _driverHeatLevelKey : _passengerHeatLevelKey;
+    // START_BLOCK_SET_HEAT_LEVEL
+    final key = userType == UserType.driver
+        ? _driverHeatLevelKey
+        : _passengerHeatLevelKey;
     await _prefs.setInt(key, level);
+    Logger.info(
+      'ModeService',
+      'setHeatLevel',
+      'BLOCK_SET_HEAT_LEVEL',
+      'persisted',
+      {'userType': userType.name, 'level': level},
+    );
+    // END_BLOCK_SET_HEAT_LEVEL
   }
 
   Future<void> initializeDefaults() async {

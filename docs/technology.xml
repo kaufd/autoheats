@@ -38,7 +38,7 @@
     <preferred-persistence-library>shared_preferences</preferred-persistence-library>
     <preferred-codegen-library>json_serializable</preferred-codegen-library>
     <preferred-test-library>flutter_test + fake_async + bloc_test + mocktail (без codegen)</preferred-test-library>
-    <preferred-observability-library>print() с префиксом '[ClassName]: ' (текущая практика; миграция на logger пока не запланирована)</preferred-observability-library>
+    <preferred-observability-library>M-LOGGER: тонкий wrapper над print() с форматом [Module][function][BLOCK_NAME] message | key=value</preferred-observability-library>
     <discouraged-surface reason="Только локальный android_automotive_plugin даёт доступ к авто.">Прямые MethodChannel-вызовы к android.car.* в обход плагина</discouraged-surface>
     <discouraged-surface reason="UI должен ходить через HvacService, чтобы централизовать обработку ошибок.">Вызов AndroidAutomotivePlugin из cubit'ов или виджетов</discouraged-surface>
     <discouraged-surface reason="UI рассчитан на фиксированное разрешение головного устройства.">Адаптивная вёрстка под мобильные размеры</discouraged-surface>
@@ -58,12 +58,12 @@
       <focus>Полный прогон тестов и анализатора</focus>
     </phase-level>
     <mocking-policy>Использовать ручные фейки для HvacService и AndroidAutomotivePlugin (узкий контракт). Не подменять SharedPreferences целиком — пользоваться SharedPreferences.setMockInitialValues.</mocking-policy>
-    <current-state>На момент инициализации GRACE в проекте нет каталога test/ с фактическими тестами — verification-plan описывает целевое состояние.</current-state>
+    <current-state>Phase-3: unit-тесты существуют для core modules; LoggerTestSink активирует log-marker assertions.</current-state>
   </Testing>
 
   <Observability>
-    <logger>Phase-1: print() напрямую. Phase-3 step-1: тонкий wrapper M-LOGGER без сторонних библиотек, см. lib/src/utils/logger.dart.</logger>
-    <log-format>[Module][function][BLOCK_NAME] message | key=value, key=value — целевой формат после M-LOGGER. Текущий код использует 'ClassName: message'.</log-format>
+    <logger>Phase-3: тонкий wrapper M-LOGGER без сторонних библиотек, см. lib/src/utils/logger.dart; production sink использует print().</logger>
+    <log-format>[Module][function][BLOCK_NAME] message | key=value, key=value — текущий формат M-LOGGER.</log-format>
     <required-fields>userType (driver|passenger), heatLevel, temperatureCelsius — при логировании операций HVAC</required-fields>
     <redaction>Чувствительных данных нет (приложение не работает с пользовательскими аккаунтами/токенами). Не логировать raw bytes от android.car.* без необходимости.</redaction>
     <android-channel>my_foreground (notification channel для foreground-service)</android-channel>

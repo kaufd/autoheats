@@ -15,8 +15,20 @@ import 'package:autoheat/src/services/mode_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../_helpers/logger_test_sink.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  late LoggerTestSink logs;
+
+  setUp(() {
+    logs = LoggerTestSink();
+  });
+
+  tearDown(() {
+    logs.dispose();
+  });
 
   // Сидирование через реальный API prefs — не зависит от соглашения о
   // префиксах ключей в setMockInitialValues.
@@ -61,12 +73,22 @@ void main() {
     test('setMode -> getMode', () async {
       final service = await buildService({});
       await service.setMode(UserType.driver, HeatMode.auto);
+      expect(
+        logs.lines,
+        contains(
+            '[ModeService][setMode][BLOCK_SET_MODE] persisted | userType=driver, mode=auto'),
+      );
       expect(service.getMode(UserType.driver), HeatMode.auto);
     });
 
     test('setHeatLevel -> getHeatLevel', () async {
       final service = await buildService({});
       await service.setHeatLevel(UserType.passenger, 3);
+      expect(
+        logs.lines,
+        contains(
+            '[ModeService][setHeatLevel][BLOCK_SET_HEAT_LEVEL] persisted | userType=passenger, level=3'),
+      );
       expect(service.getHeatLevel(UserType.passenger), 3);
     });
   });
