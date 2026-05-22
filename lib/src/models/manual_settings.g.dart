@@ -16,7 +16,7 @@ ManualHeatSettings _$ManualHeatSettingsFromJson(Map<String, dynamic> json) =>
 
 Map<String, dynamic> _$ManualHeatSettingsToJson(ManualHeatSettings instance) =>
     <String, dynamic>{
-      'autoHeatLevels': instance.autoHeatLevels,
+      'autoHeatLevels': instance.autoHeatLevels.map((e) => e.toJson()).toList(),
       'temperatureThreshold': instance.temperatureThreshold,
     };
 

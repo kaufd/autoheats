@@ -335,6 +335,9 @@
         <scenario-2 kind="success">setMode(driver, 'auto') → state.driver.heatMode==auto; prefs.getString('driver_mode')=='auto'.</scenario-2>
         <scenario-3 kind="success">setMode auto → setMode manual → stopAutoHeat: после emitTemperature(-3) уровень driver не меняется, recordedSetSeatHeatCalls пуст.</scenario-3>
         <scenario-4 kind="success">setMode(driver,'auto') + emitTemperature(-3.0) → callback AutoHeatService → setHeatLevel → state.driver.heatLevel==3, recordedSetSeatHeatCalls содержит (driver,3).</scenario-4>
+        <scenario-9 kind="success">applyPreset(preset) сохраняет preset.heatMode/heatLevel, вызывает HvacService.setSeatHeatLevel(user, level), обновляет prefs и ModesState.</scenario-9>
+        <scenario-10 kind="success">setMode(manual) при активном heatLevel&gt;0 отправляет HvacService.setSeatHeatLevel(user,0), сохраняет prefs и state.</scenario-10>
+        <scenario-11 kind="success">toggleHeatLevel из presets/auto выполняет последовательный переход в manual level=1 без параллельной гонки.</scenario-11>
       </scenarios>
       <forbidden-markers>
         <forbidden-1>После setMode manual событие датчика НЕ должно менять уровень driver (stopAutoHeat отработал) — scenario-3.</forbidden-1>
@@ -345,6 +348,7 @@
         <marker-2>[ModeCubit][setMode][BLOCK_SET_MODE] applied | userType=$userType, mode=$mode</marker-2>
         <marker-3>[ModeService][setHeatLevel][BLOCK_SET_HEAT_LEVEL] persisted | userType=$userType, level=$level</marker-3>
         <marker-4>[ModeService][setMode][BLOCK_SET_MODE] persisted | userType=$userType, mode=$mode</marker-4>
+        <marker-5>[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=$userType, mode=$mode, level=$level, presetId=$presetId</marker-5>
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>setHeatLevel пишет и в SharedPreferences, и в HvacService, и эмитит новое состояние (scenario-1).</assertion-1>
@@ -353,33 +357,38 @@
       <open-questions>
         <O-1>Должен ли setHeatLevel ранним выходом блокировать повторную запись того же уровня? Сейчас код вызывает setSeatHeatLevel всегда. Решение: оставить как есть (плагин дешёвый, идемпотентность на нижнем слое). Tests отражают текущее поведение в scenario-8.</O-1>
       </open-questions>
-      <wave-follow-up>Интеграция с PresetCubit.apply (V-M-PRESET wave): apply пресета триггерит каскад setHeatMode + setHeatLevel для обоих сидений.</wave-follow-up>
+      <wave-follow-up>Интеграция с PresetCubit.apply (V-M-PRESET wave): apply пресета триггерит каскад ModeCubit.applyPreset → HvacService.setSeatHeatLevel.</wave-follow-up>
       <phase-follow-up>Smoke на голове: вкладка Heat, переключения mode и level; проверка через logcat marker-выводов.</phase-follow-up>
       <autonomy-ready>YES после Phase-2 step-5 — bloc_test покрывает state-машину. AutoHeat-cross-test (scenario-4) — wave-level.</autonomy-ready>
     </V-M-MODE>
 
     <V-M-PRESET MODULE="M-PRESET" PRIORITY="medium">
       <test-files>
-        <file>test/unit/preset_service_test.dart (запланирован)</file>
+        <file>test/unit/preset_model_test.dart</file>
+        <file>test/unit/preset_service_test.dart</file>
         <file>test/unit/preset_cubit_test.dart (запланирован)</file>
       </test-files>
       <module-checks>
-        <check-1>flutter test test/unit/preset_service_test.dart test/unit/preset_cubit_test.dart</check-1>
+        <check-1>flutter test test/unit/preset_model_test.dart test/unit/preset_service_test.dart</check-1>
+        <check-2>flutter test test/unit/mode_cubit_test.dart</check-2>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">save + load + delete пресета.</scenario-1>
-        <scenario-2 kind="success">apply(preset) вызывает ModeCubit.setHeatMode и setHeatLevel для обоих сидений.</scenario-2>
+        <scenario-2 kind="success">ModeCubit.applyPreset(preset) сохраняет mode/level, вызывает HvacService.setSeatHeatLevel и эмитит state.</scenario-2>
         <scenario-3 kind="failure">load при битом JSON не валит изолят.</scenario-3>
+        <scenario-4 kind="success">Preset runtime fields: JSON round-trip сохраняет heatMode/heatLevel; legacy JSON без этих полей грузится как heatMode=presets, heatLevel=0.</scenario-4>
+        <scenario-5 kind="success">PresetService.createPresetFromCurrentSettings сохраняет heatMode/heatLevel в SharedPreferences round-trip.</scenario-5>
       </scenarios>
       <required-log-markers>
-        <marker-1 activated-in="Phase-3">[PresetCubit][apply][BLOCK_APPLY_PRESET]</marker-1>
+        <marker-1>[ModeCubit][applyPreset][BLOCK_APPLY_PRESET]</marker-1>
       </required-log-markers>
       <required-trace-assertions>
-        <assertion-1>Round-trip Preset.toJson() → jsonEncode → SharedPreferences → jsonDecode → Preset.fromJson не теряет поля (поверх кодогенерации json_serializable).</assertion-1>
+        <assertion-1>Round-trip Preset.toJson() → jsonEncode → SharedPreferences → jsonDecode → Preset.fromJson не теряет settings, heatMode и heatLevel.</assertion-1>
+        <assertion-2>DF-PRESET-APPLY идёт через ModeCubit.applyPreset до HvacService.setSeatHeatLevel, а не только через ManualSettingsCubit.</assertion-2>
       </required-trace-assertions>
-      <wave-follow-up>Связка с UI PresetsScreen.</wave-follow-up>
+      <wave-follow-up>Связка с UI PresetsScreen/AppContent._applyPreset.</wave-follow-up>
       <phase-follow-up>Регрессия после изменений модели Preset (codegen).</phase-follow-up>
-      <autonomy-ready>YES после Phase-2 step-6.</autonomy-ready>
+      <autonomy-ready>YES для model/service/runtime apply после Phase-4 Slice-1; PresetCubit-only test остаётся запланирован.</autonomy-ready>
     </V-M-PRESET>
 
     <V-M-SETTINGS MODULE="M-SETTINGS" PRIORITY="medium">

@@ -1,3 +1,25 @@
+// FILE: lib/src/models/manual_settings.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Модель ручных настроек/параметров пресета для driver/passenger.
+//   SCOPE: ManualHeatSettings, AutoHeatLevel, ManualSettingsState, JSON contract.
+//   DEPENDS: M-ENUMS, M-CONSTANTS-TEMPERATURE
+//   LINKS: M-MANUAL-SETTINGS, V-M-MANUAL-SETTINGS, M-PRESET, FA-001
+//   ROLE: TYPES
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   ManualHeatSettings - durations уровней и temperatureThreshold
+//   ManualHeatSettings.defaultFor - дефолтные настройки UserType
+//   AutoHeatLevel - duration + level
+//   ManualSettingsState - Cubit state для driver/passenger settings
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-1: explicitToJson для вложенных пресетов]
+// END_CHANGE_SUMMARY
+
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/constants/temperature_constants.dart';
 import 'package:equatable/equatable.dart';
@@ -5,7 +27,7 @@ import 'package:json_annotation/json_annotation.dart';
 
 part 'manual_settings.g.dart';
 
-@JsonSerializable()
+@JsonSerializable(explicitToJson: true)
 class ManualHeatSettings extends Equatable {
   final List<AutoHeatLevel> autoHeatLevels;
   final double temperatureThreshold;
@@ -64,7 +86,8 @@ class AutoHeatLevel extends Equatable {
     );
   }
 
-  factory AutoHeatLevel.fromJson(Map<String, dynamic> json) => _$AutoHeatLevelFromJson(json);
+  factory AutoHeatLevel.fromJson(Map<String, dynamic> json) =>
+      _$AutoHeatLevelFromJson(json);
   Map<String, dynamic> toJson() => _$AutoHeatLevelToJson(this);
 
   @override

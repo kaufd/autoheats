@@ -1,6 +1,32 @@
+// FILE: lib/src/cubit/preset_cubit.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Bloc-слой списка пресетов: load/save/delete/apply metadata.
+//   SCOPE: PresetState, CRUD через PresetService, сохранение runtime heatMode/heatLevel.
+//   DEPENDS: M-PRESET, M-ENUMS, M-MANUAL-SETTINGS
+//   LINKS: M-PRESET, V-M-PRESET, FA-001, FA-011, DF-PRESET-APPLY
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   PresetCubit - Cubit<PresetState> для списка и selectedPreset
+//   loadPresets(UserType) - загрузить пресеты одного сиденья
+//   loadAllPresets - загрузить driver + passenger
+//   savePreset - сохранить settings + runtime mode/level snapshot
+//   deletePreset - удалить и перезагрузить список
+//   applyPreset - обновить lastUsed и selectedPreset metadata
+//   clearError - очистить error state
+//   PresetState - presets, selectedPreset, isLoading, error
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-1: savePreset принимает heatMode/heatLevel]
+// END_CHANGE_SUMMARY
+
 import 'package:autoheat/src/app_enums.dart';
-import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
+import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/services/preset_service.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
@@ -44,22 +70,35 @@ class PresetCubit extends Cubit<PresetState> {
     }
   }
 
+  // START_CONTRACT: savePreset
+  //   PURPOSE: Сохранить пресет как snapshot settings + runtime mode/level.
+  //   INPUTS: { name, userType, settings, heatMode, heatLevel }
+  //   OUTPUTS: { Future<void> }
+  //   SIDE_EFFECTS: SharedPreferences write через PresetService, reload list.
+  //   LINKS: M-PRESET, M-MODE, V-M-PRESET, FA-001, FA-011
+  // END_CONTRACT: savePreset
   Future<void> savePreset({
     required String name,
     required UserType userType,
     required ManualHeatSettings settings,
+    required HeatMode heatMode,
+    required int heatLevel,
   }) async {
+    // START_BLOCK_SAVE_PRESET
     try {
       await _presetService.createPresetFromCurrentSettings(
         name: name,
         userType: userType,
         settings: settings,
+        heatMode: heatMode,
+        heatLevel: heatLevel,
       );
 
       await loadAllPresets();
     } catch (e) {
       emit(state.copyWith(error: e.toString()));
     }
+    // END_BLOCK_SAVE_PRESET
   }
 
   Future<void> deletePreset(String presetId, UserType userType) async {

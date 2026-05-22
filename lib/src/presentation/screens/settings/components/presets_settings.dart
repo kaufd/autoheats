@@ -1,4 +1,27 @@
+// FILE: lib/src/presentation/screens/settings/components/presets_settings.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: UI-секция сохранения driver/passenger preset snapshots из текущих настроек.
+//   SCOPE: два ManualSettingsSection, кнопки сохранения, SavePresetDialog,
+//          snapshot runtime mode/level из ModeCubit.
+//   DEPENDS: M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-UI-SETTINGS
+//   LINKS: M-UI-SETTINGS, M-PRESET, FA-001, FA-011, DF-PRESET-APPLY
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   PresetsSettings - layout настроек пресетов driver/passenger
+//   _buildSavePresetButton - кнопка сохранения для UserType
+//   _savePresetForUser - диалог имени + PresetCubit.savePreset с mode/level snapshot
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-1: save preset snapshots include ModeCubit mode/level]
+// END_CHANGE_SUMMARY
+
 import 'package:autoheat/src/app_enums.dart';
+import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/presentation/screens/settings/components/manual_settings_section.dart';
@@ -40,10 +63,12 @@ class PresetsSettings extends StatelessWidget {
                         userType: UserType.driver,
                         settings: settingsState.driverSettings,
                         onAutoHeatLevelChanged: (autoHeatLevel, level) {
-                          onAutoHeatLevelChanged(autoHeatLevel, level, UserType.driver);
+                          onAutoHeatLevelChanged(
+                              autoHeatLevel, level, UserType.driver);
                         },
                         onTemperatureThresholdChanged: (temperature) {
-                          onTemperatureThresholdChanged(temperature, UserType.driver);
+                          onTemperatureThresholdChanged(
+                              temperature, UserType.driver);
                         },
                       ),
                     ),
@@ -67,10 +92,12 @@ class PresetsSettings extends StatelessWidget {
                         userType: UserType.passenger,
                         settings: settingsState.passengerSettings,
                         onAutoHeatLevelChanged: (autoHeatLevel, level) {
-                          onAutoHeatLevelChanged(autoHeatLevel, level, UserType.passenger);
+                          onAutoHeatLevelChanged(
+                              autoHeatLevel, level, UserType.passenger);
                         },
                         onTemperatureThresholdChanged: (temperature) {
-                          onTemperatureThresholdChanged(temperature, UserType.passenger);
+                          onTemperatureThresholdChanged(
+                              temperature, UserType.passenger);
                         },
                       ),
                     ),
@@ -90,7 +117,8 @@ class PresetsSettings extends StatelessWidget {
     return TextButton(
       onPressed: () => _savePresetForUser(context, userType),
       style: ButtonStyle(
-        foregroundColor: WidgetStatePropertyAll(context.themeColors.textButtonPrimary),
+        foregroundColor:
+            WidgetStatePropertyAll(context.themeColors.textButtonPrimary),
         backgroundColor: WidgetStatePropertyAll(context.themeColors.primary),
         side: WidgetStatePropertyAll(
           BorderSide(color: context.themeColors.primary, width: 0.5),
@@ -100,7 +128,8 @@ class PresetsSettings extends StatelessWidget {
     );
   }
 
-  Future<void> _savePresetForUser(BuildContext context, UserType userType) async {
+  Future<void> _savePresetForUser(
+      BuildContext context, UserType userType) async {
     final result = await showDialog<String>(
       context: context,
       builder: (context) => const SavePresetDialog(),
@@ -111,12 +140,20 @@ class PresetsSettings extends StatelessWidget {
       final settings = userType == UserType.driver
           ? manualSettingsState.driverSettings
           : manualSettingsState.passengerSettings;
+      final modeCubit = context.read<ModeCubit>();
+      final heatMode =
+          HeatModeExtension.fromString(modeCubit.getModeByUser(userType));
+      final heatLevel = modeCubit.getHeatLevelByUser(userType);
 
-      context.read<PresetCubit>().savePreset(
+      await context.read<PresetCubit>().savePreset(
             name: result,
             userType: userType,
             settings: settings,
+            heatMode: heatMode,
+            heatLevel: heatLevel,
           );
+
+      if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

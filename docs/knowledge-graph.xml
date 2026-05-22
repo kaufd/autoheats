@@ -81,7 +81,7 @@
       <verification-ref>V-M-MODE</verification-ref>
       <annotations>
         <class-ModeService PURPOSE="Чтение/запись режимов и уровней в SharedPreferences" />
-        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel; синхронизирует SharedPreferences, HvacService и AutoHeatService" />
+        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset; синхронизирует SharedPreferences, HvacService и AutoHeatService" />
         <class-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <class-ModesState PURPOSE="Список ModeState (driver + passenger)" />
       </annotations>
@@ -95,7 +95,7 @@
       <annotations>
         <class-PresetService PURPOSE="CRUD пресетов через SharedPreferences (JSON-сериализация)" />
         <class-PresetCubit PURPOSE="Состояние списка пресетов и активного пресета" />
-        <type-Preset PURPOSE="Модель пресета (@JsonSerializable)" />
+        <type-Preset PURPOSE="Модель пресета (@JsonSerializable): settings + runtime heatMode/heatLevel" />
       </annotations>
     </M-PRESET>
 

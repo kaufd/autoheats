@@ -1,8 +1,38 @@
-import 'package:autoheat/src/app_enums.dart';
-import 'package:autoheat/src/models/preset.dart';
-import 'package:autoheat/src/models/manual_settings.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+// FILE: lib/src/services/preset_service.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: JSON-CRUD пользовательских пресетов в SharedPreferences.
+//   SCOPE: load/save/delete presets per UserType, createPresetFromCurrentSettings,
+//          lastUsed metadata, runtime heatMode/heatLevel persistence.
+//   DEPENDS: M-ENUMS, M-MANUAL-SETTINGS
+//   LINKS: M-PRESET, V-M-PRESET, FA-001, FA-011, DF-PRESET-APPLY
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   PresetService - persistence API для Preset
+//   getPresets(UserType) - список пресетов одного сиденья
+//   getAllPresets - driver + passenger
+//   savePreset - insert/update by id
+//   deletePreset - remove by id/userType
+//   getPresetById - nullable lookup
+//   updatePresetLastUsed - обновить metadata
+//   createPresetFromCurrentSettings - snapshot settings + heatMode + heatLevel
+//   _savePresets - JSON encode + SharedPreferences write
+//   clearAllPresets - очистить оба списка
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-1: Preset сохраняет runtime heatMode/heatLevel]
+// END_CHANGE_SUMMARY
+
 import 'dart:convert';
+
+import 'package:autoheat/src/app_enums.dart';
+import 'package:autoheat/src/models/manual_settings.dart';
+import 'package:autoheat/src/models/preset.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class PresetService {
   final SharedPreferences _prefs;
@@ -13,7 +43,8 @@ class PresetService {
   static const String _passengerPresetsKey = 'passenger_presets';
 
   Future<List<Preset>> getPresets(UserType userType) async {
-    final key = userType == UserType.driver ? _driverPresetsKey : _passengerPresetsKey;
+    final key =
+        userType == UserType.driver ? _driverPresetsKey : _passengerPresetsKey;
     final presetsJson = _prefs.getString(key);
 
     if (presetsJson == null) {
@@ -37,14 +68,11 @@ class PresetService {
   Future<void> savePreset(Preset preset) async {
     final presets = await getPresets(preset.userType);
 
-    // Проверяем, существует ли пресет с таким же ID
     final existingIndex = presets.indexWhere((p) => p.id == preset.id);
 
     if (existingIndex != -1) {
-      // Обновляем существующий пресет
       presets[existingIndex] = preset;
     } else {
-      // Добавляем новый пресет
       presets.add(preset);
     }
 
@@ -71,31 +99,47 @@ class PresetService {
     final presetIndex = presets.indexWhere((preset) => preset.id == presetId);
 
     if (presetIndex != -1) {
-      presets[presetIndex] = presets[presetIndex].copyWith(lastUsed: DateTime.now());
+      presets[presetIndex] =
+          presets[presetIndex].copyWith(lastUsed: DateTime.now());
       await _savePresets(presets, userType);
     }
   }
 
+  // START_CONTRACT: createPresetFromCurrentSettings
+  //   PURPOSE: Создать snapshot пресета из текущих settings + runtime mode/level.
+  //   INPUTS: { name, userType, settings, heatMode, heatLevel }
+  //   OUTPUTS: { Future<Preset> }
+  //   SIDE_EFFECTS: SharedPreferences write через savePreset.
+  //   LINKS: M-PRESET, M-MODE, V-M-PRESET, FA-001, FA-011
+  // END_CONTRACT: createPresetFromCurrentSettings
   Future<Preset> createPresetFromCurrentSettings({
     required String name,
     required UserType userType,
     required ManualHeatSettings settings,
+    required HeatMode heatMode,
+    required int heatLevel,
   }) async {
+    // START_BLOCK_CREATE_PRESET_FROM_CURRENT_SETTINGS
     final preset = Preset(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: name,
       userType: userType,
       settings: settings,
+      heatMode: heatMode,
+      heatLevel: heatLevel.clamp(0, 3),
       createdAt: DateTime.now(),
     );
 
     await savePreset(preset);
     return preset;
+    // END_BLOCK_CREATE_PRESET_FROM_CURRENT_SETTINGS
   }
 
   Future<void> _savePresets(List<Preset> presets, UserType userType) async {
-    final key = userType == UserType.driver ? _driverPresetsKey : _passengerPresetsKey;
-    final presetsJson = json.encode(presets.map((preset) => preset.toJson()).toList());
+    final key =
+        userType == UserType.driver ? _driverPresetsKey : _passengerPresetsKey;
+    final presetsJson =
+        json.encode(presets.map((preset) => preset.toJson()).toList());
     await _prefs.setString(key, presetsJson);
   }
 

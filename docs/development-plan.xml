@@ -251,7 +251,7 @@
       </contract>
       <interface>
         <export-ModeService PURPOSE="CRUD режимов/уровней через SharedPreferences" />
-        <export-ModeCubit PURPOSE="setHeatMode, setHeatLevel, getCurrentSeatHeatLevel" />
+        <export-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset, getCurrentSeatHeatLevel" />
         <export-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <export-ModesState PURPOSE="Список ModeState для driver+passenger" />
       </interface>
@@ -316,7 +316,7 @@
       <interface>
         <export-PresetService PURPOSE="JSON-CRUD пресетов в SharedPreferences" />
         <export-PresetCubit PURPOSE="Состояние списка и активного пресета" />
-        <export-Preset PURPOSE="Модель @JsonSerializable" />
+        <export-Preset PURPOSE="Модель @JsonSerializable: settings + runtime heatMode/heatLevel" />
       </interface>
       <depends>M-MODE</depends>
       <target>
@@ -674,10 +674,12 @@
     </DF-BACKGROUND>
 
     <DF-PRESET-APPLY NAME="ApplyPreset" TRIGGER="UI tap on preset">
-      <step-1>PresetCubit.apply(preset) читает сохранённую конфигурацию</step-1>
-      <step-2>Через ModeCubit выставляются heatMode и heatLevel для driver/passenger</step-2>
-      <step-3>HvacService применяет уровни как в DF-SET-HEAT</step-3>
-      <evidence>Лог [PresetCubit][apply] и серия [HvacService][setSeatHeatLevel]</evidence>
+      <step-1>UI получает Preset с settings + runtime heatMode/heatLevel snapshot.</step-1>
+      <step-2>AppContent._applyPreset сохраняет ManualSettings для preset.userType, сохраняя настройки второго сиденья.</step-2>
+      <step-3>ModeCubit.applyPreset(preset) записывает heatMode/heatLevel в SharedPreferences и ModesState.</step-3>
+      <step-4>ModeCubit.applyPreset(preset) вызывает HvacService.setSeatHeatLevel(userType, heatLevel), поток продолжается как DF-SET-HEAT.</step-4>
+      <step-5>PresetCubit.applyPreset(preset) обновляет lastUsed/selectedPreset metadata.</step-5>
+      <evidence>Логи [ModeCubit][applyPreset][BLOCK_APPLY_PRESET] и [HvacService][setSeatHeatLevel]; state содержит preset heatMode/heatLevel.</evidence>
     </DF-PRESET-APPLY>
   </DataFlow>
 
@@ -730,6 +732,14 @@
       <step-5 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">Logger markers добавлены в background_service.dart для onStart, restart-backoff, ignition и stop failures.</step-5>
       <step-6 module="M-PLUGIN" status="done" verification="V-M-PLUGIN">Прямых print() в path-плагине не было; Logger не импортируется в плагин, чтобы не создавать зависимость plugin → app. Выполнена analyze-cleanup: удалён лишний flutter/foundation.dart import.</step-6>
     </Phase-3>
+
+    <Phase-4 name="Functional hardening" status="in_progress">
+      <goal>Исправить functional audit findings, где UI/state визуально отрабатывали без runtime HVAC effect.</goal>
+      <step-1 module="M-PRESET" status="done" verification="V-M-PRESET">FA-001/FA-011: Preset хранит heatMode/heatLevel и legacy JSON defaults.</step-1>
+      <step-2 module="M-MODE" status="done" verification="V-M-MODE">FA-001/FA-004/FA-010/FA-011: ModeCubit.applyPreset идёт до HvacService; manual transition и tap из non-manual выполняются последовательно.</step-2>
+      <step-3 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">FA-001: AppContent._applyPreset делегирует runtime применение в ModeCubit.</step-3>
+      <step-4 module="M-AUTO-HEAT" status="pending" verification="V-M-AUTO-HEAT">FA-002: пользовательские duration/threshold из M-MANUAL-SETTINGS подключить к runtime auto algorithm.</step-4>
+    </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">
       <goal>Зафиксированы как replan-triggers — выполняются только при появлении конкретного триггера.</goal>

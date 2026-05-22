@@ -13,6 +13,8 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/mode_state_cubit.dart';
+import 'package:autoheat/src/models/manual_settings.dart';
+import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -62,6 +64,22 @@ void main() {
     addTearDown(cubit.close);
     await pumpEventQueue();
     return (cubit, fakeHvac, prefs);
+  }
+
+  Preset preset({
+    UserType userType = UserType.driver,
+    HeatMode heatMode = HeatMode.presets,
+    int heatLevel = 2,
+  }) {
+    return Preset(
+      id: 'preset-${userType.name}',
+      name: 'Зима ${userType.name}',
+      userType: userType,
+      settings: ManualHeatSettings.defaultFor(userType),
+      heatMode: heatMode,
+      heatLevel: heatLevel,
+      createdAt: DateTime.parse('2026-01-02T03:04:05.000'),
+    );
   }
 
   // START_BLOCK_COLD_START
@@ -136,6 +154,62 @@ void main() {
     );
   });
   // END_BLOCK_SET_MODE
+
+  // START_BLOCK_APPLY_PRESET
+  test('scenario-9: applyPreset выставляет mode/level, prefs и HVAC', () async {
+    final (cubit, fakeHvac, prefs) = await buildCubit({});
+
+    await cubit.applyPreset(preset(heatMode: HeatMode.presets, heatLevel: 2));
+
+    expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.presets);
+    expect(stateOf(cubit, UserType.driver).heatLevel, 2);
+    expect(prefs.getString('driver_mode'), 'presets');
+    expect(prefs.getInt('driver_heat_level'), 2);
+    expect(fakeHvac.recordedSetSeatHeatCalls, [
+      (userType: UserType.driver, level: 2),
+    ]);
+    expect(
+      logs.lines,
+      contains(
+          '[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=driver, mode=presets, level=2, presetId=preset-driver'),
+    );
+  });
+
+  test('scenario-10: setMode manual с активным уровнем отправляет HVAC 0',
+      () async {
+    final (cubit, fakeHvac, prefs) = await buildCubit({});
+    await cubit.setHeatLevel(UserType.driver, 3);
+    fakeHvac.recordedSetSeatHeatCalls.clear();
+
+    await cubit.setMode(UserType.driver, HeatMode.manual.name);
+
+    expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.manual);
+    expect(stateOf(cubit, UserType.driver).heatLevel, 0);
+    expect(prefs.getString('driver_mode'), 'manual');
+    expect(prefs.getInt('driver_heat_level'), 0);
+    expect(fakeHvac.recordedSetSeatHeatCalls, [
+      (userType: UserType.driver, level: 0),
+    ]);
+  });
+
+  test(
+      'scenario-11: toggleHeatLevel из presets последовательно включает manual level 1',
+      () async {
+    final (cubit, fakeHvac, prefs) = await buildCubit({});
+    await cubit.applyPreset(preset(heatMode: HeatMode.presets, heatLevel: 2));
+    fakeHvac.recordedSetSeatHeatCalls.clear();
+
+    await cubit.toggleHeatLevel(UserType.driver);
+
+    expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.manual);
+    expect(stateOf(cubit, UserType.driver).heatLevel, 1);
+    expect(prefs.getString('driver_mode'), 'manual');
+    expect(prefs.getInt('driver_heat_level'), 1);
+    expect(fakeHvac.recordedSetSeatHeatCalls, [
+      (userType: UserType.driver, level: 1),
+    ]);
+  });
+  // END_BLOCK_APPLY_PRESET
 
   // START_BLOCK_AUTO_STOP
   test('scenario-3: auto -> manual останавливает авторежим', () async {
