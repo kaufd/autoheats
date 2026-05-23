@@ -4,7 +4,7 @@
     <non-goal>Не реинжинирить рабочую кодовую базу — на этом этапе план описывает уже существующие модули как STATUS="implemented".</non-goal>
     <objective-2>Подготовить базу для следующих волн: добавление тестов (test/), переход на структурированный логгер, диагностический экран HVAC.</objective-2>
     <risk-1>Background-изолят имеет собственный DI: любое новое добавление в DI должно повторяться в onStart background-service, иначе фон молча перестаёт реагировать.</risk-1>
-    <risk-2>Колбэк onHvacChangeEventCallback устанавливается в HvacService один раз. AutoHeatService подписывается через onCabinTemperatureChanged — только один потребитель. Добавление новых потребителей требует расширения HvacService до multi-listener.</risk-2>
+    <risk-2 status="resolved-phase-4-slice-3">HvacService.onHvacChangeEventCallback остаётся единственной точкой входа из плагина, но внутри HvacService события температуры раздаются через cached multi-listener API.</risk-2>
     <risk-3>Формула температуры (raw-84)/2 унаследована от автора плагина abuharsky и разработчиком autoheat не верифицирована на реальной голове; точность и зависимость от модели Changan неизвестны.</risk-3>
     <risk-4 commit-ref="See `git log --grep=Remove ServiceStatus`">В main.dart удалён `Future.delayed(Duration(milliseconds: 1000), () =&gt; initializeBackgroundService())` — изначальный комментарий гласил «чтобы канал уведомлений успел создаться». Возможный workaround под Android 13+ / конкретный head unit Changan. Если cold-boot foreground-service не поднимается (нет нотификации 'AutoHeat Service' после рестарта), вернуть задержку — это первая гипотеза. Smoke-проверка в V-M-BACKGROUND phase-follow-up.</risk-4>
   </ArchitectureNotes>
@@ -161,14 +161,14 @@
 
     <M-HVAC NAME="HvacService" TYPE="CORE_LOGIC" LAYER="1" ORDER="1" STATUS="implemented">
       <contract>
-        <purpose>Единая точка взаимодействия приложения с AndroidAutomotivePlugin: установка уровня подогрева, чтение температуры салона, callback изменения температуры.</purpose>
+        <purpose>Единая точка взаимодействия приложения с AndroidAutomotivePlugin: установка уровня подогрева, чтение температуры салона, cached multi-listener события температуры.</purpose>
         <inputs>
           <param name="userType" type="UserType" />
           <param name="level" type="int (0..3)" />
         </inputs>
         <outputs>
           <param name="cabinTemperatureCelsius" type="double" />
-          <param name="onCabinTemperatureChanged" type="callback(double)" />
+          <param name="cabinTemperatureListeners" type="Set&lt;CabinTemperatureListener&gt;" />
         </outputs>
         <errors>
           <error code="PLUGIN_INIT_FAILED" />
@@ -179,13 +179,15 @@
         <export-HvacService PURPOSE="Singleton-сервис, регистрируемый в GetIt" />
         <export-initialize PURPOSE="Ленивая connect() плагина" />
         <export-setSeatHeatLevel PURPOSE="Прокинуть уровень через CarHvacManager.setSeatHeatLevel" />
-        <export-getCabinTemperature PURPOSE="Прочитать температуру салона; fallback 20.0 °C при ошибке" />
-        <export-onCabinTemperatureChanged PURPOSE="Колбэк, вызываемый при изменении ID_HVAC_IN_OUT_TEMP для InOutCAR_INSIDE" />
+        <export-getCabinTemperature PURPOSE="Прочитать температуру салона; fallback 20.0 °C при ошибке; обновляет cache/listeners" />
+        <export-lastCabinTemperature PURPOSE="Последняя опубликованная температура салона" />
+        <export-addCabinTemperatureListener PURPOSE="Подписать независимого потребителя температуры; optional emitCurrent" />
+        <export-removeCabinTemperatureListener PURPOSE="Отписать потребителя температуры" />
       </interface>
       <depends>M-PLUGIN, M-ENUMS</depends>
       <target>
         <source>lib/src/services/hvac_service.dart</source>
-        <tests>test/unit/hvac_service_test.dart (запланирован)</tests>
+        <tests>test/unit/hvac_service_test.dart</tests>
       </target>
       <observability>
         <log-prefix>[HvacService]</log-prefix>
@@ -195,7 +197,7 @@
       </observability>
       <verification-ref>V-M-HVAC</verification-ref>
       <notes>
-        <note-1>Сейчас onCabinTemperatureChanged — одиночный колбэк. При добавлении новых потребителей расширить до multi-listener.</note-1>
+        <note-1>Phase-4 Slice-3 выполнил deferred multi-listener trigger: AutoHeatService и CabinTemperatureCubit могут подписываться независимо.</note-1>
         <note-2>Метод dispose() предусмотрен, но в текущем коде не вызывается явно из main.</note-2>
       </notes>
     </M-HVAC>
@@ -216,7 +218,8 @@
       </contract>
       <interface>
         <export-AutoHeatService PURPOSE="Синглтон" />
-        <export-initialize PURPOSE="Подписаться на onCabinTemperatureChanged" />
+        <export-initialize PURPOSE="Подписаться на HvacService.addCabinTemperatureListener" />
+        <export-seedCurrentTemperatureFromHvac PURPOSE="Initial read через HvacService.getCabinTemperature для старта auto без ожидания sensor event" />
         <export-startAutoHeat PURPOSE="Зарегистрировать колбэк уровня и запустить расписание; optional settings override durations/threshold" />
         <export-stopAutoHeat PURPOSE="Отменить таймеры и удалить колбэк" />
         <export-setTemperature PURPOSE="Ручная установка температуры (для тестов/диагностики)" />
@@ -235,6 +238,7 @@
       <notes>
         <note-1>Таймеры хранятся per-UserType — отмена обязательна перед новым стартом, иначе наложение каскадов.</note-1>
         <note-2>Если startAutoHeat получает ManualHeatSettings, threshold управляет включением, а durations уровней 3/2/1 берутся из autoHeatLevels; TemperatureConstants остаётся fallback.</note-2>
+        <note-3>Initial temperature seed вызывается ModeCubit до восстановления auto режимов, чтобы расписание могло стартовать без нового sensor event.</note-3>
       </notes>
     </M-AUTO-HEAT>
 
@@ -274,6 +278,33 @@
         <note-1>SharedPreferences-ключи и enum.name — стабильный контракт.</note-1>
       </notes>
     </M-MODE>
+
+    <M-CABIN-TEMPERATURE NAME="CabinTemperatureDomain" TYPE="CORE_LOGIC" LAYER="2" ORDER="3" STATUS="implemented">
+      <contract>
+        <purpose>UI-state проекция температуры салона: initial read, cached listener updates, cleanup подписки.</purpose>
+        <inputs>
+          <param name="hvacService" type="HvacService" />
+          <param name="cabinTemperatureCelsius" type="double" />
+        </inputs>
+        <outputs>
+          <param name="CabinTemperatureState" type="bloc-state" />
+        </outputs>
+        <errors />
+      </contract>
+      <interface>
+        <export-CabinTemperatureCubit PURPOSE="Подписывается на HvacService listeners и эмитит CabinTemperatureState" />
+        <export-CabinTemperatureState PURPOSE="celsius? + isLoading" />
+      </interface>
+      <depends>M-HVAC</depends>
+      <target>
+        <source>lib/src/cubit/cabin_temperature_cubit.dart</source>
+        <tests>test/unit/cabin_temperature_cubit_test.dart</tests>
+      </target>
+      <observability>
+        <log-prefix>n/a</log-prefix>
+      </observability>
+      <verification-ref>V-M-CABIN-TEMPERATURE</verification-ref>
+    </M-CABIN-TEMPERATURE>
 
     <M-MANUAL-SETTINGS NAME="ManualSettingsDomain" TYPE="CORE_LOGIC" LAYER="2" ORDER="3" STATUS="implemented">
       <contract>
@@ -404,7 +435,7 @@
         <export-setupServiceLocator PURPOSE="Async bootstrap DI; должен вызываться И в UI-, И в background-изоляте" />
         <export-locator PURPOSE="GetIt.instance" />
       </interface>
-      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
+      <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
       <target>
         <source>lib/src/di/service_locator.dart</source>
         <source>lib/src/di/app_bloc_providers.dart</source>
@@ -518,7 +549,7 @@
       <interface>
         <export-BlockProviders.initiateBlocs PURPOSE="Массив BlocProvider'ов на базе locator-singletons" />
       </interface>
-      <depends>M-DI, M-THEME, M-MODE, M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET</depends>
+      <depends>M-DI, M-THEME, M-MODE, M-CABIN-TEMPERATURE, M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET</depends>
       <target>
         <source>lib/src/di/app_bloc_providers.dart</source>
       </target>
@@ -558,6 +589,7 @@
         <purpose>Главный экран управления подогревом: уровни, индикатор температуры салона, переключатель режима.</purpose>
         <inputs>
           <param name="ModesState" type="bloc-state" />
+          <param name="CabinTemperatureState" type="bloc-state" />
         </inputs>
         <outputs>
           <param name="UserAction" type="event" />
@@ -570,7 +602,7 @@
         <export-CabinTemperatureDisplay PURPOSE="Индикатор температуры салона" />
         <export-Seat PURPOSE="Виджет сиденья с уровнями подогрева" />
       </interface>
-      <depends>M-MODE, M-HVAC</depends>
+      <depends>M-MODE, M-CABIN-TEMPERATURE, M-HVAC</depends>
       <target>
         <source>lib/src/presentation/screens/heat/heat_screen.dart</source>
         <source>lib/src/presentation/screens/heat/components/</source>
@@ -650,19 +682,20 @@
       <step-1>android.car.* эмитит изменение температуры салона</step-1>
       <step-2>AndroidAutomotivePlugin вызывает onHvacChangeEventCallback с CarPropertyValue</step-2>
       <step-3>HvacService фильтрует propertyId == ID_HVAC_IN_OUT_TEMP && areaId == InOutCAR_INSIDE</step-3>
-      <step-4>HvacService конвертирует через _convertToCelsius и зовёт onCabinTemperatureChanged</step-4>
-      <step-5>AutoHeatService для каждого активного UserType строит HeatSequence через TemperatureConstants.getHeatSequence</step-5>
+      <step-4>HvacService конвертирует через _convertToCelsius, кеширует lastCabinTemperature и публикует событие всем CabinTemperatureListener</step-4>
+      <step-5>AutoHeatService получает listener event и для каждого активного UserType строит HeatSequence через ManualHeatSettings или TemperatureConstants fallback; CabinTemperatureCubit emit'ит UI-state</step-5>
       <step-6>AutoHeatService отменяет старый Timer и стартует расписание: callback(3) → Timer level3 → callback(2) → ... → callback(0)</step-6>
       <step-7>Callback в ModeCubit вызывает setHeatLevel, и поток продолжается как DF-SET-HEAT</step-7>
       <evidence>Лог [AutoHeatService][startHeatSequence] с уровнем и оставшейся длительностью; последовательность изменений ModeState</evidence>
     </DF-AUTO-HEAT>
 
     <DF-INIT-TEMP NAME="InitialCabinTemperature" TRIGGER="App start (deferred initialize of HvacService)">
-      <step-1>UI или AutoHeatService вызывает HvacService.getCabinTemperature()</step-1>
+      <step-1>AutoHeatService.seedCurrentTemperatureFromHvac или CabinTemperatureCubit вызывает HvacService.getCabinTemperature()</step-1>
       <step-2>HvacService.initialize() → AndroidAutomotivePlugin.connect()</step-2>
       <step-3>CarHvacManager.getInsideTemperature() → AndroidAutomotivePlugin.getHvacIntProperty(...)</step-3>
       <step-4>_convertToCelsius даёт начальное значение; при ошибке fallback 20.0 °C</step-4>
-      <evidence>Лог [HvacService][getCabinTemperature]</evidence>
+      <step-5>HvacService обновляет lastCabinTemperature и публикует значение AutoHeatService/CabinTemperatureCubit listener'ам</step-5>
+      <evidence>Лог [HvacService][getCabinTemperature], AutoHeatService стартует schedule без sensor event, CabinTemperatureDisplay показывает initial value</evidence>
     </DF-INIT-TEMP>
 
     <DF-BACKGROUND NAME="ForegroundServiceLifecycle" TRIGGER="App launch / boot / accessibility wake">
@@ -741,11 +774,13 @@
       <step-2 module="M-MODE" status="done" verification="V-M-MODE">FA-001/FA-004/FA-010/FA-011: ModeCubit.applyPreset идёт до HvacService; manual transition и tap из non-manual выполняются последовательно.</step-2>
       <step-3 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">FA-001: AppContent._applyPreset делегирует runtime применение в ModeCubit.</step-3>
       <step-4 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">FA-002: ManualSettingsService → ModeCubit → AutoHeatService; пользовательские duration/threshold управляют runtime auto algorithm.</step-4>
+      <step-5 module="M-HVAC" status="done" verification="V-M-HVAC">FA-003: HvacService перешёл на cached multi-listener API; AutoHeatService и CabinTemperatureCubit подписываются независимо.</step-5>
+      <step-6 module="M-CABIN-TEMPERATURE" status="done" verification="V-M-CABIN-TEMPERATURE">FA-003: initial read и HVAC events публикуются в UI через CabinTemperatureCubit/CabinTemperatureDisplay.</step-6>
     </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">
       <goal>Зафиксированы как replan-triggers — выполняются только при появлении конкретного триггера.</goal>
-      <deferred-1 trigger="Появление второго потребителя onCabinTemperatureChanged">M-HVAC: переход с single-callback на add/removeCabinTemperatureListener. До триггера single-callback — корректное решение.</deferred-1>
+      <deferred-1 trigger="Появление второго потребителя температуры" status="done-phase-4-slice-3">M-HVAC: переход с single-callback на add/removeCabinTemperatureListener выполнен; AutoHeatService и CabinTemperatureCubit подписываются независимо.</deferred-1>
       <deferred-2 trigger="Запрос на встроенную диагностику без adb/logcat">M-UI-DIAG: read-only inspector состояния плагина и HVAC; потянет M-HVAC multi-listener.</deferred-2>
       <deferred-3 trigger="Эмпирически подтверждённая неточность формулы (raw - 84) / 2 или различие между моделями Changan">Extraction _convertToCelsius из HvacService в отдельный модуль (например, M-TEMPERATURE-CONVERSION или CarProfile). До smoke-теста на голове формула остаётся в HvacService.</deferred-3>
       <deferred-4 trigger="Решение, что неуспех записи в HVAC должен быть виден UI (находка F-1, Phase-2 step-5)">Плагин setHvacIntProperty/connect — fire-and-forget (invokeMethod без await/return); ошибки записи не доходят до HvacService, setSeatHeatLevel «молча успешен» при недоступном HVAC. Варианты: добавить await/return в плагин (правка снапшота) либо обёртка-проверка в HvacService. Сейчас не блокирует — авто крутится, краш недопустим; но автоподогрев может тихо не примениться.</deferred-4>
@@ -757,7 +792,7 @@
     <controller-owns>docs/development-plan.xml, docs/knowledge-graph.xml, docs/verification-plan.xml, docs/operational-packets.xml, docs/requirements.xml, docs/technology.xml</controller-owns>
     <worker-owns>lib/src/&lt;module&gt;/, packages/android_automotive_plugin/lib/ (только когда модуль явно затронут), test/ в пределах модуля.</worker-owns>
     <max-fix-attempts-per-step>2</max-fix-attempts-per-step>
-    <replan-trigger>Изменение public API android_automotive_plugin; эмпирически подтверждённая неточность формулы (raw - 84) / 2 или зависимость от модели Changan (триггер deferred-3); нарушение enum/SharedPreferences-контракта; появление второго потребителя HvacService.onCabinTemperatureChanged (триггер deferred-1: переход на multi-listener); появление встроенного диагностического экрана (триггер deferred-2).</replan-trigger>
+    <replan-trigger>Изменение public API android_automotive_plugin; эмпирически подтверждённая неточность формулы (raw - 84) / 2 или зависимость от модели Changan (триггер deferred-3); нарушение enum/SharedPreferences-контракта; появление встроенного диагностического экрана (триггер deferred-2).</replan-trigger>
     <checkpoint-requirement>Каждый шаг фиксирует: затронутые SharedPreferences-ключи, изменённые свойства HVAC, новые/убранные подписки плагина, состояние background-изолята.</checkpoint-requirement>
   </ExecutionPolicy>
 </DevelopmentPlan>

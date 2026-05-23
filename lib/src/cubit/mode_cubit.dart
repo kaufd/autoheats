@@ -4,9 +4,10 @@
 //   PURPOSE: Bloc-слой режима подогрева — синхронизирует ModeService (persistence),
 //            HvacService (команды HVAC) и AutoHeatService (авторежим).
 //   SCOPE: setMode, setHeatLevel, applyPreset, toggleHeatLevel,
-//          восстановление состояния, публикация ModesState для UI.
+//          восстановление состояния, initial temperature seed для AutoHeatService,
+//          публикация ModesState для UI.
 //   DEPENDS: M-HVAC, M-AUTO-HEAT, M-ENUMS, M-LOGGER, M-PRESET, M-MANUAL-SETTINGS
-//   LINKS: M-MODE, V-M-MODE, DF-SET-HEAT, DF-AUTO-HEAT, DF-PRESET-APPLY
+//   LINKS: M-MODE, V-M-MODE, DF-SET-HEAT, DF-AUTO-HEAT, DF-PRESET-APPLY, DF-INIT-TEMP
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -14,7 +15,7 @@
 // START_MODULE_MAP
 //   ModeCubit - Cubit<ModesState> поверх ModeService/HvacService/AutoHeatService
 //   ModeCubit(ModeService, HvacService, ManualSettingsService) - конструктор; запускает _initialize
-//   _initialize - дефолты, подписка AutoHeatService, восстановление состояния
+//   _initialize - дефолты, подписка AutoHeatService, initial temperature seed, восстановление состояния
 //   _getStateByUser - выбрать ModeState для UserType
 //   _updateUserState - пересобрать и эмитить ModesState
 //   _persistAndApplyHeatLevel - persist + HvacService + state update без публичного лога
@@ -24,7 +25,6 @@
 //   setHeatLevel(UserType, int) - persist + HvacService.setSeatHeatLevel + emit + Logger marker
 //   applyPreset(Preset) - применить сохранённый mode/level пресета к persistence + HVAC
 //   toggleHeatLevel - последовательный перебор уровня; non-manual -> manual level 1
-//   cabinTemperature - геттер температуры из AutoHeatService
 //   _startAutoHeat - загрузить ManualSettingsService settings и стартовать AutoHeatService
 //   _manageAutoHeat - старт/стоп AutoHeatService по HeatMode
 //   _initializeHeatModes - применить восстановленные режимы при старте
@@ -32,8 +32,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.3.0 - Phase-4 Slice-2: auto mode использует ManualSettingsService]
-//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-1: applyPreset и последовательные mode transitions]
+//   LAST_CHANGE: [v1.4.0 - Phase-4 Slice-3: initial temperature seed для AutoHeatService]
+//   PREVIOUS_CHANGE: [v1.3.0 - Phase-4 Slice-2: auto mode использует ManualSettingsService]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -70,6 +70,7 @@ class ModeCubit extends Cubit<ModesState> {
   Future<void> _initialize() async {
     await _modeService.initializeDefaults();
     _autoHeatService.initialize(_hvacService);
+    await _autoHeatService.seedCurrentTemperatureFromHvac();
 
     final states = _modeService
         .getAllModes()
@@ -220,17 +221,22 @@ class ModeCubit extends Cubit<ModesState> {
     }
   }
 
-  double? get cabinTemperature => _autoHeatService.currentTemperature;
-
   Future<void> _startAutoHeat(UserType userType) async {
     final settings = await _manualSettingsService.getSettings(userType);
+    Future<void>? immediateHeatLevelFuture;
+
+    void handleAutoHeatLevel(int newLevel) {
+      final future = setHeatLevel(userType, newLevel);
+      immediateHeatLevelFuture ??= future;
+    }
+
     _autoHeatService.startAutoHeat(
       userType,
-      (newLevel) {
-        setHeatLevel(userType, newLevel);
-      },
+      handleAutoHeatLevel,
       settings: settings,
     );
+
+    await immediateHeatLevelFuture;
   }
 
   Future<void> _manageAutoHeat(UserType userType, HeatMode heatMode) async {

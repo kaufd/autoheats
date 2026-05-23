@@ -3,10 +3,11 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Реализация авторежима — по температуре салона запускает расписание
 //            уровней подогрева 3->2->1->0 индивидуально для driver/passenger.
-//   SCOPE: подписка на onCabinTemperatureChanged, per-UserType Timer-каскады,
+//   SCOPE: подписка на HvacService cabin-temperature multi-listener,
+//          initial temperature seed, per-UserType Timer-каскады,
 //          startAutoHeat/stopAutoHeat, optional ManualHeatSettings runtime sequence.
 //   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS, M-LOGGER
-//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, FA-002
+//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP, FA-002, FA-003
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -14,22 +15,24 @@
 // START_MODULE_MAP
 //   AutoHeatService - синглтон авторежима
 //   AutoHeatService() - factory, возвращает единственный _instance
-//   initialize(HvacService) - подписка на onCabinTemperatureChanged
+//   initialize(HvacService) - подписка на cabin-temperature listener API
+//   seedCurrentTemperatureFromHvac - initial read через HvacService.getCabinTemperature
 //   setTemperature(double) - ручная установка температуры (тесты/диагностика)
 //   currentTemperature - геттер последней известной температуры салона
 //   startAutoHeat(UserType, callback, settings?) - регистрация callback + optional custom settings
 //   stopAutoHeat(UserType) - отмена Timer'а и удаление callback/settings для UserType
+//   _handleCabinTemperature - listener target, cache + пересчёт активных users
 //   _updateAutoHeatForAllUsers - пересчёт расписания для всех активных UserType
 //   _updateAutoHeatForUser - отмена старого Timer'а и старт нового расписания
 //   _startHeatSequence - callback(3) и Logger marker BLOCK_START_HEAT_SEQUENCE
 //   _scheduleNextLevel - Timer-переходы 2->1->0 + marker BLOCK_SCHEDULE_NEXT_LEVEL
 //   _getSequence - custom ManualHeatSettings sequence или TemperatureConstants fallback
-//   dispose - отмена всех Timer'ов и очистка колбэков/settings
+//   dispose - отписка listener, отмена Timer'ов и очистка состояния
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-2: ManualHeatSettings duration/threshold drive auto runtime]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers для авто-расписания]
+//   LAST_CHANGE: [v1.3.0 - Phase-4 Slice-3: подписка на HvacService multi-listener и initial seed]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-2: ManualHeatSettings duration/threshold drive auto runtime]
 // END_CHANGE_SUMMARY
 
 import 'dart:async';
@@ -45,6 +48,7 @@ class AutoHeatService {
   AutoHeatService._internal();
 
   HvacService? _hvacService;
+  CabinTemperatureListener? _temperatureListener;
   double? _currentTemperature;
 
   final Map<UserType, Timer?> _heatTimers = {};
@@ -52,19 +56,41 @@ class AutoHeatService {
   final Map<UserType, ManualHeatSettings> _manualSettingsByUser = {};
 
   void initialize(HvacService hvacService) {
+    final previousHvacService = _hvacService;
+    final previousListener = _temperatureListener;
+    if (previousHvacService != null && previousListener != null) {
+      previousHvacService.removeCabinTemperatureListener(previousListener);
+    }
+
     _hvacService = hvacService;
-    _hvacService!.onCabinTemperatureChanged = (double temperature) {
-      _currentTemperature = temperature;
-      _updateAutoHeatForAllUsers();
-    };
+    _temperatureListener = _handleCabinTemperature;
+    _hvacService!.addCabinTemperatureListener(
+      _temperatureListener!,
+      emitCurrent: true,
+    );
+  }
+
+  // START_CONTRACT: seedCurrentTemperatureFromHvac
+  //   PURPOSE: Засидить текущую температуру из HvacService initial read без ожидания sensor event.
+  //   INPUTS: none
+  //   OUTPUTS: { Future<void> }
+  //   SIDE_EFFECTS: HvacService.getCabinTemperature публикует температуру listener'ам.
+  //   LINKS: M-AUTO-HEAT, M-HVAC, V-M-AUTO-HEAT, DF-INIT-TEMP, FA-003
+  // END_CONTRACT: seedCurrentTemperatureFromHvac
+  Future<void> seedCurrentTemperatureFromHvac() async {
+    await _hvacService?.getCabinTemperature();
   }
 
   void setTemperature(double celsius) {
-    _currentTemperature = celsius;
-    _updateAutoHeatForAllUsers();
+    _handleCabinTemperature(celsius);
   }
 
   double? get currentTemperature => _currentTemperature;
+
+  void _handleCabinTemperature(double temperature) {
+    _currentTemperature = temperature;
+    _updateAutoHeatForAllUsers();
+  }
 
   // START_CONTRACT: startAutoHeat
   //   PURPOSE: Зарегистрировать callback авторежима и стартовать расписание.
@@ -226,11 +252,20 @@ class AutoHeatService {
   }
 
   void dispose() {
+    final hvacService = _hvacService;
+    final listener = _temperatureListener;
+    if (hvacService != null && listener != null) {
+      hvacService.removeCabinTemperatureListener(listener);
+    }
+
     for (final timer in _heatTimers.values) {
       timer?.cancel();
     }
     _heatTimers.clear();
     _heatLevelCallbacks.clear();
     _manualSettingsByUser.clear();
+    _hvacService = null;
+    _temperatureListener = null;
+    _currentTemperature = null;
   }
 }

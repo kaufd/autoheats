@@ -4,7 +4,8 @@
 //   PURPOSE: Unit-тесты AutoHeatService — расписание авторежима через FakeAsync.
 //   SCOPE: последовательности 3->2->1->0 по диапазонам, отмена при смене
 //          температуры, stopAutoHeat, независимость UserType, idempotency,
-//          поведение при неизвестной температуре, проброс через initialize.
+//          поведение при неизвестной температуре, проброс через initialize,
+//          initial read через HvacService seed.
 //   DEPENDS: M-AUTO-HEAT, M-HVAC, M-CONSTANTS-TEMPERATURE, M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: V-M-AUTO-HEAT
 //   ROLE: TEST
@@ -22,10 +23,8 @@ import '../_helpers/logger_test_sink.dart';
 
 void main() {
   late LoggerTestSink logs;
-  // AutoHeatService — синглтон. _currentTemperature нельзя сбросить в null
-  // публичным API (dispose() чистит только таймеры и колбэки). Поэтому тест
-  // "неизвестная температура" обязан идти ПЕРВЫМ — пока ни один тест ещё не
-  // вызвал setTemperature/emitTemperature в этом изоляте.
+  // AutoHeatService — синглтон; tearDown вызывает dispose(), чтобы сбросить
+  // listener/timer/current-temperature состояние между сценариями.
 
   setUp(() {
     logs = LoggerTestSink();
@@ -244,9 +243,27 @@ void main() {
   });
   // END_BLOCK_CUSTOM_SETTINGS
 
+  test(
+      'scenario-12: initial HVAC read seeds auto schedule without sensor event',
+      () {
+    fakeAsync((async) {
+      final fakeHvac = FakeHvacService()..programmedTemperature = -3.0;
+      final captured = <int>[];
+
+      AutoHeatService().initialize(fakeHvac);
+      AutoHeatService().seedCurrentTemperatureFromHvac();
+      async.flushMicrotasks();
+
+      AutoHeatService().startAutoHeat(UserType.driver, captured.add);
+
+      expect(captured, [3]);
+      expect(fakeHvac.getCabinTemperatureCallCount, 1);
+    });
+  });
+
   // START_BLOCK_HVAC_WIRING
   test(
-      'initialize(hvac): emitTemperature через onCabinTemperatureChanged '
+      'initialize(hvac): emitTemperature через cabin listener '
       'запускает расписание', () {
     fakeAsync((async) {
       final fakeHvac = FakeHvacService();

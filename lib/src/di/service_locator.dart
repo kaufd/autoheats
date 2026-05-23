@@ -4,8 +4,8 @@
 //   PURPOSE: Регистрация SharedPreferences и всех сервисов/кубитов в GetIt —
 //            единый bootstrap DI для UI- и background-изолята.
 //   SCOPE: setupServiceLocator (async), глобальный locator.
-//   DEPENDS: M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT
-//   LINKS: M-DI, V-M-DI, DF-BACKGROUND
+//   DEPENDS: M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT, M-CABIN-TEMPERATURE
+//   LINKS: M-DI, V-M-DI, DF-BACKGROUND, DF-INIT-TEMP
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -17,10 +17,11 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-2: ModeCubit получает ManualSettingsService]
-//   PREVIOUS_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-3: регистрируется CabinTemperatureCubit]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-2: ModeCubit получает ManualSettingsService]
 // END_CHANGE_SUMMARY
 
+import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
@@ -71,6 +72,10 @@ Future<void> setupServiceLocator() async {
       locator<HvacService>(),
       locator<ManualSettingsService>(),
     ),
+  );
+
+  locator.registerSingleton<CabinTemperatureCubit>(
+    CabinTemperatureCubit(locator<HvacService>()),
   );
 
   locator.registerSingleton<SettingsCubit>(

@@ -27,7 +27,7 @@ M-AUTO-HEAT (LAYER=2, ORDER=1):
 <CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-heat-sequence" />
       ]]></graph-entry-excerpt>
       <dependency-contract-summaries>
-        <dependency-1 module="M-HVAC">HvacService.onCabinTemperatureChanged — единственный потребитель колбэка температуры. Не вешать сюда второго listener'а без расширения интерфейса.</dependency-1>
+        <dependency-1 module="M-HVAC">HvacService.addCabinTemperatureListener/removeCabinTemperatureListener — cached multi-listener API; AutoHeatService и CabinTemperatureCubit подписываются независимо.</dependency-1>
         <dependency-2 module="M-CONSTANTS-TEMPERATURE">getHeatSequence(double) возвращает null для TemperatureRange.off (&gt; 10 °C). HeatSequence в минутах.</dependency-2>
       </dependency-contract-summaries>
       <verification-excerpt><![CDATA[
@@ -43,7 +43,7 @@ V-M-AUTO-HEAT (priority=high):
         <assumption-2>Тесты используют FakeAsync для имитации Timer'ов.</assumption-2>
       </assumptions>
       <stop-conditions>
-        <condition-1>Стоп, если требуется новый callback в HvacService — нужно сначала расширить контракт M-HVAC до multi-listener (см. Phase-3 / replan-trigger).</condition-1>
+        <condition-1>Стоп, если требуется изменить semantics HvacService listener/cache API — обновить M-HVAC, M-AUTO-HEAT, M-CABIN-TEMPERATURE и V-M-* контракты.</condition-1>
         <condition-2>Стоп, если новая логика затрагивает SharedPreferences-ключи или enum.name — это работа M-MODE/M-ENUMS.</condition-2>
       </stop-conditions>
       <retry-budget>2</retry-budget>
@@ -133,7 +133,7 @@ V-M-AUTO-HEAT (priority=high):
       </expected-evidence>
       <observed-evidence>
         <log-1>[AutoHeatService] _updateAutoHeatForUser called but _currentTemperature == null</log-1>
-        <trace-1>onCabinTemperatureChanged не сработал — нет события от HvacService.</trace-1>
+        <trace-1>CabinTemperatureListener не сработал — нет sensor event или initial getCabinTemperature seed от HvacService.</trace-1>
       </observed-evidence>
       <first-divergent-block>BLOCK_HANDLE_TEMPERATURE_EVENT (в M-HVAC)</first-divergent-block>
       <suggested-next-action>Проверить, был ли вызван HvacService.initialize() в background-изоляте и зарегистрирован ли onHvacChangeEventCallback. Свериться с DF-AUTO-HEAT.</suggested-next-action>

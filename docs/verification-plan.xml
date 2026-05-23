@@ -18,11 +18,13 @@
       <dep-3 name="mocktail" version="^1.0.5" status="installed" purpose="Mock ModeService, CarHvacManager и verify()/verifyNever()/verifyInOrder() для проверки взаимодействий. FakeHvacService — ручной фейк, не mocktail." />
     </required-dev-deps>
     <harness-1 name="FakeHvacService" location="test/_helpers/fake_hvac_service.dart" status="created">
-      <purpose>Ручной фейк (implements HvacService) с программируемой температурой, счётчиком setSeatHeatLevel-вызовов и инжекцией событий через emitTemperature. Не mocktail: settable-поле onCabinTemperatureChanged удобнее в ручном фейке. Создан в Phase-2 step-0.</purpose>
+      <purpose>Ручной фейк (implements HvacService) с программируемой температурой, счётчиком setSeatHeatLevel-вызовов, cached lastCabinTemperature и multi-listener инжекцией событий через emitTemperature. Создан в Phase-2 step-0, обновлён в Phase-4 Slice-3.</purpose>
       <api>
-        <fn-emitTemperature PURPOSE="Имитировать событие датчика: дёргает onCabinTemperatureChanged" />
+        <fn-emitTemperature PURPOSE="Имитировать событие датчика: публикует всем CabinTemperatureListener" />
         <fn-recordedSetSeatHeatCalls PURPOSE="List&lt;(UserType, int)&gt; — все вызовы setSeatHeatLevel" />
         <fn-programmedTemperature PURPOSE="Значение, возвращаемое getCabinTemperature (default 20.0)" />
+        <fn-getCabinTemperatureCallCount PURPOSE="Счётчик initial-read вызовов getCabinTemperature" />
+        <fn-lastCabinTemperature PURPOSE="Последняя опубликованная температура" />
         <fn-initializeCallCount PURPOSE="Счётчик вызовов initialize" />
       </api>
     </harness-1>
@@ -65,7 +67,7 @@
       <required-signals>
         <log-marker>[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE]</log-marker>
         <log-marker>[AutoHeatService][scheduleNextLevel][BLOCK_SCHEDULE_NEXT_LEVEL]</log-marker>
-        <trace-sequence>HvacService.onCabinTemperatureChanged -&gt; AutoHeatService._updateAutoHeatForUser -&gt; TemperatureConstants.getHeatSequence -&gt; callback(3) -&gt; ... -&gt; callback(0)</trace-sequence>
+        <trace-sequence>HvacService.addCabinTemperatureListener event -&gt; AutoHeatService._updateAutoHeatForUser -&gt; ManualHeatSettings/TemperatureConstants sequence -&gt; callback(3) -&gt; ... -&gt; callback(0)</trace-sequence>
       </required-signals>
     </VF-002>
 
@@ -236,21 +238,23 @@
       <api-note>HvacService не инжектирует плагин — тесты идут через мок const MethodChannel('android_automotive_plugin'): setMockMethodCallHandler (исходящие) + handlePlatformMessage (входящие onHvacChangeEvent). Harness — test/_helpers/fake_plugin.dart (AutomotiveMethodChannelMock).</api-note>
       <scenarios>
         <scenario-1 kind="success">Первый setSeatHeatLevel(driver, 2) → outgoingMethods == ['connect', 'setHvacIntProperty'] (порядок).</scenario-1>
-        <scenario-2 kind="success">Эмиссия onHvacChangeEvent(propertyId=ID_HVAC_IN_OUT_TEMP, areaId=InOutCAR_INSIDE, value=124) → onCabinTemperatureChanged вызван один раз с 20.0.</scenario-2>
+        <scenario-2 kind="success">Эмиссия onHvacChangeEvent(propertyId=ID_HVAC_IN_OUT_TEMP, areaId=InOutCAR_INSIDE, value=124) → CabinTemperatureListener вызван один раз с 20.0.</scenario-2>
         <scenario-3 kind="boundary">Конверсия граничных raw: 84→0.0; 74→-5.0; 124→20.0; 0→-42.0; 200→58.0.</scenario-3>
-        <scenario-4 kind="failure">Событие areaId=InOutCAR_OUTSIDE НЕ вызывает callback.</scenario-4>
-        <scenario-5 kind="failure">Событие с чужим propertyId НЕ вызывает callback.</scenario-5>
+        <scenario-4 kind="failure">Событие areaId=InOutCAR_OUTSIDE НЕ вызывает listener.</scenario-4>
+        <scenario-5 kind="failure">Событие с чужим propertyId НЕ вызывает listener.</scenario-5>
         <scenario-6 kind="failure">getCabinTemperature при бросе плагина (getHvacIntProperty) возвращает 20.0 fallback, НЕ rethrow'ит.</scenario-6>
         <scenario-7 kind="removed">УДАЛЁН. Изначально: "setSeatHeatLevel rethrow при ошибке плагина". Находка step-5: плагин setHvacIntProperty/connect — fire-and-forget (invokeMethod без await/return), ошибки записи не доходят до HvacService. Поведение, которое описывал scenario-7, не существует; см. finding F-1.</scenario-7>
         <scenario-8 kind="invariant">Двойной initialize() → connect() в outgoingMethods ровно один раз.</scenario-8>
-        <scenario-9 kind="invariant">Событие с value=null не валит изолят (catch в onHvacChangeEventCallback), callback не вызван.</scenario-9>
+        <scenario-9 kind="invariant">Событие с value=null не валит изолят (catch в onHvacChangeEventCallback), listener не вызван.</scenario-9>
+        <scenario-10 kind="success">Два CabinTemperatureListener получают inside event; после remove первого второй продолжает получать events; lastCabinTemperature обновляется.</scenario-10>
+        <scenario-11 kind="success">getCabinTemperature() обновляет lastCabinTemperature и публикует значение listener'ам.</scenario-11>
       </scenarios>
       <findings>
         <F-1>Плагин AndroidAutomotivePlugin.setHvacIntProperty/connect/setHvacFloatProperty — fire-and-forget: вызывают methodChannel.invokeMethod БЕЗ await/return. Ошибки записи и подключения никогда не доходят до вызывающего кода. Следствие: HvacService.setSeatHeatLevel и initialize() имеют catch/rethrow, но для записи/connect это мёртвый код — исключение не возникает. Только read-путь (getHvacIntProperty) реально await-ит канал. UI не узнает о неуспешной записи уровня подогрева. Кандидат на Phase-Deferred: либо await в плагине, либо обёртка в HvacService.</F-1>
       </findings>
       <forbidden-markers>
         <forbidden-1>plugin.connect() НЕ должен вызываться больше одного раза за жизненный цикл HvacService.</forbidden-1>
-        <forbidden-2>onCabinTemperatureChanged НЕ должен срабатывать на не-InOutCAR_INSIDE и чужих propertyId событиях.</forbidden-2>
+        <forbidden-2>CabinTemperatureListener НЕ должен срабатывать на не-InOutCAR_INSIDE и чужих propertyId событиях.</forbidden-2>
       </forbidden-markers>
       <required-log-markers>
         <marker-1>[HvacService][initialize][BLOCK_INITIALIZE] initialized</marker-1>
@@ -279,7 +283,7 @@
         <type-3>forbidden (callback не вызывается после stopAutoHeat / после завершения)</type-3>
         <type-4>settings-regression (ManualHeatSettings duration/threshold меняют runtime sequence)</type-4>
       </evidence-types>
-      <setup>AutoHeatService — синглтон. В каждом setUp обязательно AutoHeatService().dispose() и пересоздать состояние через initialize(fakeHvacService).</setup>
+      <setup>AutoHeatService — синглтон. В каждом tearDown обязательно AutoHeatService().dispose(), чтобы сбросить listener/timer/current-temperature состояние.</setup>
       <scenarios>
         <scenario-1 kind="success">cold sequence: setTemperature(-3.0) + startAutoHeat(driver, captureCallback) → ожидаемая trace: t=0:00 callback(3); FakeAsync.elapse(6m) → callback(2); elapse(4m) → callback(1); elapse(10m) → callback(0). Итоговый captureList == [3, 2, 1, 0].</scenario-1>
         <scenario-2 kind="success">warm sequence: setTemperature(7.0) → captureList == [3, 2, 1, 0] с длительностями (2m, 2m, 6m). Сумма 10m.</scenario-2>
@@ -292,6 +296,7 @@
         <scenario-9 kind="failure">startAutoHeat когда _currentTemperature == null → callback НЕ вызывается; Timer НЕ создаётся (verifyNever через FakeAsync.elapse(60m)).</scenario-9>
         <scenario-10 kind="success">Custom ManualHeatSettings: threshold=5.0, durations level3=3m/level2=2m/level1=1m, temperature=4.0 → trace [3,2,1,0] именно по 3/2/1 минутам.</scenario-10>
         <scenario-11 kind="boundary">Custom threshold: temperature == threshold → callback(0) сразу и Timer не создаётся.</scenario-11>
+        <scenario-12 kind="success">initialize(fakeHvac) + seedCurrentTemperatureFromHvac() при programmedTemperature=-3.0 → startAutoHeat(driver) сразу callback(3) без sensor event.</scenario-12>
       </scenarios>
       <forbidden-markers>
         <forbidden-1>После прохождения [3,2,1,0] активных Timer'ов в FakeAsync НЕ должно остаться (fakeAsync.pendingTimers.isEmpty).</forbidden-1>
@@ -309,6 +314,7 @@
         <assertion-2>Timer.cancel() вызывается перед созданием нового Timer для того же userType.</assertion-2>
         <assertion-3>Сумма durations совпадает с HeatSequence из TemperatureConstants (cross-verification с V-M-CONSTANTS-TEMPERATURE) для fallback-пути без ManualHeatSettings.</assertion-3>
         <assertion-4>При ManualHeatSettings durations берутся по AutoHeatLevel.level, а temperatureThreshold заменяет TemperatureConstants off-range.</assertion-4>
+        <assertion-5>Initial read через HvacService.getCabinTemperature публикуется в AutoHeatService до startAutoHeat или до восстановления persisted auto mode.</assertion-5>
       </required-trace-assertions>
       <wave-follow-up>Связка с ModeCubit (V-M-MODE wave-1): callback из AutoHeatService должен превращаться в setHeatLevel + setSeatHeatLevel на FakeHvacService.</wave-follow-up>
       <phase-follow-up>Smoke на голове с реальным датчиком при отрицательной температуре салона; проверить, что последовательность не сбрасывается из-за шумов сенсора.</phase-follow-up>
@@ -329,10 +335,10 @@
         <type-3>behavioral — авторежим проверяется через emitTemperature + наблюдаемое изменение состояния (AutoHeatService — синглтон, не мокается)</type-3>
       </evidence-types>
       <api-note>Фактический API ModeCubit: setMode(UserType, String newMode) — НЕ setHeatMode; setHeatLevel(UserType, int); toggleHeatLevel(UserType). Ключи ModeService: driver_mode / driver_heat_level / passenger_mode / passenger_heat_level. Сценарии ниже исправлены по факту кода (план изначально содержал угаданные имена).</api-note>
-      <setup>SharedPreferences.setMockInitialValues({}); сидирование через prefs API; реальные ModeService + AutoHeatService(синглтон), FakeHvacService. ВАЖНО: тесты с emitTemperature идут последними (синглтон не сбрасывает _currentTemperature в null).</setup>
+      <setup>SharedPreferences.setMockInitialValues({}); сидирование через prefs API; реальные ModeService + AutoHeatService(синглтон), FakeHvacService. AutoHeatService.dispose() в tearDown сбрасывает listener/timer/current-temperature состояние.</setup>
       <scenarios>
         <scenario-5 kind="boundary">Холодный старт с пустым prefs → оба сиденья ModeState(manual, 0); recordedSetSeatHeatCalls пуст.</scenario-5>
-        <scenario-6 kind="boundary">Восстановление: prefs {driver_mode:'auto', driver_heat_level:1} → driver(auto,1), passenger(manual,0).</scenario-6>
+        <scenario-6 kind="boundary">Восстановление: prefs {driver_mode:'auto', driver_heat_level:1} + initial temperature off/default 20.0 → driver(auto,0), passenger(manual,0), HvacService получает setSeatHeatLevel(driver,0).</scenario-6>
         <scenario-7 kind="failure">prefs {driver_mode:'garbage'} → fromString orElse → driver heatMode=manual; ModeCubit не падает.</scenario-7>
         <scenario-1 kind="success">setHeatLevel(driver, 2) → state.driver.heatLevel==2; FakeHvacService.recordedSetSeatHeatCalls==[(driver,2)]; prefs.getInt('driver_heat_level')==2.</scenario-1>
         <scenario-8 kind="idempotency">setHeatLevel(driver, 2) дважды → recordedSetSeatHeatCalls имеет 2 записи (текущий код вызывает HVAC всегда — см. O-1).</scenario-8>
@@ -343,6 +349,7 @@
         <scenario-10 kind="success">setMode(manual) при активном heatLevel&gt;0 отправляет HvacService.setSeatHeatLevel(user,0), сохраняет prefs и state.</scenario-10>
         <scenario-11 kind="success">toggleHeatLevel из presets/auto выполняет последовательный переход в manual level=1 без параллельной гонки.</scenario-11>
         <scenario-12 kind="success">setMode(driver,'auto') читает persisted ManualHeatSettings через ManualSettingsService: при threshold=-10.0 и temperature=-3.0 AutoHeatService отдаёт level=0, а не fallback level=3.</scenario-12>
+        <scenario-13 kind="success">setMode(driver,'auto') при programmedTemperature=-3.0 стартует callback(3) от initial read без fakeHvac.emitTemperature.</scenario-13>
       </scenarios>
       <forbidden-markers>
         <forbidden-1>После setMode manual событие датчика НЕ должно менять уровень driver (stopAutoHeat отработал) — scenario-3.</forbidden-1>
@@ -359,6 +366,7 @@
         <assertion-1>setHeatLevel пишет и в SharedPreferences, и в HvacService, и эмитит новое состояние (scenario-1).</assertion-1>
         <assertion-2>setMode auto подключает авторежим, setMode manual — отключает (scenario-3, scenario-4).</assertion-2>
         <assertion-3>setMode auto загружает ManualSettingsService settings и передаёт их в AutoHeatService (scenario-12).</assertion-3>
+        <assertion-4>ModeCubit._initialize вызывает AutoHeatService.seedCurrentTemperatureFromHvac до восстановления auto modes (scenario-6, scenario-13).</assertion-4>
       </required-trace-assertions>
       <open-questions>
         <O-1>Должен ли setHeatLevel ранним выходом блокировать повторную запись того же уровня? Сейчас код вызывает setSeatHeatLevel всегда. Решение: оставить как есть (плагин дешёвый, идемпотентность на нижнем слое). Tests отражают текущее поведение в scenario-8.</O-1>
@@ -367,6 +375,36 @@
       <phase-follow-up>Smoke на голове: вкладка Heat, переключения mode и level; проверка через logcat marker-выводов.</phase-follow-up>
       <autonomy-ready>YES после Phase-2 step-5 — bloc_test покрывает state-машину. AutoHeat-cross-test (scenario-4) — wave-level.</autonomy-ready>
     </V-M-MODE>
+
+    <V-M-CABIN-TEMPERATURE MODULE="M-CABIN-TEMPERATURE" PRIORITY="high">
+      <test-files>
+        <file>test/unit/cabin_temperature_cubit_test.dart</file>
+        <file>test/widget/cabin_temperature_display_test.dart</file>
+      </test-files>
+      <module-checks>
+        <check-1>flutter test test/unit/cabin_temperature_cubit_test.dart</check-1>
+        <check-2>flutter test test/widget/cabin_temperature_display_test.dart</check-2>
+      </module-checks>
+      <evidence-types>
+        <type-1>deterministic — FakeHvacService.programmedTemperature и lastCabinTemperature</type-1>
+        <type-2>behavioral — CabinTemperatureCubit state после initial read и emitTemperature</type-2>
+        <type-3>widget — CabinTemperatureDisplay текст обновляется после cubit event</type-3>
+      </evidence-types>
+      <scenarios>
+        <scenario-1 kind="success">CabinTemperatureCubit initial read: programmedTemperature=18.5 → state.celsius=18.5, isLoading=false, getCabinTemperatureCallCount=1.</scenario-1>
+        <scenario-2 kind="success">Cached emitCurrent: FakeHvacService.lastCabinTemperature=16.5 до создания cubit → state.celsius=16.5 без второго getCabinTemperature.</scenario-2>
+        <scenario-3 kind="success">HVAC event в manual/no-auto context: fakeHvac.emitTemperature(-3.0) → state.celsius=-3.0.</scenario-3>
+        <scenario-4 kind="invariant">close() удаляет listener: emitTemperature после close не меняет state.</scenario-4>
+        <scenario-5 kind="widget">CabinTemperatureDisplay показывает initial '18.5 °C' и после fakeHvac.emitTemperature(-3.0) показывает '-3.0 °C'.</scenario-5>
+      </scenarios>
+      <forbidden-markers>
+        <forbidden-1>CabinTemperatureDisplay НЕ читает ModeCubit.cabinTemperature или AutoHeatService singleton напрямую.</forbidden-1>
+      </forbidden-markers>
+      <required-trace-assertions>
+        <assertion-1>HvacService listener event → CabinTemperatureCubit emit → CabinTemperatureDisplay text update.</assertion-1>
+      </required-trace-assertions>
+      <phase-follow-up>Manual head-unit smoke: HeatScreen temperature updates in manual/presets mode without touching seat level.</phase-follow-up>
+    </V-M-CABIN-TEMPERATURE>
 
     <V-M-PRESET MODULE="M-PRESET" PRIORITY="medium">
       <test-files>
@@ -482,7 +520,7 @@
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
-        <assertion-1>context.read&lt;ThemeCubit&gt;(), context.read&lt;ModeCubit&gt;(), context.read&lt;PresetCubit&gt;(), context.read&lt;SettingsCubit&gt;(), context.read&lt;ManualSettingsCubit&gt;() не бросают ProviderNotFoundException в дочернем виджете.</assertion-1>
+        <assertion-1>context.read&lt;ThemeCubit&gt;(), context.read&lt;ModeCubit&gt;(), context.read&lt;CabinTemperatureCubit&gt;(), context.read&lt;PresetCubit&gt;(), context.read&lt;SettingsCubit&gt;(), context.read&lt;ManualSettingsCubit&gt;() не бросают ProviderNotFoundException в дочернем виджете.</assertion-1>
       </required-trace-assertions>
       <wave-follow-up>При добавлении нового Cubit обновить BlockProviders.initiateBlocs() и расширить scenario-1.</wave-follow-up>
       <phase-follow-up>n/a — структурная проверка, регрессии маловероятны.</phase-follow-up>
@@ -569,18 +607,20 @@
     <V-M-UI-HEAT MODULE="M-UI-HEAT" PRIORITY="medium">
       <test-files>
         <file>test/widget/heat_screen_test.dart (запланирован)</file>
+        <file>test/widget/cabin_temperature_display_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/widget/heat_screen_test.dart</check-1>
+        <check-2>flutter test test/widget/cabin_temperature_display_test.dart</check-2>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">Тап на уровень сиденья вызывает ModeCubit.setHeatLevel.</scenario-1>
-        <scenario-2 kind="success">CabinTemperatureDisplay отражает температуру из HvacService.</scenario-2>
+        <scenario-2 kind="success">CabinTemperatureDisplay отражает температуру из CabinTemperatureCubit, который подписан на HvacService listeners.</scenario-2>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
         <assertion-1>WidgetTester.tap на кнопке уровня → mocktail.verify(fakeModeCubit.setHeatLevel(userType, level)).called(1).</assertion-1>
-        <assertion-2>State update в ModeCubit → CabinTemperatureDisplay содержит ожидаемый текст (find.text('20°C') и т.п.).</assertion-2>
+        <assertion-2>State update в CabinTemperatureCubit → CabinTemperatureDisplay содержит ожидаемый текст (find.text('18.5 °C'), find.text('-3.0 °C')).</assertion-2>
       </required-trace-assertions>
       <wave-follow-up>Cross-check с V-M-MODE: тап в UI → setHeatLevel → setSeatHeatLevel через FakeHvacService.</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: визуальная проверка состояний (driver / passenger / уровни).</phase-follow-up>

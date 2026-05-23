@@ -68,7 +68,8 @@ Resolution:
 ### FA-003 — Температура салона в UI обновляется ненадёжно и нет initial read
 
 Priority: high  
-Modules: `M-AUTO-HEAT`, `M-MODE`, `M-HVAC`, `M-UI-HEAT`  
+Status: addressed in Phase-4 Slice-3 by replacing the single HVAC temperature callback with cached multi-listener delivery, adding `CabinTemperatureCubit`, and seeding `AutoHeatService` from initial `HvacService.getCabinTemperature()`.
+Modules: `M-AUTO-HEAT`, `M-MODE`, `M-HVAC`, `M-UI-HEAT`, `M-CABIN-TEMPERATURE`
 Related: `DF-INIT-TEMP`, `DF-AUTO-HEAT`
 
 Evidence:
@@ -81,10 +82,11 @@ Observed consequence:
 - В manual/presets режиме температура может оставаться `-- °C` или устаревшей, пока не произойдёт другой state-change.
 - При включении auto до первого HVAC event расписание не стартует, потому что `_currentTemperature == null`.
 
-Suggested fix direction:
-- Ввести явный state/stream температуры (`ModeCubit` field + emit on temperature event, отдельный cubit, или listener-модель в `HvacService`).
-- При инициализации вызвать `HvacService.getCabinTemperature()` и засидить initial temperature.
-- Добавить UI/unit checks на обновление температуры без изменения heat level.
+Resolution:
+- `HvacService` теперь хранит `lastCabinTemperature` и публикует sensor/read values через `addCabinTemperatureListener` / `removeCabinTemperatureListener`.
+- `AutoHeatService` подписывается на listener API и получает initial seed через `seedCurrentTemperatureFromHvac()`.
+- `CabinTemperatureCubit` стал отдельной UI-state проекцией, а `CabinTemperatureDisplay` читает его вместо `ModeCubit.cabinTemperature`.
+- Verification: `test/unit/hvac_service_test.dart` scenarios 10/11, `test/unit/auto_heat_service_test.dart` scenario 12, `test/unit/cabin_temperature_cubit_test.dart`, `test/widget/cabin_temperature_display_test.dart`, `test/unit/mode_cubit_test.dart` scenario 13.
 
 ---
 
@@ -284,7 +286,7 @@ Suggested fix direction:
 Suggested ordering:
 1. `FA-001` + `FA-011`: addressed in Phase-4 Slice-1.
 2. `FA-002`: addressed in Phase-4 Slice-2.
-3. `FA-003` + remaining UI temperature/state issues: стабилизировать initial temperature и mode transitions.
+3. `FA-003`: addressed in Phase-4 Slice-3.
 4. `FA-005`: защитить auto sequence от sensor noise.
 5. `FA-006`: отдельно hardened background lifecycle + head-unit smoke.
 6. `FA-009`/`FA-012`: UI/state cleanup.
@@ -294,5 +296,5 @@ Suggested ordering:
 - Widget smoke for `SettingsScreen` at target head-unit size.
 - Unit/integration test for `DF-PRESET-APPLY`: tap/apply preset causes `ModeCubit.setHeatLevel` and `HvacService.setSeatHeatLevel`.
 - FakeAsync test: repeated same-range temperature events do not restart sequence.
-- Temperature display test: HVAC temperature event updates visible UI even when no auto mode is active.
+- Temperature display test: addressed in Phase-4 Slice-3 (`test/widget/cabin_temperature_display_test.dart`).
 - Background service manual smoke checklist for stop/restart/ignition OFF.

@@ -17,7 +17,7 @@
     <M-DI NAME="ServiceLocator" TYPE="UTILITY" STATUS="implemented">
       <purpose>GetIt-регистрация всех сервисов и кубитов</purpose>
       <path>lib/src/di/service_locator.dart</path>
-      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
+      <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
       <verification-ref>V-M-DI</verification-ref>
       <annotations>
         <fn-setupServiceLocator PURPOSE="Регистрирует SharedPreferences и все singletons; вызывается и в UI- и в background-изоляте" />
@@ -28,7 +28,7 @@
     <M-BLOC-PROVIDERS NAME="AppBlocProviders" TYPE="UTILITY" STATUS="implemented">
       <purpose>Список BlocProvider'ов для корневого MultiBlocProvider</purpose>
       <path>lib/src/di/app_bloc_providers.dart</path>
-      <depends>M-DI</depends>
+      <depends>M-DI, M-CABIN-TEMPERATURE</depends>
       <verification-ref>V-M-BLOC-PROVIDERS</verification-ref>
       <annotations>
         <class-BlockProviders PURPOSE="initiateBlocs() — массив BlocProvider'ов" />
@@ -51,12 +51,13 @@
     </M-PLUGIN>
 
     <M-HVAC NAME="HvacService" TYPE="CORE_LOGIC" STATUS="implemented">
-      <purpose>Централизованная обёртка над AndroidAutomotivePlugin для UI и AutoHeatService. Конверсия температуры (raw - 84) / 2 и проброс событий датчика.</purpose>
+      <purpose>Централизованная обёртка над AndroidAutomotivePlugin для UI и AutoHeatService. Конверсия температуры (raw - 84) / 2, cached lastCabinTemperature и multi-listener события датчика.</purpose>
       <path>lib/src/services/hvac_service.dart</path>
       <depends>M-PLUGIN, M-ENUMS</depends>
       <verification-ref>V-M-HVAC</verification-ref>
       <annotations>
-        <class-HvacService PURPOSE="Singleton-обёртка; ленивая initialize(), setSeatHeatLevel, getCabinTemperature, onCabinTemperatureChanged callback" />
+        <class-HvacService PURPOSE="Singleton-обёртка; ленивая initialize(), setSeatHeatLevel, getCabinTemperature, add/removeCabinTemperatureListener" />
+        <type-CabinTemperatureListener PURPOSE="void Function(double celsius) listener для температуры салона" />
         <fn-_convertToCelsius PURPOSE="(value - 84) / 2 → °C" />
       </annotations>
     </M-HVAC>
@@ -67,7 +68,7 @@
       <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS</depends>
       <verification-ref>V-M-AUTO-HEAT</verification-ref>
       <annotations>
-        <class-AutoHeatService PURPOSE="Синглтон; initialize(hvacService) подписывает onCabinTemperatureChanged" />
+        <class-AutoHeatService PURPOSE="Синглтон; initialize(hvacService) подписывает addCabinTemperatureListener; seedCurrentTemperatureFromHvac выполняет initial read" />
         <fn-startAutoHeat PURPOSE="Регистрация callback изменения уровня для UserType и запуск расписания; optional ManualHeatSettings override threshold/durations" />
         <fn-stopAutoHeat PURPOSE="Снятие callback и отмена таймеров" />
         <fn-_startHeatSequence PURPOSE="Старт с уровня 3 и каскадные переходы по Timer" />
@@ -86,6 +87,17 @@
         <class-ModesState PURPOSE="Список ModeState (driver + passenger)" />
       </annotations>
     </M-MODE>
+
+    <M-CABIN-TEMPERATURE NAME="CabinTemperatureDomain" TYPE="CORE_LOGIC" STATUS="implemented">
+      <purpose>UI-state проекция температуры салона: initial read, cached emitCurrent, listener updates для CabinTemperatureDisplay.</purpose>
+      <path>lib/src/cubit/cabin_temperature_cubit.dart</path>
+      <depends>M-HVAC</depends>
+      <verification-ref>V-M-CABIN-TEMPERATURE</verification-ref>
+      <annotations>
+        <class-CabinTemperatureCubit PURPOSE="Подписывается на HvacService.addCabinTemperatureListener и эмитит CabinTemperatureState" />
+        <class-CabinTemperatureState PURPOSE="celsius? + isLoading" />
+      </annotations>
+    </M-CABIN-TEMPERATURE>
 
     <M-PRESET NAME="PresetDomain" TYPE="CORE_LOGIC" STATUS="implemented">
       <purpose>Сохранение и применение пользовательских пресетов конфигурации подогрева.</purpose>
@@ -211,7 +223,7 @@
     <M-UI-HEAT NAME="HeatScreen" TYPE="UI_COMPONENT" STATUS="implemented">
       <purpose>Главный экран управления подогревом — кнопки уровней, индикатор температуры салона, переключатель режима.</purpose>
       <path>lib/src/presentation/screens/heat/</path>
-      <depends>M-MODE, M-HVAC</depends>
+      <depends>M-MODE, M-CABIN-TEMPERATURE, M-HVAC</depends>
       <verification-ref>V-M-UI-HEAT</verification-ref>
       <annotations>
         <class-HeatScreen PURPOSE="Связывает ModeCubit с виджетами Seat/CabinTemperatureDisplay/ModeToggler" />
@@ -247,6 +259,7 @@
     <CrossLink from="M-MAIN" to="M-SETTINGS" relation="initialize" />
     <CrossLink from="M-DI" to="M-HVAC" relation="registers-singleton" />
     <CrossLink from="M-DI" to="M-MODE" relation="registers-cubit" />
+    <CrossLink from="M-DI" to="M-CABIN-TEMPERATURE" relation="registers-cubit" />
     <CrossLink from="M-DI" to="M-PRESET" relation="registers-cubit" />
     <CrossLink from="M-DI" to="M-SETTINGS" relation="registers-cubit" />
     <CrossLink from="M-DI" to="M-MANUAL-SETTINGS" relation="registers-cubit" />
@@ -256,6 +269,7 @@
     <CrossLink from="M-AUTO-HEAT" to="M-LOGGER" relation="logs-via" />
     <CrossLink from="M-MODE" to="M-LOGGER" relation="logs-via" />
     <CrossLink from="M-BACKGROUND" to="M-LOGGER" relation="logs-via" />
+    <CrossLink from="M-HVAC" to="M-CABIN-TEMPERATURE" relation="publishes-temperature" />
     <CrossLink from="M-AUTO-HEAT" to="M-HVAC" relation="subscribes-to-temperature" />
     <CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-fallback-heat-sequence" />
     <CrossLink from="M-AUTO-HEAT" to="M-MANUAL-SETTINGS" relation="uses-custom-auto-settings" />
@@ -267,7 +281,7 @@
     <CrossLink from="M-BACKGROUND" to="M-MODE" relation="updates-state-from-isolate" />
     <CrossLink from="M-ACCESSIBILITY" to="M-BACKGROUND" relation="wakes-service" />
     <CrossLink from="M-UI-HEAT" to="M-MODE" relation="reads-and-commands" />
-    <CrossLink from="M-UI-HEAT" to="M-HVAC" relation="reads-cabin-temperature" />
+    <CrossLink from="M-UI-HEAT" to="M-CABIN-TEMPERATURE" relation="reads-cabin-temperature-state" />
     <CrossLink from="M-UI-SETTINGS" to="M-SETTINGS" relation="edits" />
     <CrossLink from="M-UI-SETTINGS" to="M-MANUAL-SETTINGS" relation="edits" />
     <CrossLink from="M-UI-SETTINGS" to="M-PRESET" relation="edits" />

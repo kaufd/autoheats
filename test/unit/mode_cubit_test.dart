@@ -3,7 +3,8 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Unit-тесты ModeCubit — мост UI ↔ persistence ↔ HVAC ↔ авторежим.
 //   SCOPE: setHeatLevel, setMode (manual/auto), восстановление из prefs,
-//          устойчивость к мусору, проброс авторежима в HvacService.
+//          устойчивость к мусору, проброс авторежима в HvacService,
+//          initial temperature seed для auto mode.
 //   DEPENDS: M-MODE, M-HVAC, M-AUTO-HEAT, M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: V-M-MODE
 //   ROLE: TEST
@@ -26,12 +27,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../_helpers/fake_hvac_service.dart';
 import '../_helpers/logger_test_sink.dart';
 
-// ВАЖНО ПРО ПОРЯДОК ТЕСТОВ:
-// ModeCubit создаёт AutoHeatService() — синглтон. Его _currentTemperature
-// нельзя сбросить в null публичным API. Тесты, чувствительные к нулевой
-// температуре (восстановление auto-режима из prefs, setMode auto без
-// события датчика), обязаны идти ДО любого теста, который вызывает
-// emitTemperature. Поэтому emit-тесты (scenario-3, scenario-12, scenario-4) — последние.
+// AutoHeatService — синглтон; tearDown вызывает dispose(), чтобы сбросить
+// listener/timer/current-temperature состояние между сценариями.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -51,7 +48,9 @@ void main() {
       cubit.state.states.firstWhere((s) => s.userType == user);
 
   Future<(ModeCubit, FakeHvacService, SharedPreferences)> buildCubit(
-      Map<String, Object> seed) async {
+    Map<String, Object> seed, {
+    double programmedTemperature = 20.0,
+  }) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     for (final entry in seed.entries) {
@@ -62,7 +61,8 @@ void main() {
         await prefs.setString(entry.key, value);
       }
     }
-    final fakeHvac = FakeHvacService();
+    final fakeHvac = FakeHvacService()
+      ..programmedTemperature = programmedTemperature;
     final cubit = ModeCubit(
       ModeService(prefs),
       fakeHvac,
@@ -102,14 +102,18 @@ void main() {
   // END_BLOCK_COLD_START
 
   // START_BLOCK_RESTORE_FROM_PREFS
-  test('scenario-6: восстановление driver(auto, 1) из prefs', () async {
-    final (cubit, _, _) = await buildCubit({
+  test(
+      'scenario-6: восстановление driver(auto, 1) применяет initial off temperature',
+      () async {
+    final (cubit, fakeHvac, _) = await buildCubit({
       'driver_mode': 'auto',
       'driver_heat_level': 1,
     });
     expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.auto);
-    expect(stateOf(cubit, UserType.driver).heatLevel, 1);
+    expect(stateOf(cubit, UserType.driver).heatLevel, 0);
     expect(stateOf(cubit, UserType.passenger).heatMode, HeatMode.manual);
+    expect(fakeHvac.recordedSetSeatHeatCalls,
+        contains((userType: UserType.driver, level: 0)));
   });
   // END_BLOCK_RESTORE_FROM_PREFS
 
@@ -218,12 +222,28 @@ void main() {
   });
   // END_BLOCK_APPLY_PRESET
 
+  test('scenario-13: auto mode starts from initial cabin temperature read',
+      () async {
+    final (cubit, fakeHvac, _) = await buildCubit(
+      {},
+      programmedTemperature: -3.0,
+    );
+
+    await cubit.setMode(UserType.driver, HeatMode.auto.name);
+
+    expect(stateOf(cubit, UserType.driver).heatLevel, 3);
+    expect(fakeHvac.getCabinTemperatureCallCount, 1);
+    expect(fakeHvac.recordedSetSeatHeatCalls,
+        contains((userType: UserType.driver, level: 3)));
+  });
+
   // START_BLOCK_AUTO_STOP
   test('scenario-3: auto -> manual останавливает авторежим', () async {
     final (cubit, fakeHvac, _) = await buildCubit({});
     await cubit.setMode(UserType.driver, HeatMode.auto.name);
     await cubit.setMode(UserType.driver, HeatMode.manual.name);
     final levelBefore = stateOf(cubit, UserType.driver).heatLevel;
+    fakeHvac.recordedSetSeatHeatCalls.clear();
 
     fakeHvac.emitTemperature(-3.0);
     await pumpEventQueue();

@@ -3,7 +3,7 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Unit-тесты HvacService через мок MethodChannel плагина (V-M-HVAC).
 //   SCOPE: исходящие connect/setHvacIntProperty, конверсия температуры из
-//          входящего onHvacChangeEvent, фильтрация по areaId/propertyId,
+//          входящего onHvacChangeEvent, multi-listener fan-out/removal,
 //          fallback getCabinTemperature, идемпотентность initialize.
 //   DEPENDS: M-HVAC, M-PLUGIN, M-ENUMS
 //   LINKS: V-M-HVAC
@@ -72,10 +72,9 @@ void main() {
   // END_BLOCK_OUTGOING_CALLS
 
   // START_BLOCK_TEMPERATURE_EVENT
-  test('scenario-2: событие InOutCAR_INSIDE -> onCabinTemperatureChanged(20.0)',
-      () async {
+  test('scenario-2: событие InOutCAR_INSIDE -> cabin listener(20.0)', () async {
     final captured = <double>[];
-    hvac.onCabinTemperatureChanged = captured.add;
+    hvac.addCabinTemperatureListener(captured.add);
     await mock.emitHvacChangeEvent(
       propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
       areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
@@ -100,7 +99,7 @@ void main() {
     for (final (raw, celsius) in cases) {
       test('raw=$raw -> $celsius', () async {
         final captured = <double>[];
-        hvac.onCabinTemperatureChanged = captured.add;
+        hvac.addCabinTemperatureListener(captured.add);
         await mock.emitHvacChangeEvent(
           propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
           areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
@@ -110,12 +109,53 @@ void main() {
       });
     }
   });
+  test(
+      'scenario-10: cabin temperature listeners fan out and remove independently',
+      () async {
+    final first = <double>[];
+    final second = <double>[];
+    void firstListener(double celsius) => first.add(celsius);
+    void secondListener(double celsius) => second.add(celsius);
+
+    hvac.addCabinTemperatureListener(firstListener);
+    hvac.addCabinTemperatureListener(secondListener);
+
+    await mock.emitHvacChangeEvent(
+      propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
+      areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
+      value: 124,
+    );
+
+    hvac.removeCabinTemperatureListener(firstListener);
+    await mock.emitHvacChangeEvent(
+      propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
+      areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
+      value: 126,
+    );
+
+    expect(first, [20.0]);
+    expect(second, [20.0, 21.0]);
+    expect(hvac.lastCabinTemperature, 21.0);
+  });
+
+  test('scenario-11: getCabinTemperature updates cache and notifies listeners',
+      () async {
+    final captured = <double>[];
+    hvac.addCabinTemperatureListener(captured.add);
+    mock.hvacIntResponse = 128; // (128 - 84) / 2 = 22.0
+
+    final temp = await hvac.getCabinTemperature();
+
+    expect(temp, 22.0);
+    expect(hvac.lastCabinTemperature, 22.0);
+    expect(captured, [22.0]);
+  });
   // END_BLOCK_TEMPERATURE_EVENT
 
   // START_BLOCK_EVENT_FILTERING
-  test('scenario-4: событие InOutCAR_OUTSIDE не вызывает callback', () async {
+  test('scenario-4: событие InOutCAR_OUTSIDE не вызывает listener', () async {
     final captured = <double>[];
-    hvac.onCabinTemperatureChanged = captured.add;
+    hvac.addCabinTemperatureListener(captured.add);
     await mock.emitHvacChangeEvent(
       propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
       areaId: VehicleAreaInOutCAR.InOutCAR_OUTSIDE,
@@ -124,9 +164,9 @@ void main() {
     expect(captured, isEmpty);
   });
 
-  test('scenario-5: чужой propertyId не вызывает callback', () async {
+  test('scenario-5: чужой propertyId не вызывает listener', () async {
     final captured = <double>[];
-    hvac.onCabinTemperatureChanged = captured.add;
+    hvac.addCabinTemperatureListener(captured.add);
     await mock.emitHvacChangeEvent(
       propertyId: CarHvacPropertyIds.ID_HVAC_FAN_SPEED_ACK,
       areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
@@ -135,10 +175,10 @@ void main() {
     expect(captured, isEmpty);
   });
 
-  test('scenario-9: событие с value=null не валит изолят, callback не вызван',
+  test('scenario-9: событие с value=null не валит изолят, listener не вызван',
       () async {
     final captured = <double>[];
-    hvac.onCabinTemperatureChanged = captured.add;
+    hvac.addCabinTemperatureListener(captured.add);
     await mock.emitHvacChangeEvent(
       propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
       areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
