@@ -17,7 +17,7 @@
     <M-DI NAME="ServiceLocator" TYPE="UTILITY" STATUS="implemented">
       <purpose>GetIt-регистрация всех сервисов и кубитов</purpose>
       <path>lib/src/di/service_locator.dart</path>
-      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME</depends>
+      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
       <verification-ref>V-M-DI</verification-ref>
       <annotations>
         <fn-setupServiceLocator PURPOSE="Регистрирует SharedPreferences и все singletons; вызывается и в UI- и в background-изоляте" />
@@ -62,13 +62,13 @@
     </M-HVAC>
 
     <M-AUTO-HEAT NAME="AutoHeatService" TYPE="CORE_LOGIC" STATUS="implemented">
-      <purpose>Реализация авторежима: по температуре салона запускает расписание уровней 3→2→1→0 по таймерам, индивидуально для driver/passenger.</purpose>
+      <purpose>Реализация авторежима: по температуре салона и optional ManualHeatSettings запускает расписание уровней 3→2→1→0 по таймерам, индивидуально для driver/passenger.</purpose>
       <path>lib/src/services/auto_heat_service.dart</path>
-      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE</depends>
+      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS</depends>
       <verification-ref>V-M-AUTO-HEAT</verification-ref>
       <annotations>
         <class-AutoHeatService PURPOSE="Синглтон; initialize(hvacService) подписывает onCabinTemperatureChanged" />
-        <fn-startAutoHeat PURPOSE="Регистрация callback изменения уровня для UserType и запуск расписания" />
+        <fn-startAutoHeat PURPOSE="Регистрация callback изменения уровня для UserType и запуск расписания; optional ManualHeatSettings override threshold/durations" />
         <fn-stopAutoHeat PURPOSE="Снятие callback и отмена таймеров" />
         <fn-_startHeatSequence PURPOSE="Старт с уровня 3 и каскадные переходы по Timer" />
       </annotations>
@@ -77,11 +77,11 @@
     <M-MODE NAME="ModeDomain" TYPE="CORE_LOGIC" STATUS="implemented">
       <purpose>Состояние режимов (manual/presets/auto) и уровня подогрева для driver/passenger. Persistence и команда на HVAC.</purpose>
       <path>lib/src/services/mode_service.dart, lib/src/cubit/mode_cubit.dart, lib/src/cubit/mode_state_cubit.dart</path>
-      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-DI</depends>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-DI, M-MANUAL-SETTINGS</depends>
       <verification-ref>V-M-MODE</verification-ref>
       <annotations>
         <class-ModeService PURPOSE="Чтение/запись режимов и уровней в SharedPreferences" />
-        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset; синхронизирует SharedPreferences, HvacService и AutoHeatService" />
+        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset; синхронизирует SharedPreferences, HvacService, ManualSettingsService и AutoHeatService" />
         <class-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <class-ModesState PURPOSE="Список ModeState (driver + passenger)" />
       </annotations>
@@ -257,9 +257,11 @@
     <CrossLink from="M-MODE" to="M-LOGGER" relation="logs-via" />
     <CrossLink from="M-BACKGROUND" to="M-LOGGER" relation="logs-via" />
     <CrossLink from="M-AUTO-HEAT" to="M-HVAC" relation="subscribes-to-temperature" />
-    <CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-heat-sequence" />
+    <CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-fallback-heat-sequence" />
+    <CrossLink from="M-AUTO-HEAT" to="M-MANUAL-SETTINGS" relation="uses-custom-auto-settings" />
     <CrossLink from="M-MODE" to="M-HVAC" relation="commands-seat-heat" />
     <CrossLink from="M-MODE" to="M-AUTO-HEAT" relation="starts-stops-auto-mode" />
+    <CrossLink from="M-MODE" to="M-MANUAL-SETTINGS" relation="loads-auto-settings" />
     <CrossLink from="M-PRESET" to="M-MODE" relation="applies-preset" />
     <CrossLink from="M-BACKGROUND" to="M-PLUGIN" relation="uses-in-isolate" />
     <CrossLink from="M-BACKGROUND" to="M-MODE" relation="updates-state-from-isolate" />

@@ -5,13 +5,14 @@
 //   SCOPE: последовательности 3->2->1->0 по диапазонам, отмена при смене
 //          температуры, stopAutoHeat, независимость UserType, idempotency,
 //          поведение при неизвестной температуре, проброс через initialize.
-//   DEPENDS: M-AUTO-HEAT, M-HVAC, M-CONSTANTS-TEMPERATURE, M-ENUMS
+//   DEPENDS: M-AUTO-HEAT, M-HVAC, M-CONSTANTS-TEMPERATURE, M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: V-M-AUTO-HEAT
 //   ROLE: TEST
 //   MAP_MODE: LOCALS
 // END_MODULE_CONTRACT
 
 import 'package:autoheat/src/app_enums.dart';
+import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
 import 'package:fake_async/fake_async.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -191,6 +192,57 @@ void main() {
     });
   });
   // END_BLOCK_BOUNDARY
+
+  // START_BLOCK_CUSTOM_SETTINGS
+  test('scenario-10: custom settings durations drive 3->2->1->0 schedule', () {
+    fakeAsync((async) {
+      final captured = <int>[];
+      final settings = ManualHeatSettings(
+        autoHeatLevels: const [
+          AutoHeatLevel(level: 1, duration: 1),
+          AutoHeatLevel(level: 2, duration: 2),
+          AutoHeatLevel(level: 3, duration: 3),
+        ],
+        temperatureThreshold: 5.0,
+      );
+
+      AutoHeatService().setTemperature(4.0);
+      AutoHeatService()
+          .startAutoHeat(UserType.driver, captured.add, settings: settings);
+
+      expect(captured, [3]);
+      async.elapse(const Duration(minutes: 3));
+      expect(captured, [3, 2]);
+      async.elapse(const Duration(minutes: 2));
+      expect(captured, [3, 2, 1]);
+      async.elapse(const Duration(minutes: 1));
+      expect(captured, [3, 2, 1, 0]);
+    });
+  });
+
+  test('scenario-11: custom threshold turns auto off at or above threshold',
+      () {
+    fakeAsync((async) {
+      final captured = <int>[];
+      final settings = ManualHeatSettings(
+        autoHeatLevels: const [
+          AutoHeatLevel(level: 1, duration: 1),
+          AutoHeatLevel(level: 2, duration: 2),
+          AutoHeatLevel(level: 3, duration: 3),
+        ],
+        temperatureThreshold: 5.0,
+      );
+
+      AutoHeatService().setTemperature(5.0);
+      AutoHeatService()
+          .startAutoHeat(UserType.driver, captured.add, settings: settings);
+
+      expect(captured, [0]);
+      async.elapse(const Duration(minutes: 10));
+      expect(captured, [0]);
+    });
+  });
+  // END_BLOCK_CUSTOM_SETTINGS
 
   // START_BLOCK_HVAC_WIRING
   test(

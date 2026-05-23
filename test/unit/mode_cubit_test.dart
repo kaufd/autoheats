@@ -4,11 +4,13 @@
 //   PURPOSE: Unit-тесты ModeCubit — мост UI ↔ persistence ↔ HVAC ↔ авторежим.
 //   SCOPE: setHeatLevel, setMode (manual/auto), восстановление из prefs,
 //          устойчивость к мусору, проброс авторежима в HvacService.
-//   DEPENDS: M-MODE, M-HVAC, M-AUTO-HEAT, M-ENUMS
+//   DEPENDS: M-MODE, M-HVAC, M-AUTO-HEAT, M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: V-M-MODE
 //   ROLE: TEST
 //   MAP_MODE: LOCALS
 // END_MODULE_CONTRACT
+
+import 'dart:convert';
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
@@ -16,6 +18,7 @@ import 'package:autoheat/src/cubit/mode_state_cubit.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
+import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,7 +31,7 @@ import '../_helpers/logger_test_sink.dart';
 // нельзя сбросить в null публичным API. Тесты, чувствительные к нулевой
 // температуре (восстановление auto-режима из prefs, setMode auto без
 // события датчика), обязаны идти ДО любого теста, который вызывает
-// emitTemperature. Поэтому emit-тесты (scenario-3, scenario-4) — последние.
+// emitTemperature. Поэтому emit-тесты (scenario-3, scenario-12, scenario-4) — последние.
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -60,7 +63,11 @@ void main() {
       }
     }
     final fakeHvac = FakeHvacService();
-    final cubit = ModeCubit(ModeService(prefs), fakeHvac);
+    final cubit = ModeCubit(
+      ModeService(prefs),
+      fakeHvac,
+      ManualSettingsService(prefs),
+    );
     addTearDown(cubit.close);
     await pumpEventQueue();
     return (cubit, fakeHvac, prefs);
@@ -226,6 +233,33 @@ void main() {
     expect(fakeHvac.recordedSetSeatHeatCalls, isEmpty);
   });
   // END_BLOCK_AUTO_STOP
+
+  test('scenario-12: auto mode uses persisted ManualSettings threshold',
+      () async {
+    final customSettings = ManualHeatSettings(
+      autoHeatLevels: const [
+        AutoHeatLevel(level: 1, duration: 1),
+        AutoHeatLevel(level: 2, duration: 2),
+        AutoHeatLevel(level: 3, duration: 3),
+      ],
+      temperatureThreshold: -10.0,
+    );
+    final (cubit, fakeHvac, prefs) = await buildCubit({});
+    await prefs.setString(
+      'manual_settings_driver',
+      json.encode(customSettings.toJson()),
+    );
+
+    await cubit.setMode(UserType.driver, HeatMode.auto.name);
+    fakeHvac.emitTemperature(-3.0);
+    await pumpEventQueue();
+
+    expect(stateOf(cubit, UserType.driver).heatLevel, 0);
+    expect(
+      fakeHvac.recordedSetSeatHeatCalls,
+      contains((userType: UserType.driver, level: 0)),
+    );
+  });
 
   // START_BLOCK_AUTO_END_TO_END
   test('scenario-4: auto + событие датчика -> уровень 3 через HvacService',

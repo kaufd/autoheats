@@ -4,7 +4,7 @@
 //   PURPOSE: Регистрация SharedPreferences и всех сервисов/кубитов в GetIt —
 //            единый bootstrap DI для UI- и background-изолята.
 //   SCOPE: setupServiceLocator (async), глобальный locator.
-//   DEPENDS: M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME
+//   DEPENDS: M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT
 //   LINKS: M-DI, V-M-DI, DF-BACKGROUND
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
@@ -17,7 +17,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-2: ModeCubit получает ManualSettingsService]
+//   PREVIOUS_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/cubit/mode_cubit.dart';
@@ -43,16 +44,20 @@ Future<void> setupServiceLocator() async {
 
   locator.registerSingleton<HvacService>(HvacService());
 
-  locator.registerSingleton<ThemeService>(ThemeService(locator<SharedPreferences>()));
+  locator.registerSingleton<ThemeService>(
+      ThemeService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<SettingsService>(SettingsService(locator<SharedPreferences>()));
+  locator.registerSingleton<SettingsService>(
+      SettingsService(locator<SharedPreferences>()));
 
   locator.registerSingleton<ManualSettingsService>(
       ManualSettingsService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<PresetService>(PresetService(locator<SharedPreferences>()));
+  locator.registerSingleton<PresetService>(
+      PresetService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<ModeService>(ModeService(locator<SharedPreferences>()));
+  locator.registerSingleton<ModeService>(
+      ModeService(locator<SharedPreferences>()));
 
   locator.registerSingleton<ThemeConfigurator>(ThemeConfigurator());
 
@@ -60,9 +65,16 @@ Future<void> setupServiceLocator() async {
     ThemeCubit(locator<ThemeService>(), locator<ThemeConfigurator>()),
   );
 
-  locator.registerSingleton<ModeCubit>(ModeCubit(locator<ModeService>(), locator<HvacService>()));
+  locator.registerSingleton<ModeCubit>(
+    ModeCubit(
+      locator<ModeService>(),
+      locator<HvacService>(),
+      locator<ManualSettingsService>(),
+    ),
+  );
 
-  locator.registerSingleton<SettingsCubit>(SettingsCubit(locator<SettingsService>()));
+  locator.registerSingleton<SettingsCubit>(
+      SettingsCubit(locator<SettingsService>()));
 
   locator.registerSingleton<ManualSettingsCubit>(
       ManualSettingsCubit(locator<ManualSettingsService>()));

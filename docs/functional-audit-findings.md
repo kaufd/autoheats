@@ -41,6 +41,7 @@ Suggested fix direction:
 ### FA-002 — Настройки автоподогрева сохраняются, но не влияют на `AutoHeatService`
 
 Priority: critical  
+Status: addressed in Phase-4 Slice-2 by loading `ManualSettingsService` in `ModeCubit` and passing per-user `ManualHeatSettings` into `AutoHeatService.startAutoHeat(...)`.
 Modules: `M-MANUAL-SETTINGS`, `M-AUTO-HEAT`, `M-CONSTANTS-TEMPERATURE`, `M-UI-SETTINGS`  
 Related: `UC-002`, `UC-003`, `DF-AUTO-HEAT`
 
@@ -56,10 +57,11 @@ Observed consequence:
 - Пользователь двигает слайдеры, значения сохраняются, но реальное авто-расписание остаётся статическим из `TemperatureConstants`.
 - Порог «Включать, когда температура ниже X°C» не используется в `AutoHeatService`.
 
-Suggested fix direction:
-- Решить, кто владеет пользовательским расписанием: `ManualSettingsCubit`, новый domain service или расширенный `AutoHeatService`.
-- Передавать per-`UserType` settings в `AutoHeatService.startAutoHeat(...)` или дать `AutoHeatService` read-only dependency на settings-service.
-- Добавить deterministic tests: изменение duration/threshold меняет уровни/таймеры.
+Resolution:
+- Владение runtime apply: `ModeCubit` читает persisted settings через `ManualSettingsService` перед стартом auto mode.
+- `AutoHeatService.startAutoHeat(..., settings: ManualHeatSettings?)` использует `temperatureThreshold` как порог включения и durations уровней 3/2/1 из `autoHeatLevels`.
+- `TemperatureConstants.getHeatSequence(...)` оставлен fallback для вызовов без user settings.
+- Verification: `test/unit/auto_heat_service_test.dart` scenarios 10/11 и `test/unit/mode_cubit_test.dart` scenario 12.
 
 ---
 
@@ -280,9 +282,9 @@ Suggested fix direction:
 Рекомендуемая следующая работа: `Phase-4 Functional hardening`.
 
 Suggested ordering:
-1. `FA-001` + `FA-011`: определить и починить semantics preset mode/apply до `ModeCubit/HvacService`.
-2. `FA-002`: подключить manual settings к auto algorithm.
-3. `FA-003` + `FA-004` + `FA-010`: стабилизировать `ModeCubit` state machine, initial temperature и mode transitions.
+1. `FA-001` + `FA-011`: addressed in Phase-4 Slice-1.
+2. `FA-002`: addressed in Phase-4 Slice-2.
+3. `FA-003` + remaining UI temperature/state issues: стабилизировать initial temperature и mode transitions.
 4. `FA-005`: защитить auto sequence от sensor noise.
 5. `FA-006`: отдельно hardened background lifecycle + head-unit smoke.
 6. `FA-009`/`FA-012`: UI/state cleanup.

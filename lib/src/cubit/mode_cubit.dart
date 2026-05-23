@@ -5,7 +5,7 @@
 //            HvacService (команды HVAC) и AutoHeatService (авторежим).
 //   SCOPE: setMode, setHeatLevel, applyPreset, toggleHeatLevel,
 //          восстановление состояния, публикация ModesState для UI.
-//   DEPENDS: M-HVAC, M-AUTO-HEAT, M-ENUMS, M-LOGGER, M-PRESET
+//   DEPENDS: M-HVAC, M-AUTO-HEAT, M-ENUMS, M-LOGGER, M-PRESET, M-MANUAL-SETTINGS
 //   LINKS: M-MODE, V-M-MODE, DF-SET-HEAT, DF-AUTO-HEAT, DF-PRESET-APPLY
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
@@ -13,7 +13,7 @@
 //
 // START_MODULE_MAP
 //   ModeCubit - Cubit<ModesState> поверх ModeService/HvacService/AutoHeatService
-//   ModeCubit(ModeService, HvacService) - конструктор; запускает _initialize
+//   ModeCubit(ModeService, HvacService, ManualSettingsService) - конструктор; запускает _initialize
 //   _initialize - дефолты, подписка AutoHeatService, восстановление состояния
 //   _getStateByUser - выбрать ModeState для UserType
 //   _updateUserState - пересобрать и эмитить ModesState
@@ -25,18 +25,20 @@
 //   applyPreset(Preset) - применить сохранённый mode/level пресета к persistence + HVAC
 //   toggleHeatLevel - последовательный перебор уровня; non-manual -> manual level 1
 //   cabinTemperature - геттер температуры из AutoHeatService
+//   _startAutoHeat - загрузить ManualSettingsService settings и стартовать AutoHeatService
 //   _manageAutoHeat - старт/стоп AutoHeatService по HeatMode
 //   _initializeHeatModes - применить восстановленные режимы при старте
 //   close - dispose AutoHeatService и закрытие Cubit
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-1: applyPreset и последовательные mode transitions]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers setMode/setHeatLevel]
+//   LAST_CHANGE: [v1.3.0 - Phase-4 Slice-2: auto mode использует ManualSettingsService]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-1: applyPreset и последовательные mode transitions]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/preset.dart';
+import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
@@ -48,9 +50,10 @@ import 'mode_state_cubit.dart';
 class ModeCubit extends Cubit<ModesState> {
   final ModeService _modeService;
   final HvacService _hvacService;
+  final ManualSettingsService _manualSettingsService;
   final AutoHeatService _autoHeatService = AutoHeatService();
 
-  ModeCubit(this._modeService, this._hvacService)
+  ModeCubit(this._modeService, this._hvacService, this._manualSettingsService)
       : super(ModesState(states: [
           ModeState(
               userType: UserType.driver,
@@ -79,7 +82,7 @@ class ModeCubit extends Cubit<ModesState> {
         .toList();
 
     emit(ModesState(states: states));
-    _initializeHeatModes(states);
+    await _initializeHeatModes(states);
   }
 
   ModeState _getStateByUser(UserType userType) {
@@ -130,7 +133,7 @@ class ModeCubit extends Cubit<ModesState> {
     await _modeService.setMode(userType, heatMode);
     _updateUserState(userType, mode: heatMode);
 
-    _manageAutoHeat(userType, heatMode);
+    await _manageAutoHeat(userType, heatMode);
 
     if (heatMode == HeatMode.manual && currentState.heatLevel != 0) {
       await _persistAndApplyHeatLevel(userType, 0);
@@ -181,7 +184,7 @@ class ModeCubit extends Cubit<ModesState> {
     final heatMode = preset.heatMode;
     final heatLevel = preset.heatLevel.clamp(0, 3);
 
-    _manageAutoHeat(userType, heatMode);
+    await _manageAutoHeat(userType, heatMode);
 
     await _modeService.setMode(userType, heatMode);
     _updateUserState(userType, mode: heatMode);
@@ -219,22 +222,29 @@ class ModeCubit extends Cubit<ModesState> {
 
   double? get cabinTemperature => _autoHeatService.currentTemperature;
 
-  void _manageAutoHeat(UserType userType, HeatMode heatMode) {
-    if (heatMode == HeatMode.auto) {
-      _autoHeatService.startAutoHeat(userType, (newLevel) {
+  Future<void> _startAutoHeat(UserType userType) async {
+    final settings = await _manualSettingsService.getSettings(userType);
+    _autoHeatService.startAutoHeat(
+      userType,
+      (newLevel) {
         setHeatLevel(userType, newLevel);
-      });
+      },
+      settings: settings,
+    );
+  }
+
+  Future<void> _manageAutoHeat(UserType userType, HeatMode heatMode) async {
+    if (heatMode == HeatMode.auto) {
+      await _startAutoHeat(userType);
     } else {
       _autoHeatService.stopAutoHeat(userType);
     }
   }
 
-  void _initializeHeatModes(List<ModeState> states) {
+  Future<void> _initializeHeatModes(List<ModeState> states) async {
     for (final state in states) {
       if (state.heatMode == HeatMode.auto) {
-        _autoHeatService.startAutoHeat(state.userType, (newLevel) {
-          setHeatLevel(state.userType, newLevel);
-        });
+        await _startAutoHeat(state.userType);
       } else if (state.heatMode == HeatMode.manual && state.heatLevel > 0) {
         setHeatLevel(state.userType, state.heatLevel);
       }

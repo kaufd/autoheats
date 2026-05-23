@@ -207,6 +207,7 @@
           <param name="hvacService" type="HvacService" />
           <param name="userType" type="UserType" />
           <param name="onHeatLevelChanged" type="callback(int)" />
+          <param name="settings" type="ManualHeatSettings?" />
         </inputs>
         <outputs>
           <param name="heatLevel" type="int" />
@@ -216,14 +217,14 @@
       <interface>
         <export-AutoHeatService PURPOSE="Синглтон" />
         <export-initialize PURPOSE="Подписаться на onCabinTemperatureChanged" />
-        <export-startAutoHeat PURPOSE="Зарегистрировать колбэк уровня и запустить расписание" />
+        <export-startAutoHeat PURPOSE="Зарегистрировать колбэк уровня и запустить расписание; optional settings override durations/threshold" />
         <export-stopAutoHeat PURPOSE="Отменить таймеры и удалить колбэк" />
         <export-setTemperature PURPOSE="Ручная установка температуры (для тестов/диагностики)" />
       </interface>
-      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE</depends>
+      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS</depends>
       <target>
         <source>lib/src/services/auto_heat_service.dart</source>
-        <tests>test/unit/auto_heat_service_test.dart (запланирован)</tests>
+        <tests>test/unit/auto_heat_service_test.dart</tests>
       </target>
       <observability>
         <log-prefix>[AutoHeatService]</log-prefix>
@@ -233,6 +234,7 @@
       <verification-ref>V-M-AUTO-HEAT</verification-ref>
       <notes>
         <note-1>Таймеры хранятся per-UserType — отмена обязательна перед новым стартом, иначе наложение каскадов.</note-1>
+        <note-2>Если startAutoHeat получает ManualHeatSettings, threshold управляет включением, а durations уровней 3/2/1 берутся из autoHeatLevels; TemperatureConstants остаётся fallback.</note-2>
       </notes>
     </M-AUTO-HEAT>
 
@@ -255,12 +257,12 @@
         <export-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <export-ModesState PURPOSE="Список ModeState для driver+passenger" />
       </interface>
-      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS</depends>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-MANUAL-SETTINGS</depends>
       <target>
         <source>lib/src/services/mode_service.dart</source>
         <source>lib/src/cubit/mode_cubit.dart</source>
         <source>lib/src/cubit/mode_state_cubit.dart</source>
-        <tests>test/unit/mode_cubit_test.dart (запланирован)</tests>
+        <tests>test/unit/mode_cubit_test.dart</tests>
       </target>
       <observability>
         <log-prefix>[ModeCubit]</log-prefix>
@@ -402,7 +404,7 @@
         <export-setupServiceLocator PURPOSE="Async bootstrap DI; должен вызываться И в UI-, И в background-изоляте" />
         <export-locator PURPOSE="GetIt.instance" />
       </interface>
-      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME</depends>
+      <depends>M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
       <target>
         <source>lib/src/di/service_locator.dart</source>
         <source>lib/src/di/app_bloc_providers.dart</source>
@@ -738,7 +740,7 @@
       <step-1 module="M-PRESET" status="done" verification="V-M-PRESET">FA-001/FA-011: Preset хранит heatMode/heatLevel и legacy JSON defaults.</step-1>
       <step-2 module="M-MODE" status="done" verification="V-M-MODE">FA-001/FA-004/FA-010/FA-011: ModeCubit.applyPreset идёт до HvacService; manual transition и tap из non-manual выполняются последовательно.</step-2>
       <step-3 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">FA-001: AppContent._applyPreset делегирует runtime применение в ModeCubit.</step-3>
-      <step-4 module="M-AUTO-HEAT" status="pending" verification="V-M-AUTO-HEAT">FA-002: пользовательские duration/threshold из M-MANUAL-SETTINGS подключить к runtime auto algorithm.</step-4>
+      <step-4 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">FA-002: ManualSettingsService → ModeCubit → AutoHeatService; пользовательские duration/threshold управляют runtime auto algorithm.</step-4>
     </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">

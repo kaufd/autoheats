@@ -4,9 +4,9 @@
 //   PURPOSE: Реализация авторежима — по температуре салона запускает расписание
 //            уровней подогрева 3->2->1->0 индивидуально для driver/passenger.
 //   SCOPE: подписка на onCabinTemperatureChanged, per-UserType Timer-каскады,
-//          startAutoHeat/stopAutoHeat, ручная setTemperature для тестов.
-//   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-LOGGER
-//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT
+//          startAutoHeat/stopAutoHeat, optional ManualHeatSettings runtime sequence.
+//   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS, M-LOGGER
+//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, FA-002
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -17,24 +17,25 @@
 //   initialize(HvacService) - подписка на onCabinTemperatureChanged
 //   setTemperature(double) - ручная установка температуры (тесты/диагностика)
 //   currentTemperature - геттер последней известной температуры салона
-//   startAutoHeat(UserType, callback) - регистрация колбэка уровня и старт расписания
-//   stopAutoHeat(UserType) - отмена Timer'а и удаление колбэка для UserType
+//   startAutoHeat(UserType, callback, settings?) - регистрация callback + optional custom settings
+//   stopAutoHeat(UserType) - отмена Timer'а и удаление callback/settings для UserType
 //   _updateAutoHeatForAllUsers - пересчёт расписания для всех активных UserType
 //   _updateAutoHeatForUser - отмена старого Timer'а и старт нового расписания
 //   _startHeatSequence - callback(3) и Logger marker BLOCK_START_HEAT_SEQUENCE
 //   _scheduleNextLevel - Timer-переходы 2->1->0 + marker BLOCK_SCHEDULE_NEXT_LEVEL
-//   _getSequence - HeatSequence для текущей температуры (null при range.off)
-//   dispose - отмена всех Timer'ов и очистка колбэков
+//   _getSequence - custom ManualHeatSettings sequence или TemperatureConstants fallback
+//   dispose - отмена всех Timer'ов и очистка колбэков/settings
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers для авто-расписания]
-//   PREVIOUS_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-2: ManualHeatSettings duration/threshold drive auto runtime]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers для авто-расписания]
 // END_CHANGE_SUMMARY
 
 import 'dart:async';
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/constants/temperature_constants.dart';
+import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
 import 'package:autoheat/src/utils/logger.dart';
 
@@ -47,8 +48,8 @@ class AutoHeatService {
   double? _currentTemperature;
 
   final Map<UserType, Timer?> _heatTimers = {};
-
   final Map<UserType, Function(int)> _heatLevelCallbacks = {};
+  final Map<UserType, ManualHeatSettings> _manualSettingsByUser = {};
 
   void initialize(HvacService hvacService) {
     _hvacService = hvacService;
@@ -65,13 +66,29 @@ class AutoHeatService {
 
   double? get currentTemperature => _currentTemperature;
 
-  void startAutoHeat(UserType userType, Function(int) onHeatLevelChanged) {
+  // START_CONTRACT: startAutoHeat
+  //   PURPOSE: Зарегистрировать callback авторежима и стартовать расписание.
+  //   INPUTS: { userType, onHeatLevelChanged, settings? }
+  //   OUTPUTS: { void }
+  //   SIDE_EFFECTS: Может вызвать callback сразу и создать Timer.
+  //   LINKS: M-AUTO-HEAT, M-MANUAL-SETTINGS, V-M-AUTO-HEAT, FA-002
+  // END_CONTRACT: startAutoHeat
+  void startAutoHeat(
+    UserType userType,
+    Function(int) onHeatLevelChanged, {
+    ManualHeatSettings? settings,
+  }) {
     _heatLevelCallbacks[userType] = onHeatLevelChanged;
+    if (settings != null) {
+      _manualSettingsByUser[userType] = settings;
+    } else {
+      _manualSettingsByUser.remove(userType);
+    }
     _updateAutoHeatForUser(userType);
   }
 
   // START_CONTRACT: stopAutoHeat
-  //   PURPOSE: Остановить авторежим конкретного сиденья и удалить callback.
+  //   PURPOSE: Остановить авторежим конкретного сиденья и удалить callback/settings.
   //   INPUTS: { userType: UserType }
   //   OUTPUTS: { void }
   //   SIDE_EFFECTS: Отмена Timer, Logger marker BLOCK_STOP.
@@ -82,6 +99,7 @@ class AutoHeatService {
     _heatTimers[userType]?.cancel();
     _heatTimers[userType] = null;
     _heatLevelCallbacks.remove(userType);
+    _manualSettingsByUser.remove(userType);
     Logger.info(
       'AutoHeatService',
       'stopAutoHeat',
@@ -106,7 +124,7 @@ class AutoHeatService {
 
     _heatTimers[userType]?.cancel();
 
-    final sequence = TemperatureConstants.getHeatSequence(_currentTemperature!);
+    final sequence = _getSequence(userType);
     if (sequence == null) {
       callback(0);
       return;
@@ -168,10 +186,12 @@ class AutoHeatService {
 
       if (nextLevel == 2) {
         callback(2);
-        _scheduleNextLevel(userType, 1, _getSequence()?.level2Duration ?? 0);
+        _scheduleNextLevel(
+            userType, 1, _getSequence(userType)?.level2Duration ?? 0);
       } else if (nextLevel == 1) {
         callback(1);
-        _scheduleNextLevel(userType, 0, _getSequence()?.level1Duration ?? 0);
+        _scheduleNextLevel(
+            userType, 0, _getSequence(userType)?.level1Duration ?? 0);
       } else {
         callback(0);
       }
@@ -179,9 +199,30 @@ class AutoHeatService {
     // END_BLOCK_SCHEDULE_NEXT_LEVEL
   }
 
-  HeatSequence? _getSequence() {
+  HeatSequence? _getSequence(UserType userType) {
     if (_currentTemperature == null) return null;
-    return TemperatureConstants.getHeatSequence(_currentTemperature!);
+
+    final settings = _manualSettingsByUser[userType];
+    if (settings == null) {
+      return TemperatureConstants.getHeatSequence(_currentTemperature!);
+    }
+
+    if (_currentTemperature! >= settings.temperatureThreshold) return null;
+
+    int durationFor(int level) {
+      for (final autoHeatLevel in settings.autoHeatLevels) {
+        if (autoHeatLevel.level == level) {
+          return autoHeatLevel.duration.clamp(0, 15);
+        }
+      }
+      return 0;
+    }
+
+    return HeatSequence(
+      level3Duration: durationFor(3),
+      level2Duration: durationFor(2),
+      level1Duration: durationFor(1),
+    );
   }
 
   void dispose() {
@@ -190,5 +231,6 @@ class AutoHeatService {
     }
     _heatTimers.clear();
     _heatLevelCallbacks.clear();
+    _manualSettingsByUser.clear();
   }
 }
