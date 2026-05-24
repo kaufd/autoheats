@@ -76,13 +76,13 @@
     </M-AUTO-HEAT>
 
     <M-MODE NAME="ModeDomain" TYPE="CORE_LOGIC" STATUS="implemented">
-      <purpose>Состояние режимов (manual/presets/auto) и уровня подогрева для driver/passenger. Persistence и команда на HVAC.</purpose>
+      <purpose>Состояние режимов (manual/presets/auto), уровня подогрева и selected preset id для driver/passenger. Persistence и команда на HVAC.</purpose>
       <path>lib/src/services/mode_service.dart, lib/src/cubit/mode_cubit.dart, lib/src/cubit/mode_state_cubit.dart</path>
-      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-DI, M-MANUAL-SETTINGS</depends>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-DI, M-MANUAL-SETTINGS, M-PRESET</depends>
       <verification-ref>V-M-MODE</verification-ref>
       <annotations>
         <class-ModeService PURPOSE="Чтение/запись режимов и уровней в SharedPreferences" />
-        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset; синхронизирует SharedPreferences, HvacService, ManualSettingsService и AutoHeatService" />
+        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset; синхронизирует SharedPreferences, HvacService, ManualSettingsService, PresetService и AutoHeatService" />
         <class-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <class-ModesState PURPOSE="Список ModeState (driver + passenger)" />
       </annotations>
@@ -100,13 +100,13 @@
     </M-CABIN-TEMPERATURE>
 
     <M-PRESET NAME="PresetDomain" TYPE="CORE_LOGIC" STATUS="implemented">
-      <purpose>Сохранение и применение пользовательских пресетов конфигурации подогрева.</purpose>
+      <purpose>Сохранение, selected preset id per UserType и применение пользовательских пресетов конфигурации подогрева.</purpose>
       <path>lib/src/services/preset_service.dart, lib/src/cubit/preset_cubit.dart, lib/src/models/preset.dart</path>
-      <depends>M-MODE</depends>
+      <depends>M-MODE, M-ENUMS, M-MANUAL-SETTINGS</depends>
       <verification-ref>V-M-PRESET</verification-ref>
       <annotations>
-        <class-PresetService PURPOSE="CRUD пресетов через SharedPreferences (JSON-сериализация)" />
-        <class-PresetCubit PURPOSE="Состояние списка пресетов и активного пресета" />
+        <class-PresetService PURPOSE="CRUD пресетов и selected preset id per UserType через SharedPreferences (JSON-сериализация)" />
+        <class-PresetCubit PURPOSE="Состояние списка пресетов и активного пресета per UserType" />
         <type-Preset PURPOSE="Модель пресета (@JsonSerializable): settings + runtime heatMode/heatLevel" />
       </annotations>
     </M-PRESET>
@@ -277,6 +277,7 @@
     <CrossLink from="M-MODE" to="M-HVAC" relation="commands-seat-heat" />
     <CrossLink from="M-MODE" to="M-AUTO-HEAT" relation="starts-stops-auto-mode" />
     <CrossLink from="M-MODE" to="M-MANUAL-SETTINGS" relation="loads-auto-settings" />
+    <CrossLink from="M-MODE" to="M-PRESET" relation="syncs-selected-preset-id" />
     <CrossLink from="M-PRESET" to="M-MODE" relation="applies-preset" />
     <CrossLink from="M-BACKGROUND" to="M-PLUGIN" relation="uses-in-isolate" />
     <CrossLink from="M-BACKGROUND" to="M-MODE" relation="updates-state-from-isolate" />

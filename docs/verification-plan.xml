@@ -360,6 +360,7 @@
         <scenario-11 kind="success">toggleHeatLevel из presets/auto выполняет последовательный переход в manual level=1 без параллельной гонки.</scenario-11>
         <scenario-12 kind="success">setMode(driver,'auto') читает persisted ManualHeatSettings через ManualSettingsService: при threshold=-10.0 и temperature=-3.0 AutoHeatService отдаёт level=0, а не fallback level=3.</scenario-12>
         <scenario-13 kind="success">setMode(driver,'auto') при programmedTemperature=-3.0 стартует callback(3) от initial read без fakeHvac.emitTemperature.</scenario-13>
+        <scenario-14 kind="success">applyPreset сохраняет selected preset id; setMode(manual/auto) и toggleHeatLevel из presets очищают persisted selected preset id.</scenario-14>
       </scenarios>
       <forbidden-markers>
         <forbidden-1>После setMode manual событие датчика НЕ должно менять уровень driver (stopAutoHeat отработал) — scenario-3.</forbidden-1>
@@ -377,6 +378,7 @@
         <assertion-2>setMode auto подключает авторежим, setMode manual — отключает (scenario-3, scenario-4).</assertion-2>
         <assertion-3>setMode auto загружает ManualSettingsService settings и передаёт их в AutoHeatService (scenario-12).</assertion-3>
         <assertion-4>ModeCubit._initialize вызывает AutoHeatService.seedCurrentTemperatureFromHvac до восстановления auto modes (scenario-6, scenario-13).</assertion-4>
+        <assertion-5>ModeCubit синхронизирует PresetService selected preset id: apply сохраняет, non-presets переходы очищают (scenario-9, scenario-11, scenario-14).</assertion-5>
       </required-trace-assertions>
       <open-questions>
         <O-1>Должен ли setHeatLevel ранним выходом блокировать повторную запись того же уровня? Сейчас код вызывает setSeatHeatLevel всегда. Решение: оставить как есть (плагин дешёвый, идемпотентность на нижнем слое). Tests отражают текущее поведение в scenario-8.</O-1>
@@ -420,10 +422,10 @@
       <test-files>
         <file>test/unit/preset_model_test.dart</file>
         <file>test/unit/preset_service_test.dart</file>
-        <file>test/unit/preset_cubit_test.dart (запланирован)</file>
+        <file>test/unit/preset_cubit_test.dart</file>
       </test-files>
       <module-checks>
-        <check-1>flutter test test/unit/preset_model_test.dart test/unit/preset_service_test.dart</check-1>
+        <check-1>flutter test test/unit/preset_model_test.dart test/unit/preset_service_test.dart test/unit/preset_cubit_test.dart</check-1>
         <check-2>flutter test test/unit/mode_cubit_test.dart</check-2>
       </module-checks>
       <scenarios>
@@ -432,6 +434,8 @@
         <scenario-3 kind="failure">load при битом JSON не валит изолят.</scenario-3>
         <scenario-4 kind="success">Preset runtime fields: JSON round-trip сохраняет heatMode/heatLevel; legacy JSON без этих полей грузится как heatMode=presets, heatLevel=0.</scenario-4>
         <scenario-5 kind="success">PresetService.createPresetFromCurrentSettings сохраняет heatMode/heatLevel в SharedPreferences round-trip.</scenario-5>
+        <scenario-6 kind="success">PresetService хранит selected preset id отдельно для driver/passenger и очищает его при delete выбранного пресета.</scenario-6>
+        <scenario-7 kind="success">PresetCubit.loadAllPresets восстанавливает selected preset per UserType; applyPreset сохраняет selected id; delete выбранного пресета очищает state.</scenario-7>
       </scenarios>
       <required-log-markers>
         <marker-1>[ModeCubit][applyPreset][BLOCK_APPLY_PRESET]</marker-1>
@@ -439,10 +443,11 @@
       <required-trace-assertions>
         <assertion-1>Round-trip Preset.toJson() → jsonEncode → SharedPreferences → jsonDecode → Preset.fromJson не теряет settings, heatMode и heatLevel.</assertion-1>
         <assertion-2>DF-PRESET-APPLY идёт через ModeCubit.applyPreset до HvacService.setSeatHeatLevel, а не только через ManualSettingsCubit.</assertion-2>
+        <assertion-3>selected preset id является per-UserType state-machine metadata: apply сохраняет id, delete/manual/auto transition очищают id.</assertion-3>
       </required-trace-assertions>
       <wave-follow-up>Связка с UI PresetsScreen/AppContent._applyPreset.</wave-follow-up>
       <phase-follow-up>Регрессия после изменений модели Preset (codegen).</phase-follow-up>
-      <autonomy-ready>YES для model/service/runtime apply после Phase-4 Slice-1; PresetCubit-only test остаётся запланирован.</autonomy-ready>
+      <autonomy-ready>YES для model/service/runtime apply и selected preset semantics после Phase-4 Slice-9.</autonomy-ready>
     </V-M-PRESET>
 
     <V-M-SETTINGS MODULE="M-SETTINGS" PRIORITY="medium">

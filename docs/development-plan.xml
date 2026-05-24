@@ -245,7 +245,7 @@
 
     <M-MODE NAME="ModeDomain" TYPE="CORE_LOGIC" LAYER="2" ORDER="2" STATUS="implemented">
       <contract>
-        <purpose>Управление режимом (manual/presets/auto) и уровнем подогрева для driver/passenger с persistence и командами на HVAC.</purpose>
+        <purpose>Управление режимом (manual/presets/auto), уровнем подогрева и selected preset id для driver/passenger с persistence и командами на HVAC.</purpose>
         <inputs>
           <param name="userType" type="UserType" />
           <param name="mode" type="HeatMode" />
@@ -258,11 +258,11 @@
       </contract>
       <interface>
         <export-ModeService PURPOSE="CRUD режимов/уровней через SharedPreferences" />
-        <export-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset, getCurrentSeatHeatLevel" />
+        <export-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset, getCurrentSeatHeatLevel; apply/manual/auto переходы синхронизируют selected preset id" />
         <export-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <export-ModesState PURPOSE="Список ModeState для driver+passenger" />
       </interface>
-      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-MANUAL-SETTINGS</depends>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-MANUAL-SETTINGS, M-PRESET</depends>
       <target>
         <source>lib/src/services/mode_service.dart</source>
         <source>lib/src/cubit/mode_cubit.dart</source>
@@ -339,7 +339,7 @@
 
     <M-PRESET NAME="PresetDomain" TYPE="CORE_LOGIC" LAYER="3" ORDER="1" STATUS="implemented">
       <contract>
-        <purpose>CRUD пользовательских пресетов и их применение к ModeCubit.</purpose>
+        <purpose>CRUD пользовательских пресетов, selected preset id per UserType и применение к ModeCubit.</purpose>
         <inputs>
           <param name="Preset" type="model" />
         </inputs>
@@ -349,11 +349,11 @@
         <errors />
       </contract>
       <interface>
-        <export-PresetService PURPOSE="JSON-CRUD пресетов в SharedPreferences" />
-        <export-PresetCubit PURPOSE="Состояние списка и активного пресета" />
+        <export-PresetService PURPOSE="JSON-CRUD пресетов и selected preset id per UserType в SharedPreferences" />
+        <export-PresetCubit PURPOSE="Состояние списка и активного пресета per UserType" />
         <export-Preset PURPOSE="Модель @JsonSerializable: settings + runtime heatMode/heatLevel" />
       </interface>
-      <depends>M-MODE</depends>
+      <depends>M-MODE, M-ENUMS, M-MANUAL-SETTINGS</depends>
       <target>
         <source>lib/src/services/preset_service.dart</source>
         <source>lib/src/cubit/preset_cubit.dart</source>
@@ -716,10 +716,10 @@
     <DF-PRESET-APPLY NAME="ApplyPreset" TRIGGER="UI tap on preset">
       <step-1>UI получает Preset с settings + runtime heatMode/heatLevel snapshot.</step-1>
       <step-2>AppContent._applyPreset сохраняет ManualSettings для preset.userType, сохраняя настройки второго сиденья.</step-2>
-      <step-3>ModeCubit.applyPreset(preset) записывает heatMode/heatLevel в SharedPreferences и ModesState.</step-3>
+      <step-3>ModeCubit.applyPreset(preset) записывает heatMode/heatLevel и selected preset id в SharedPreferences и ModesState.</step-3>
       <step-4>ModeCubit.applyPreset(preset) вызывает HvacService.setSeatHeatLevel(userType, heatLevel), поток продолжается как DF-SET-HEAT.</step-4>
-      <step-5>PresetCubit.applyPreset(preset) обновляет lastUsed/selectedPreset metadata.</step-5>
-      <evidence>Логи [ModeCubit][applyPreset][BLOCK_APPLY_PRESET] и [HvacService][setSeatHeatLevel]; state содержит preset heatMode/heatLevel.</evidence>
+      <step-5>PresetCubit.applyPreset(preset) обновляет lastUsed/selectedPreset per UserType metadata.</step-5>
+      <evidence>Логи [ModeCubit][applyPreset][BLOCK_APPLY_PRESET] и [HvacService][setSeatHeatLevel]; state содержит preset heatMode/heatLevel, PresetService хранит selected preset id.</evidence>
     </DF-PRESET-APPLY>
   </DataFlow>
 
@@ -773,7 +773,7 @@
       <step-6 module="M-PLUGIN" status="done" verification="V-M-PLUGIN">Прямых print() в path-плагине не было; Logger не импортируется в плагин, чтобы не создавать зависимость plugin → app. Выполнена analyze-cleanup: удалён лишний flutter/foundation.dart import.</step-6>
     </Phase-3>
 
-    <Phase-4 name="Functional hardening" status="in_progress">
+    <Phase-4 name="Functional hardening" status="done">
       <goal>Исправить functional audit findings, где UI/state визуально отрабатывали без runtime HVAC effect.</goal>
       <step-1 module="M-PRESET" status="done" verification="V-M-PRESET">FA-001/FA-011: Preset хранит heatMode/heatLevel и legacy JSON defaults.</step-1>
       <step-2 module="M-MODE" status="done" verification="V-M-MODE">FA-001/FA-004/FA-010/FA-011: ModeCubit.applyPreset идёт до HvacService; manual transition и tap из non-manual выполняются последовательно.</step-2>
@@ -786,6 +786,9 @@
       <step-9 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">FA-009/FA-012: SettingsScreen head-unit smoke, wrap-safe ThemeSelector, PresetsSettings без unbounded vertical Expanded, ManualSettingsState clearError.</step-9>
       <step-10 module="M-PLUGIN" status="done" verification="V-M-HVAC">FA-007: local plugin patch awaits connect/setHvac*Property; HvacService tests assert connect/write error propagation.</step-10>
       <step-11 module="M-DI" status="done" verification="V-M-DI">FA-008: setupServiceLocator idempotent per isolate via isRegistered guards; UI and background paths continue sharing the same bootstrap.</step-11>
+      <step-12 module="M-PRESET" status="done" verification="V-M-PRESET">FA-011: selected preset id persists per UserType; apply/delete restores and clears preset state without requiring manual smoke.</step-12>
+      <step-13 module="M-MODE" status="done" verification="V-M-MODE">FA-011: ModeCubit apply/manual/auto transitions synchronize selected preset id with runtime mode state.</step-13>
+      <step-14 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">FA-011: PresetList highlights selected preset independently for driver/passenger.</step-14>
     </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">

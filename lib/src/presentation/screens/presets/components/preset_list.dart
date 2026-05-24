@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 
 class PresetList extends StatelessWidget {
   final List<Preset> presets;
-  final Preset? selectedPreset;
+  final Map<UserType, Preset?> selectedPresets;
   final Function(Preset) onPresetSelected;
   final Function(Preset) onPresetDeleted;
 
@@ -16,7 +16,7 @@ class PresetList extends StatelessWidget {
     required this.presets,
     required this.onPresetSelected,
     required this.onPresetDeleted,
-    this.selectedPreset,
+    this.selectedPresets = const {},
   });
 
   @override
@@ -44,8 +44,10 @@ class PresetList extends StatelessWidget {
       );
     }
 
-    final driverPresets = presets.where((p) => p.userType == UserType.driver).toList();
-    final passengerPresets = presets.where((p) => p.userType == UserType.passenger).toList();
+    final driverPresets =
+        presets.where((p) => p.userType == UserType.driver).toList();
+    final passengerPresets =
+        presets.where((p) => p.userType == UserType.passenger).toList();
 
     return SingleChildScrollView(
       child: Padding(
@@ -62,7 +64,8 @@ class PresetList extends StatelessWidget {
     );
   }
 
-  Widget _buildPresetSection(BuildContext context, String title, List<Preset> presets) {
+  Widget _buildPresetSection(
+      BuildContext context, String title, List<Preset> presets) {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,7 +75,8 @@ class PresetList extends StatelessWidget {
             child: Center(
               child: Text(
                 title,
-                style: context.textStyle.paragraph3.copyWith(fontWeight: FontWeight.w600),
+                style: context.textStyle.paragraph3
+                    .copyWith(fontWeight: FontWeight.w600),
               ),
             ),
           ),
@@ -83,7 +87,7 @@ class PresetList extends StatelessWidget {
   }
 
   Widget _buildPresetItem(BuildContext context, Preset preset) {
-    final isSelected = selectedPreset?.id == preset.id;
+    final isSelected = selectedPresets[preset.userType]?.id == preset.id;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),

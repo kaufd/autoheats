@@ -73,6 +73,7 @@ Future<void> setupServiceLocator() async {
       locator<ModeService>(),
       locator<HvacService>(),
       locator<ManualSettingsService>(),
+      locator<PresetService>(),
     ),
   );
 

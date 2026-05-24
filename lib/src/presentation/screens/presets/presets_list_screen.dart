@@ -33,7 +33,8 @@ class _PresetsListScreenState extends State<PresetsListScreen> {
         children: [
           Text(
             'Пресеты сохраняются отдельно для водителя и пассажира. Для сохранения пресета используйте кнопки в разделе "Настройки".',
-            style: context.textStyle.paragraph3.copyWith(color: context.themeColors.textMuted),
+            style: context.textStyle.paragraph3
+                .copyWith(color: context.themeColors.textMuted),
           ),
           const SizedBox(height: 20),
           Expanded(
@@ -55,12 +56,14 @@ class _PresetsListScreenState extends State<PresetsListScreen> {
 
                 return PresetList(
                   presets: state.presets,
-                  selectedPreset: state.selectedPreset,
+                  selectedPresets: state.selectedPresets,
                   onPresetSelected: (preset) {
                     widget.onPresetApplied(preset);
                   },
                   onPresetDeleted: (preset) {
-                    context.read<PresetCubit>().deletePreset(preset.id, preset.userType);
+                    context
+                        .read<PresetCubit>()
+                        .deletePreset(preset.id, preset.userType);
                   },
                 );
               },

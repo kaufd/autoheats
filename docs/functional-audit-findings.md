@@ -250,7 +250,7 @@ Suggested fix direction:
 
 ### FA-011 — `HeatMode.presets` есть в UI, но нет полноценной state-machine семантики
 
-Status: partially addressed in Phase-4 Slice-1: presets now carry/apply runtime `heatMode`/`heatLevel`; selected preset-id persistence remains out of scope.
+Status: addressed in Phase-4 Slice-9: presets carry/apply runtime `heatMode`/`heatLevel`, selected preset-id persists per user, and manual/auto/delete transitions clear stale selected-preset state.
 Priority: medium
 Modules: `M-MODE`, `M-PRESET`, `M-UI-HEAT`, `M-UI-PRESETS`
 
@@ -265,6 +265,12 @@ Observed consequence:
 Suggested fix direction:
 - Либо убрать `presets` из segmented control и оставить пресеты как action из отдельной вкладки.
 - Либо определить state-machine: selected preset per user, apply mode, persisted preset id, fallback на manual.
+
+Resolution:
+- `PresetService` stores `driver_selected_preset_id` / `passenger_selected_preset_id` and clears the matching id when a preset is deleted.
+- `PresetCubit.loadAllPresets()` restores selected presets per `UserType`; `PresetList` highlights driver/passenger selection independently.
+- `ModeCubit.applyPreset()` persists selected id; `setMode(manual|auto)` and `toggleHeatLevel()` out of presets clear stale selected id.
+- Verification: `test/unit/preset_service_test.dart`, `test/unit/preset_cubit_test.dart`, `test/unit/mode_cubit_test.dart`.
 
 ---
 
@@ -291,7 +297,7 @@ Suggested fix direction:
 Рекомендуемая следующая работа: `Phase-4 Functional hardening`.
 
 Suggested ordering:
-1. `FA-001` + `FA-011`: addressed in Phase-4 Slice-1.
+1. `FA-001` + `FA-011`: addressed in Phase-4 Slice-1 and completed in Slice-9.
 2. `FA-002`: addressed in Phase-4 Slice-2.
 3. `FA-003`: addressed in Phase-4 Slice-3.
 4. `FA-005`: addressed in Phase-4 Slice-4.
@@ -301,7 +307,7 @@ Suggested ordering:
 ## Verification gaps to add before fixing
 
 - Widget smoke for `SettingsScreen` at target head-unit size.
-- Unit/integration test for `DF-PRESET-APPLY`: tap/apply preset causes `ModeCubit.setHeatLevel` and `HvacService.setSeatHeatLevel`.
+- Unit/integration test for `DF-PRESET-APPLY`: runtime apply and selected-id persistence covered by `test/unit/mode_cubit_test.dart`, `test/unit/preset_service_test.dart`, and `test/unit/preset_cubit_test.dart`.
 - FakeAsync test: repeated same-range temperature events do not restart sequence — addressed in Phase-4 Slice-4 (`test/unit/auto_heat_service_test.dart` scenario-13).
 - Temperature display test: addressed in Phase-4 Slice-3 (`test/widget/cabin_temperature_display_test.dart`).
 - Background service manual smoke checklist for stop/restart/ignition OFF remains required after Phase-4 Slice-5.

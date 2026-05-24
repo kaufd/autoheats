@@ -5,7 +5,7 @@
 //            HvacService (команды HVAC) и AutoHeatService (авторежим).
 //   SCOPE: setMode, setHeatLevel, applyPreset, toggleHeatLevel,
 //          восстановление состояния, initial temperature seed для AutoHeatService,
-//          публикация ModesState для UI.
+//          публикация ModesState для UI, selected preset id sync.
 //   DEPENDS: M-HVAC, M-AUTO-HEAT, M-ENUMS, M-LOGGER, M-PRESET, M-MANUAL-SETTINGS
 //   LINKS: M-MODE, V-M-MODE, DF-SET-HEAT, DF-AUTO-HEAT, DF-PRESET-APPLY, DF-INIT-TEMP
 //   ROLE: RUNTIME
@@ -14,16 +14,16 @@
 //
 // START_MODULE_MAP
 //   ModeCubit - Cubit<ModesState> поверх ModeService/HvacService/AutoHeatService
-//   ModeCubit(ModeService, HvacService, ManualSettingsService) - конструктор; запускает _initialize
+//   ModeCubit(ModeService, HvacService, ManualSettingsService, PresetService) - конструктор; запускает _initialize
 //   _initialize - дефолты, подписка AutoHeatService, initial temperature seed, восстановление состояния
 //   _getStateByUser - выбрать ModeState для UserType
 //   _updateUserState - пересобрать и эмитить ModesState
 //   _persistAndApplyHeatLevel - persist + HvacService + state update без публичного лога
 //   getModeByUser - имя текущего HeatMode для UserType
 //   getHeatLevelByUser - текущий уровень для UserType
-//   setMode(UserType, String) - сменить режим, persist, управлять авторежимом + Logger marker
+//   setMode(UserType, String) - сменить режим, persist, управлять авторежимом + Logger marker; non-presets чистит selected preset
 //   setHeatLevel(UserType, int) - persist + HvacService.setSeatHeatLevel + emit + Logger marker
-//   applyPreset(Preset) - применить сохранённый mode/level пресета к persistence + HVAC
+//   applyPreset(Preset) - применить сохранённый mode/level пресета к persistence + HVAC + selected preset
 //   toggleHeatLevel - последовательный перебор уровня; non-manual -> manual level 1
 //   _startAutoHeat - загрузить ManualSettingsService settings и стартовать AutoHeatService
 //   _manageAutoHeat - старт/стоп AutoHeatService по HeatMode
@@ -32,14 +32,15 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.4.0 - Phase-4 Slice-3: initial temperature seed для AutoHeatService]
-//   PREVIOUS_CHANGE: [v1.3.0 - Phase-4 Slice-2: auto mode использует ManualSettingsService]
+//   LAST_CHANGE: [v1.5.0 - Phase-4 Slice-9: ModeCubit синхронизирует selected preset id]
+//   PREVIOUS_CHANGE: [v1.4.0 - Phase-4 Slice-3: initial temperature seed для AutoHeatService]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/mode_service.dart';
+import 'package:autoheat/src/services/preset_service.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
 import 'package:autoheat/src/utils/logger.dart';
@@ -51,10 +52,15 @@ class ModeCubit extends Cubit<ModesState> {
   final ModeService _modeService;
   final HvacService _hvacService;
   final ManualSettingsService _manualSettingsService;
+  final PresetService _presetService;
   final AutoHeatService _autoHeatService = AutoHeatService();
 
-  ModeCubit(this._modeService, this._hvacService, this._manualSettingsService)
-      : super(ModesState(states: [
+  ModeCubit(
+    this._modeService,
+    this._hvacService,
+    this._manualSettingsService,
+    this._presetService,
+  ) : super(ModesState(states: [
           ModeState(
               userType: UserType.driver,
               heatMode: HeatMode.manual,
@@ -123,8 +129,9 @@ class ModeCubit extends Cubit<ModesState> {
   //   PURPOSE: Сменить режим сиденья, сохранить и запустить/остановить авторежим.
   //   INPUTS: { userType: UserType, newMode: String HeatMode.name }
   //   OUTPUTS: { Future<void> }
-  //   SIDE_EFFECTS: SharedPreferences, AutoHeatService, emit, Logger marker BLOCK_SET_MODE.
-  //   LINKS: M-MODE, M-AUTO-HEAT, M-LOGGER, V-M-MODE, DF-AUTO-HEAT
+  //   SIDE_EFFECTS: SharedPreferences, AutoHeatService, selected preset id,
+  //                 emit, Logger marker BLOCK_SET_MODE.
+  //   LINKS: M-MODE, M-AUTO-HEAT, M-PRESET, M-LOGGER, V-M-MODE, DF-AUTO-HEAT, FA-011
   // END_CONTRACT: setMode
   Future<void> setMode(UserType userType, String newMode) async {
     // START_BLOCK_SET_MODE
@@ -132,6 +139,9 @@ class ModeCubit extends Cubit<ModesState> {
     final currentState = _getStateByUser(userType);
 
     await _modeService.setMode(userType, heatMode);
+    if (heatMode != HeatMode.presets) {
+      await _presetService.clearSelectedPresetId(userType);
+    }
     _updateUserState(userType, mode: heatMode);
 
     await _manageAutoHeat(userType, heatMode);
@@ -176,7 +186,8 @@ class ModeCubit extends Cubit<ModesState> {
   //   PURPOSE: Применить сохранённый runtime mode/level пресета к конкретному сиденью.
   //   INPUTS: { preset: Preset }
   //   OUTPUTS: { Future<void> }
-  //   SIDE_EFFECTS: SharedPreferences, AutoHeatService, HvacService, emit, Logger marker BLOCK_APPLY_PRESET.
+  //   SIDE_EFFECTS: SharedPreferences, AutoHeatService, HvacService,
+  //                 selected preset id, emit, Logger marker BLOCK_APPLY_PRESET.
   //   LINKS: M-MODE, M-PRESET, M-HVAC, M-LOGGER, V-M-MODE, V-M-PRESET, DF-PRESET-APPLY
   // END_CONTRACT: applyPreset
   Future<void> applyPreset(Preset preset) async {
@@ -188,6 +199,7 @@ class ModeCubit extends Cubit<ModesState> {
     await _manageAutoHeat(userType, heatMode);
 
     await _modeService.setMode(userType, heatMode);
+    await _presetService.setSelectedPresetId(userType, preset.id);
     _updateUserState(userType, mode: heatMode);
     await _persistAndApplyHeatLevel(userType, heatLevel);
 
@@ -215,6 +227,7 @@ class ModeCubit extends Cubit<ModesState> {
       await setHeatLevel(userType, newLevel);
     } else {
       await _modeService.setMode(userType, HeatMode.manual);
+      await _presetService.clearSelectedPresetId(userType);
       _autoHeatService.stopAutoHeat(userType);
       _updateUserState(userType, mode: HeatMode.manual);
       await setHeatLevel(userType, 1);
