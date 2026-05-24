@@ -29,13 +29,15 @@
 //   _temperatureBasedLevel - вычислить целевой уровень по текущей температуре
 //   _durationForLevel - длительность уровня из ManualHeatSettings или HeatSequence
 //   _stepDownThresholdFor - порог step-down для уровня
+//   _planKeyFor - стабильная сериализация HeatSequence для сравнения планов
+//   _finishedPlanKeys - ключ плана, при котором каскад вышел в 0 (защита от рестарта)
 //   _getSequence - custom ManualHeatSettings sequence или TemperatureConstants fallback
 //   dispose - отписка listener, отмена Timer'ов и очистка состояния
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v2.0.0 - Adaptive auto-heat: temperature-driven step-down + cold-start + no level-3 restart on warming]
-//   PREVIOUS_CHANGE: [v1.4.0 - Phase-4 Slice-4: effective-plan guard от sensor noise]
+//   LAST_CHANGE: [v2.1.0 - Fix infinite restart loop: activeLevel==0 рестартует только при смене HeatSequence (plan-key guard)]
+//   PREVIOUS_CHANGE: [v2.0.0 - Adaptive auto-heat: temperature-driven step-down + cold-start + no level-3 restart on warming]
 // END_CHANGE_SUMMARY
 
 import 'dart:async';

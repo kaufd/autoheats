@@ -16,7 +16,8 @@
 //   CabinTemperatureListener - callback type для событий температуры салона
 //   HvacService - singleton-обёртка плагина (регистрируется в GetIt)
 //   HvacService() - конструктор: создаёт плагин и onHvacChangeEventCallback
-//   initialize - ленивый connect(); идемпотентен через гард _isInitialized
+//   initialize - ленивый connect(); идемпотентен через _isInitialized + _initInFlight guard
+//   _runInitialize - тело connect; сбрасывает _initInFlight при ошибке для retry
 //   isInitialized - геттер флага инициализации
 //   androidAutomotivePlugin - геттер плагина (нужен background-изоляту)
 //   setSeatHeatLevel(UserType, int) - запись уровня через CarHvacManager
@@ -31,8 +32,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.3.0 - Phase-4 Slice-7: connect/write plugin errors now propagate through awaited M-PLUGIN calls]
-//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-3: multi-listener cabin temperature source]
+//   LAST_CHANGE: [v1.4.0 - initialize() in-flight guard: одновременные вызовы делят один connect()]
+//   PREVIOUS_CHANGE: [v1.3.0 - Phase-4 Slice-7: connect/write plugin errors now propagate through awaited M-PLUGIN calls]
 // END_CHANGE_SUMMARY
 
 import 'package:android_automotive_plugin/android_automotive_plugin.dart';
@@ -49,6 +50,7 @@ class HvacService {
   late final AndroidAutomotivePlugin _androidAutomotivePlugin;
   late final CarHvacManager _hvacManager;
   bool _isInitialized = false;
+  Future<void>? _initInFlight;
   double? _lastCabinTemperature;
   final Set<CabinTemperatureListener> _cabinTemperatureListeners = {};
 
@@ -95,16 +97,26 @@ class HvacService {
   //   SIDE_EFFECTS: connect() в нативный слой, Logger marker BLOCK_INITIALIZE.
   //   LINKS: M-HVAC, M-PLUGIN, M-LOGGER, V-M-HVAC
   // END_CONTRACT: initialize
-  Future<void> initialize() async {
+  Future<void> initialize() {
     // START_BLOCK_INITIALIZE
-    if (_isInitialized) return;
+    if (_isInitialized) return Future.value();
+    // Concurrent guard: одновременные вызовы (background_service._startRuntimeConnection
+    // + ModeCubit._initialize → seedCurrentTemperatureFromHvac, CabinTemperatureCubit
+    // и т.п.) делят один in-flight connect вместо повторного await plugin.connect().
+    return _initInFlight ??= _runInitialize();
+    // END_BLOCK_INITIALIZE
+  }
 
+  Future<void> _runInitialize() async {
     try {
       await _androidAutomotivePlugin.connect();
       _isInitialized = true;
       Logger.info(
           'HvacService', 'initialize', 'BLOCK_INITIALIZE', 'initialized');
     } catch (e) {
+      // Сбрасываем in-flight, иначе следующий await initialize() ушёл бы в
+      // тот же зафейленный future и retry стал бы невозможным.
+      _initInFlight = null;
       Logger.error(
         'HvacService',
         'initialize',
@@ -114,7 +126,6 @@ class HvacService {
       );
       rethrow;
     }
-    // END_BLOCK_INITIALIZE
   }
 
   bool get isInitialized => _isInitialized;
@@ -253,6 +264,7 @@ class HvacService {
 
   void dispose() {
     _isInitialized = false;
+    _initInFlight = null;
     _lastCabinTemperature = null;
     _cabinTemperatureListeners.clear();
     _androidAutomotivePlugin.onHvacChangeEventCallback = null;

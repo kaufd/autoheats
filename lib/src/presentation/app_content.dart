@@ -59,6 +59,12 @@ class AppContentState extends State<AppContent>
         });
       }
     });
+
+    // Прогреваем PresetCubit до первого взаимодействия с ModeToggler:
+    // _onPresetsSegmentTapped читает state.selectedPresets, и без этой загрузки
+    // на холодном старте всегда виден «пресет не выбран» → нас бросает на таб
+    // «Пресеты», хотя ModeCubit уже работает в режиме presets с активным id.
+    context.read<PresetCubit>().loadAllPresets();
   }
 
   @override

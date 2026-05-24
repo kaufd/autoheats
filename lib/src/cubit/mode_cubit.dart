@@ -211,12 +211,16 @@ class ModeCubit extends Cubit<ModesState> {
       final newLevel =
           currentState.heatLevel == 3 ? 0 : currentState.heatLevel + 1;
       await setHeatLevel(userType, newLevel);
-    } else {
-      await _modeService.setMode(userType, HeatMode.manual);
-      _autoHeatService.stopAutoHeat(userType);
-      _updateUserState(userType, mode: HeatMode.manual);
-      await setHeatLevel(userType, 1);
+      return;
     }
+
+    // НАМЕРЕННО: переключение из presets/auto через тап на сиденье не очищает
+    // PresetService.getSelectedPresetId(userType) — selected id остаётся как
+    // «последний применённый пресет». При следующем тапе сегмента «Пресеты»
+    // в ModeToggler пользователь снова попадёт в этот пресет, а не на пустой
+    // экран выбора. См. AppContent._onPresetsSegmentTapped.
+    await setMode(userType, HeatMode.manual.name);
+    await setHeatLevel(userType, 1);
   }
 
   Future<void> _startAutoHeat(
@@ -274,6 +278,15 @@ class ModeCubit extends Cubit<ModesState> {
       switch (state.heatMode) {
         case HeatMode.manual:
           if (state.heatLevel > 0) {
+            // НАМЕРЕННО без await: восстановление обоих сидений не должно
+            // последовательно блокироваться на HVAC-записи первого. Logger
+            // marker внутри setHeatLevel/HvacService остаётся, persistence
+            // выполняется, emit состояния происходит синхронно через
+            // _updateUserState. Возможный rethrow от HvacService.setSeatHeatLevel
+            // здесь сознательно становится unhandled Future error (попадает в
+            // zone-handler) — крашить _initialize ради railroaded HVAC-ошибки
+            // на старте не хочется, а alternative await ломал бы параллельное
+            // восстановление driver/passenger.
             // ignore: discarded_futures
             setHeatLevel(state.userType, state.heatLevel);
           }
@@ -286,10 +299,12 @@ class ModeCubit extends Cubit<ModesState> {
               await _resolveSelectedPresetSettings(state.userType);
           if (presetSettings == null) {
             // Нет валидного preset — откат на manual+0.
+            // Используем публичный setHeatLevel, чтобы HVAC реально получил level=0:
+            // прямой _modeService.setHeatLevel оставлял бы железо греть последним
+            // значением, выставленным в предыдущей сессии (рассинхрон UI и HVAC).
             await _modeService.setMode(state.userType, HeatMode.manual);
-            _updateUserState(state.userType,
-                mode: HeatMode.manual, heatLevel: 0);
-            await _modeService.setHeatLevel(state.userType, 0);
+            _updateUserState(state.userType, mode: HeatMode.manual);
+            await setHeatLevel(state.userType, 0);
           } else {
             await _startAutoHeat(state.userType, settings: presetSettings);
           }

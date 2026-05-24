@@ -14,24 +14,20 @@
 // START_MODULE_MAP
 //   initializeBackgroundService - конфигурация (channel my_foreground, id 888) + startService
 //   onStart - @pragma('vm:entry-point'); ensureInitialized + setupServiceLocator + Logger marker
-//   _startRuntimeConnection - plugin sensor callback + connect + automotive_connected flag
+//   _startRuntimeConnection - sensor callback + HvacService.initialize (in-flight guard) + automotive_connected flag
 //   _retryRuntimeStart - bounded retry wrapper delegated from BackgroundRuntimeController
-//   _modeCubit - ModeCubit, поднятый в background-изоляте
-//   _runtimeController - BackgroundRuntimeController lifecycle owner
 //   _maxRestartAttempts - retry limit для restart-backoff
 //   stopBackgroundService - отправка stopService command в background isolate
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-5: lifecycle вынесен в BackgroundRuntimeController]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers foreground-service lifecycle]
+//   LAST_CHANGE: [v1.3.0 - Use HvacService.initialize() (in-flight guarded) вместо прямого plugin.connect(), удалён dead-code seat-shutdown в UI-изоляте]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-5: lifecycle вынесен в BackgroundRuntimeController]
 // END_CHANGE_SUMMARY
 
 import 'dart:async';
 import 'dart:ui';
 
-import 'package:android_automotive_plugin/android_automotive_plugin.dart';
-import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/di/service_locator.dart';
 import 'package:autoheat/src/services/background_runtime_controller.dart';
@@ -79,15 +75,13 @@ Future<void> initializeBackgroundService() async {
   }
 }
 
-ModeCubit? _modeCubit;
-BackgroundRuntimeController? _runtimeController;
 const int _maxRestartAttempts = 3;
 
 @pragma('vm:entry-point')
 onStart(ServiceInstance service) async {
   // START_BLOCK_ON_START
   BackgroundRuntimeController? runtimeController;
-  AndroidAutomotivePlugin? plugin;
+  HvacService? hvacService;
 
   try {
     DartPluginRegistrant.ensureInitialized();
@@ -101,18 +95,16 @@ onStart(ServiceInstance service) async {
 
     await setupServiceLocator();
     final modeCubit = locator<ModeCubit>();
-    plugin = locator<HvacService>().androidAutomotivePlugin;
+    hvacService = locator<HvacService>();
 
-    _modeCubit = modeCubit;
     runtimeController = BackgroundRuntimeController(
       servicePort: servicePort,
       modePort: ModeCubitBackgroundModePort(modeCubit),
       maxRestartAttempts: _maxRestartAttempts,
     );
-    _runtimeController = runtimeController;
     runtimeController.registerStopHandler();
 
-    await _startRuntimeConnection(runtimeController, plugin);
+    await _startRuntimeConnection(runtimeController, hvacService);
 
     final completer = Completer<void>();
     Timer(Duration(seconds: 30), () {
@@ -124,11 +116,11 @@ onStart(ServiceInstance service) async {
     await completer.future;
   } catch (e) {
     final controller = runtimeController;
-    final retryPlugin = plugin;
-    if (controller != null && retryPlugin != null) {
+    final retryHvac = hvacService;
+    if (controller != null && retryHvac != null) {
       await controller.handleStartFailure(
         e,
-        retry: () => _retryRuntimeStart(controller, retryPlugin),
+        retry: () => _retryRuntimeStart(controller, retryHvac),
       );
     } else {
       Logger.error(
@@ -144,12 +136,17 @@ onStart(ServiceInstance service) async {
   // END_BLOCK_ON_START
 }
 
+// _startRuntimeConnection идёт через HvacService.initialize() (с in-flight guard),
+// а не вызывает plugin.connect() напрямую: иначе параллельный путь через
+// ModeCubit._initialize → seedCurrentTemperatureFromHvac → HvacService.initialize
+// мог бы выстрелить вторым concurrent connect на тот же AndroidAutomotivePlugin.
 Future<void> _startRuntimeConnection(
   BackgroundRuntimeController runtimeController,
-  AndroidAutomotivePlugin plugin,
+  HvacService hvacService,
 ) async {
-  plugin.onCarSensorEventCallback = runtimeController.handleIgnition;
-  await plugin.connect();
+  hvacService.androidAutomotivePlugin.onCarSensorEventCallback =
+      runtimeController.handleIgnition;
+  await hvacService.initialize();
 
   final prefs = await SharedPreferences.getInstance();
   await prefs.setBool('automotive_connected', true);
@@ -159,26 +156,25 @@ Future<void> _startRuntimeConnection(
 
 Future<void> _retryRuntimeStart(
   BackgroundRuntimeController runtimeController,
-  AndroidAutomotivePlugin plugin,
+  HvacService hvacService,
 ) async {
   try {
-    await _startRuntimeConnection(runtimeController, plugin);
+    await _startRuntimeConnection(runtimeController, hvacService);
   } catch (e) {
     await runtimeController.handleStartFailure(
       e,
-      retry: () => _retryRuntimeStart(runtimeController, plugin),
+      retry: () => _retryRuntimeStart(runtimeController, hvacService),
     );
   }
 }
 
 Future<void> stopBackgroundService() async {
+  // _modeCubit / _runtimeController присваиваются ТОЛЬКО в onStart, который
+  // выполняется в background-изоляте. Из UI-изолята эти top-level переменные
+  // всегда null, поэтому никакого "shutdown seats fallback" здесь делать нельзя.
+  // Просто шлём команду stopService — её ловит registerStopHandler в фоне и сам
+  // вызывает runtimeController.stopService() → shutdownSeats → stopSelf.
   try {
-    final modeCubit = _modeCubit;
-    if (_runtimeController == null && modeCubit != null) {
-      await modeCubit.setHeatLevel(UserType.driver, 0);
-      await modeCubit.setHeatLevel(UserType.passenger, 0);
-    }
-
     final service = FlutterBackgroundService();
     service.invoke('stopService');
   } catch (e) {

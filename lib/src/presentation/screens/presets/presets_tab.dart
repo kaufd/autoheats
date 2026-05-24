@@ -123,7 +123,10 @@ class _PresetsTabState extends State<PresetsTab> {
     Preset? editingPreset;
     if (_editingPresetId != null) {
       for (final p in presetState.presets) {
-        if (p.id == _editingPresetId) {
+        // state.presets хранит driver+passenger вперемешку; матч только по id
+        // теоретически мог бы поднять чужой пресет при коллизии id (id =
+        // ms timestamp). Явно сужаем до текущего сиденья.
+        if (p.userType == _selectedUser && p.id == _editingPresetId) {
           editingPreset = p;
           break;
         }
@@ -200,12 +203,16 @@ class _PresetsTabState extends State<PresetsTab> {
   }
 
   Future<void> _onApply(Preset preset) async {
+    Preset toApply = preset;
     if (_editingPresetId == preset.id && _draftSettings != null) {
+      // Сохраняем dirty draft и применяем уже обновлённую версию пресета —
+      // иначе AutoHeatService получит старые settings, хотя storage обновлён.
+      toApply = preset.copyWith(settings: _draftSettings!);
       await context
           .read<PresetCubit>()
           .updatePresetSettings(preset, _draftSettings!);
     }
-    widget.onPresetApplied(preset);
+    widget.onPresetApplied(toApply);
   }
 
   Future<void> _onDelete(Preset preset) async {
@@ -285,7 +292,7 @@ class _PresetsTabState extends State<PresetsTab> {
     if (id == null) return;
     Preset? preset;
     for (final p in presetState.presets) {
-      if (p.id == id) {
+      if (p.userType == _selectedUser && p.id == id) {
         preset = p;
         break;
       }
@@ -340,7 +347,7 @@ class _PresetsTabState extends State<PresetsTab> {
   ManualHeatSettings _currentEditorSettings(PresetState presetState) {
     if (_editingPresetId != null) {
       for (final p in presetState.presets) {
-        if (p.id == _editingPresetId) {
+        if (p.userType == _selectedUser && p.id == _editingPresetId) {
           return p.settings;
         }
       }

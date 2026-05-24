@@ -34,6 +34,7 @@ import 'dart:convert';
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:autoheat/src/models/preset.dart';
+import 'package:autoheat/src/utils/logger.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PresetService {
@@ -60,6 +61,16 @@ class PresetService {
       final List<dynamic> presetsList = json.decode(presetsJson);
       return presetsList.map((json) => Preset.fromJson(json)).toList();
     } catch (e) {
+      // Битый JSON в SharedPreferences (например, после изменения схемы Preset).
+      // Возвращаем пустой список, но шумим в лог — иначе пользователь молча
+      // теряет пресеты и не понимает, почему.
+      Logger.warn(
+        'PresetService',
+        'getPresets',
+        'BLOCK_GET_PRESETS',
+        'failed to decode persisted presets; returning empty list',
+        {'userType': userType.name, 'error': e},
+      );
       return [];
     }
   }
