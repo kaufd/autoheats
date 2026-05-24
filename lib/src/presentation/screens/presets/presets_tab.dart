@@ -142,9 +142,14 @@ class _PresetsTabState extends State<PresetsTab> {
         ? 'Новый пресет'
         : (editingPreset?.name ?? activePreset?.name);
 
-    final isActiveShown = !_isNewPresetDraft &&
-        editingPreset == null &&
-        activePreset != null;
+    // Маркер «(активен)» отражает «показанный в редакторе пресет == активный».
+    // Поэтому он остаётся при edit-режиме активного пресета, но скрывается, если
+    // мы редактируем НЕактивный пресет или создаём новый.
+    final shownPresetId = _isNewPresetDraft
+        ? null
+        : (editingPreset?.id ?? activePreset?.id);
+    final isActiveShown =
+        activePreset != null && shownPresetId == activePreset.id;
 
     // Save имеет цель только когда:
     //  - new-preset draft (имя спросим в диалоге), или
