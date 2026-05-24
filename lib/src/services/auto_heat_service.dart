@@ -192,7 +192,14 @@ class AutoHeatService {
       return;
     }
 
-    // Уже работает — проверяем, не пора ли step-down
+    // Для пресетов: фиксированное расписание, без адаптации по температуре.
+    // Max-timer уже запланирован в _stepDownLevel — он отработает каскад
+    // 3→2→1→0 строго по заданным длительностям.
+    if (_manualSettingsByUser.containsKey(userType)) {
+      return;
+    }
+
+    // Авто-режим: адаптивный step-down по температуре.
     final temp = _currentTemperature!;
 
     // Если температура ушла в диапазон, где естественный уровень ниже текущего —
@@ -348,14 +355,10 @@ class AutoHeatService {
       return 0;
     }
 
-    final t = settings.temperatureThreshold;
     return HeatSequence(
       level3Duration: durationFor(3),
       level2Duration: durationFor(2),
       level1Duration: durationFor(1),
-      level3StepDownCelsius: t - 10,
-      level2StepDownCelsius: t - 4,
-      level1StepDownCelsius: t,
     );
   }
 
