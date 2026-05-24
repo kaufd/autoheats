@@ -189,6 +189,7 @@ Suggested fix direction:
 
 ### FA-008 — DI setup неидемпотентен внутри одного isolate
 
+Status: addressed in Phase-4 Slice-8 by making `setupServiceLocator()` idempotent with `isRegistered` guards and adding `test/unit/service_locator_test.dart`.
 Priority: medium  
 Modules: `M-DI`, `M-MAIN`, `M-BACKGROUND`
 

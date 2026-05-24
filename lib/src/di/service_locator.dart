@@ -5,7 +5,7 @@
 //            единый bootstrap DI для UI- и background-изолята.
 //   SCOPE: setupServiceLocator (async), глобальный locator.
 //   DEPENDS: M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT, M-CABIN-TEMPERATURE
-//   LINKS: M-DI, V-M-DI, DF-BACKGROUND, DF-INIT-TEMP
+//   LINKS: M-DI, V-M-DI, DF-BACKGROUND, DF-INIT-TEMP, FA-008
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -13,12 +13,14 @@
 // START_MODULE_MAP
 //   locator - GetIt.instance, глобальный контейнер зависимостей
 //   setupServiceLocator - регистрирует SharedPreferences, сервисы и кубиты;
-//                         вызывается И в UI-, И в background-изоляте
+//                         идемпотентен в рамках isolate; вызывается И в UI-, И в background-изоляте
+//   _registerSingletonIfAbsent - lazy guard вокруг GetIt.registerSingleton
+//   _registerValueIfAbsent - guard для уже созданного async SharedPreferences
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-3: регистрируется CabinTemperatureCubit]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-2: ModeCubit получает ManualSettingsService]
+//   LAST_CHANGE: [v1.3.0 - Phase-4 Slice-8: setupServiceLocator is idempotent per isolate]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-3: регистрируется CabinTemperatureCubit]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
@@ -41,48 +43,59 @@ final locator = GetIt.instance;
 
 Future<void> setupServiceLocator() async {
   final sharedPreferences = await SharedPreferences.getInstance();
-  locator.registerSingleton<SharedPreferences>(sharedPreferences);
+  _registerValueIfAbsent<SharedPreferences>(sharedPreferences);
 
-  locator.registerSingleton<HvacService>(HvacService());
+  _registerSingletonIfAbsent<HvacService>(() => HvacService());
 
-  locator.registerSingleton<ThemeService>(
-      ThemeService(locator<SharedPreferences>()));
+  _registerSingletonIfAbsent<ThemeService>(
+      () => ThemeService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<SettingsService>(
-      SettingsService(locator<SharedPreferences>()));
+  _registerSingletonIfAbsent<SettingsService>(
+      () => SettingsService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<ManualSettingsService>(
-      ManualSettingsService(locator<SharedPreferences>()));
+  _registerSingletonIfAbsent<ManualSettingsService>(
+      () => ManualSettingsService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<PresetService>(
-      PresetService(locator<SharedPreferences>()));
+  _registerSingletonIfAbsent<PresetService>(
+      () => PresetService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<ModeService>(
-      ModeService(locator<SharedPreferences>()));
+  _registerSingletonIfAbsent<ModeService>(
+      () => ModeService(locator<SharedPreferences>()));
 
-  locator.registerSingleton<ThemeConfigurator>(ThemeConfigurator());
+  _registerSingletonIfAbsent<ThemeConfigurator>(() => ThemeConfigurator());
 
-  locator.registerSingleton<ThemeCubit>(
-    ThemeCubit(locator<ThemeService>(), locator<ThemeConfigurator>()),
+  _registerSingletonIfAbsent<ThemeCubit>(
+    () => ThemeCubit(locator<ThemeService>(), locator<ThemeConfigurator>()),
   );
 
-  locator.registerSingleton<ModeCubit>(
-    ModeCubit(
+  _registerSingletonIfAbsent<ModeCubit>(
+    () => ModeCubit(
       locator<ModeService>(),
       locator<HvacService>(),
       locator<ManualSettingsService>(),
     ),
   );
 
-  locator.registerSingleton<CabinTemperatureCubit>(
-    CabinTemperatureCubit(locator<HvacService>()),
+  _registerSingletonIfAbsent<CabinTemperatureCubit>(
+    () => CabinTemperatureCubit(locator<HvacService>()),
   );
 
-  locator.registerSingleton<SettingsCubit>(
-      SettingsCubit(locator<SettingsService>()));
+  _registerSingletonIfAbsent<SettingsCubit>(
+      () => SettingsCubit(locator<SettingsService>()));
 
-  locator.registerSingleton<ManualSettingsCubit>(
-      ManualSettingsCubit(locator<ManualSettingsService>()));
+  _registerSingletonIfAbsent<ManualSettingsCubit>(
+      () => ManualSettingsCubit(locator<ManualSettingsService>()));
 
-  locator.registerSingleton<PresetCubit>(PresetCubit(locator<PresetService>()));
+  _registerSingletonIfAbsent<PresetCubit>(
+      () => PresetCubit(locator<PresetService>()));
+}
+
+void _registerValueIfAbsent<T extends Object>(T instance) {
+  if (locator.isRegistered<T>()) return;
+  locator.registerSingleton<T>(instance);
+}
+
+void _registerSingletonIfAbsent<T extends Object>(T Function() create) {
+  if (locator.isRegistered<T>()) return;
+  locator.registerSingleton<T>(create());
 }

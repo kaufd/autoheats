@@ -424,7 +424,7 @@
 
     <M-DI NAME="ServiceLocator" TYPE="UTILITY" LAYER="3" ORDER="2" STATUS="implemented">
       <contract>
-        <purpose>Регистрация SharedPreferences и всех сервисов/кубитов в GetIt.</purpose>
+        <purpose>Регистрация SharedPreferences и всех сервисов/кубитов в GetIt; idempotent per isolate.</purpose>
         <inputs>
           <param name="-" type="-" />
         </inputs>
@@ -434,7 +434,7 @@
         <errors />
       </contract>
       <interface>
-        <export-setupServiceLocator PURPOSE="Async bootstrap DI; должен вызываться И в UI-, И в background-изоляте" />
+        <export-setupServiceLocator PURPOSE="Async bootstrap DI; idempotent через isRegistered guards; должен вызываться И в UI-, И в background-изоляте" />
         <export-locator PURPOSE="GetIt.instance" />
       </interface>
       <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
@@ -785,6 +785,7 @@
       <step-8 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">FA-006: BackgroundRuntimeController управляет stopService, awaited ignition OFF shutdown и bounded restart-backoff.</step-8>
       <step-9 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">FA-009/FA-012: SettingsScreen head-unit smoke, wrap-safe ThemeSelector, PresetsSettings без unbounded vertical Expanded, ManualSettingsState clearError.</step-9>
       <step-10 module="M-PLUGIN" status="done" verification="V-M-HVAC">FA-007: local plugin patch awaits connect/setHvac*Property; HvacService tests assert connect/write error propagation.</step-10>
+      <step-11 module="M-DI" status="done" verification="V-M-DI">FA-008: setupServiceLocator idempotent per isolate via isRegistered guards; UI and background paths continue sharing the same bootstrap.</step-11>
     </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">

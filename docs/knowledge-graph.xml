@@ -15,12 +15,12 @@
     </M-MAIN>
 
     <M-DI NAME="ServiceLocator" TYPE="UTILITY" STATUS="implemented">
-      <purpose>GetIt-регистрация всех сервисов и кубитов</purpose>
+      <purpose>GetIt-регистрация всех сервисов и кубитов; idempotent per isolate</purpose>
       <path>lib/src/di/service_locator.dart</path>
       <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
       <verification-ref>V-M-DI</verification-ref>
       <annotations>
-        <fn-setupServiceLocator PURPOSE="Регистрирует SharedPreferences и все singletons; вызывается и в UI- и в background-изоляте" />
+        <fn-setupServiceLocator PURPOSE="Регистрирует SharedPreferences и все singletons через isRegistered guards; вызывается и в UI- и в background-изоляте" />
         <const-locator PURPOSE="GetIt.instance" />
       </annotations>
     </M-DI>
