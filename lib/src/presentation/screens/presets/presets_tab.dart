@@ -5,7 +5,7 @@
 //   SCOPE: local state (selectedUser, editingPresetId, draftSettings, isNewPresetDraft),
 //          wires PresetEditor + PresetList + UserSegmentToggle, delegates apply to parent,
 //          name запрашивается через SavePresetDialog после нажатия Сохранить.
-//   DEPENDS: M-UI-PRESETS, M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-ENUMS, M-THEME
+//   DEPENDS: M-UI-PRESETS, M-PRESET, M-MODE, M-ENUMS, M-THEME
 //   LINKS: M-UI-PRESETS, V-M-UI-PRESETS, DF-PRESET-APPLY, FA-001, FA-011
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
@@ -19,7 +19,7 @@
 //   _PresetsTabState._onUserChanged - reset editor/draft when toggling user
 //   _PresetsTabState._onEdit - clone preset settings into draft, set editingPresetId
 //   _PresetsTabState._onApply - save dirty edits if same preset, then onPresetApplied (E1)
-//   _PresetsTabState._onDelete - delete preset, clear draft if was editing it
+//   _PresetsTabState._onDelete - delete preset, clear draft, fallback manual+0 if active preset
 //   _PresetsTabState._onNewPreset - open empty/default draft (title = «Новый пресет»)
 //   _PresetsTabState._onSave - update в edit-режиме или show SavePresetDialog для имени в new-режиме
 //   _PresetsTabState._ensureDraftTarget - первое движение слайдера из idle поднимает edit/new режим
@@ -27,12 +27,13 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Имя нового пресета через SavePresetDialog после Save (вместо inline TextField)]
-//   PREVIOUS_CHANGE: [v1.0.0 - Initial merged Presets tab]
+//   LAST_CHANGE: [v1.2.0 - Mode-source decoupling: delete-active-preset fallback to manual+0, drop ManualSettingsCubit import]
+//   PREVIOUS_CHANGE: [v1.1.0 - Имя нового пресета через SavePresetDialog после Save (вместо inline TextField)]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
+import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
@@ -210,13 +211,40 @@ class _PresetsTabState extends State<PresetsTab> {
   }
 
   Future<void> _onDelete(Preset preset) async {
-    await context.read<PresetCubit>().deletePreset(preset.id, preset.userType);
+    final modeCubit = context.read<ModeCubit>();
+    final presetCubit = context.read<PresetCubit>();
+
+    final wasActiveForUser =
+        presetCubit.state.selectedPresets[preset.userType]?.id == preset.id;
+    final currentModeName = modeCubit.getModeByUser(preset.userType);
+    final wasInPresetsMode = currentModeName == HeatMode.presets.name;
+
+    await presetCubit.deletePreset(preset.id, preset.userType);
     if (!mounted) return;
+
     if (_editingPresetId == preset.id) {
       setState(() {
         _editingPresetId = null;
         _draftSettings = null;
       });
+    }
+
+    if (wasActiveForUser && wasInPresetsMode) {
+      // Активный пресет удалён, пока user в presets-режиме — алгоритм остался бы
+      // без источника settings (PresetCubit уже очистил selectedPresetId внутри
+      // deletePreset). Явно откатываем в manual+0 и сообщаем.
+      await modeCubit.setMode(preset.userType, HeatMode.manual.name);
+      await modeCubit.setHeatLevel(preset.userType, 0);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Активный пресет удалён — режим переключён в ручной',
+            style: TextStyle(color: context.themeColors.textButtonSelected),
+          ),
+          backgroundColor: context.themeColors.primary,
+        ),
+      );
     }
   }
 
