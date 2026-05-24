@@ -1,12 +1,36 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="ru.kaufd.autoheat">
-    <!-- Разрешения для foreground service -->
+    <!-- Foreground-service подогрева сидений -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- autoStart on boot (flutter_background_service AndroidConfiguration.autoStartOnBoot) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <!-- android.car.* API: HVAC (setSeatHeatLevel, getInsideTemperature),
+         ignition sensor (CAR_POWER), vendor extensions через плагин.
+         Перенесены из autoheat_old; набор соответствует тому, что реально
+         использует AndroidAutomotivePlugin / CarHvacManager / sensor_manager. -->
+    <uses-permission android:name="android.car.permission.CONTROL_CAR_CLIMATE" />
+    <uses-permission android:name="android.car.permission.CAR_POWER" />
+    <uses-permission android:name="android.car.permission.CAR_POWERTRAIN" />
+    <uses-permission android:name="android.car.permission.CAR_VENDOR_EXTENSION" />
+    <uses-permission android:name="android.car.permission.CAR_INFO" />
+
+    <!-- Vendor-specific protocol bridge на голове Changan, требуется плагином -->
+    <uses-permission android:name="coagent.permission.SEND_PROTOCOL" />
+
+    <!-- Динамические BroadcastReceiver'ы от системного AirConditioner-сервиса
+         на Android 13+ требуют декларации signature-permission, иначе getBroadcast
+         падает с SecurityException. Объявляем и используем — так же, как делал autoheat_old. -->
+    <permission
+        android:name="com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:protectionLevel="signature" />
+    <uses-permission android:name="com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+
     <application
-        android:label="autoheat"
+        android:label="AutoHeat v3"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

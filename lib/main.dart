@@ -54,7 +54,7 @@ class AutoheatApp extends StatelessWidget {
           final themeCubit = context.read<ThemeCubit>();
 
           return MaterialApp(
-            title: 'AutoHeat',
+            title: 'AutoHeat v3',
             theme: themeCubit.getCurrentTheme(context),
             themeAnimationDuration: Duration.zero,
             home: const AppContent(),
