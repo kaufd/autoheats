@@ -19,7 +19,6 @@ import 'package:autoheat/src/cubit/mode_state_cubit.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/services/auto_heat_service.dart';
-import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/preset_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,7 +68,6 @@ void main() {
     final cubit = ModeCubit(
       ModeService(prefs),
       fakeHvac,
-      ManualSettingsService(prefs),
       presetService,
     );
     addTearDown(cubit.close);
@@ -170,21 +168,23 @@ void main() {
 
   // START_BLOCK_APPLY_PRESET
   test('scenario-9: applyPreset выставляет mode/level, prefs и HVAC', () async {
-    final (cubit, fakeHvac, prefs, presetService) = await buildCubit({});
+    final (cubit, fakeHvac, prefs, _) = await buildCubit({});
 
     await cubit.applyPreset(preset());
 
     expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.presets);
     expect(prefs.getString('driver_mode'), 'presets');
-    expect(await presetService.getSelectedPresetId(UserType.driver),
-        'preset-driver');
+    // removed after mode-source decoupling: ModeCubit no longer writes
+    // selectedPresetId (owned solely by PresetCubit).
+    // expect(await presetService.getSelectedPresetId(UserType.driver),
+    //     'preset-driver');
     expect(fakeHvac.recordedSetSeatHeatCalls, [
       (userType: UserType.driver, level: 0),
     ]);
     expect(
       logs.lines,
       contains(
-          '[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=driver, mode=presets, level=0, presetId=preset-driver'),
+          '[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=driver, presetId=preset-driver'),
     );
   });
 
@@ -400,8 +400,8 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('driver_mode', 'presets');
     await prefs.setInt('driver_heat_level', 0);
-    await prefs.setString('selected_preset_id_driver', 'p-init');
-    await prefs.setString('presets_driver', json.encode([
+    await prefs.setString('driver_selected_preset_id', 'p-init');
+    await prefs.setString('driver_presets', json.encode([
       {
         'id': 'p-init',
         'name': 'InitPreset',
@@ -416,7 +416,6 @@ void main() {
     final cubit = ModeCubit(
       ModeService(prefs),
       fakeHvac,
-      ManualSettingsService(prefs),
       presetService,
     );
     addTearDown(cubit.close);
@@ -441,7 +440,6 @@ void main() {
     final cubit = ModeCubit(
       ModeService(prefs),
       fakeHvac,
-      ManualSettingsService(prefs),
       presetService,
     );
     addTearDown(cubit.close);

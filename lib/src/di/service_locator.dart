@@ -72,7 +72,6 @@ Future<void> setupServiceLocator() async {
     () => ModeCubit(
       locator<ModeService>(),
       locator<HvacService>(),
-      locator<ManualSettingsService>(),
       locator<PresetService>(),
     ),
   );
