@@ -24,7 +24,6 @@
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
-import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
@@ -166,31 +165,17 @@ class AppContentState extends State<AppContent>
   }
 
   // START_CONTRACT: _applyPreset
-  //   PURPOSE: Применить Preset к manual-settings state и runtime ModeCubit/HVAC.
+  //   PURPOSE: Применить пользовательский Preset к runtime через ModeCubit и PresetCubit.
   //   INPUTS: { preset: Preset }
   //   OUTPUTS: { Future<void> }
-  //   SIDE_EFFECTS: ManualSettings persistence, ModeCubit.applyPreset, PresetCubit.applyPreset, SnackBar.
+  //   SIDE_EFFECTS: ModeCubit.applyPreset (mode=presets + AutoHeatService restart),
+  //                 PresetCubit.applyPreset (selectedPresetId + lastUsed), SnackBar.
   //   LINKS: M-UI-PRESETS, M-PRESET, M-MODE, M-HVAC, DF-PRESET-APPLY, FA-001, FA-011
   // END_CONTRACT: _applyPreset
   Future<void> _applyPreset(Preset preset) async {
     // START_BLOCK_APPLY_PRESET
-    final manualSettingsCubit = context.read<ManualSettingsCubit>();
     final modeCubit = context.read<ModeCubit>();
     final presetCubit = context.read<PresetCubit>();
-
-    if (preset.userType == UserType.driver) {
-      final currentState = manualSettingsCubit.state;
-      await manualSettingsCubit.applyPresetSettings(
-        preset.settings,
-        currentState.passengerSettings,
-      );
-    } else {
-      final currentState = manualSettingsCubit.state;
-      await manualSettingsCubit.applyPresetSettings(
-        currentState.driverSettings,
-        preset.settings,
-      );
-    }
 
     await modeCubit.applyPreset(preset);
     await presetCubit.applyPreset(preset);
@@ -199,9 +184,6 @@ class AppContentState extends State<AppContent>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        // SnackBar foreground в теме задан под dark surfaceVariant; в белой теме
-        // он остаётся светлым и сливается с primary-фоном. Явно задаём текст
-        // через тот же контрастный токен, что и у Save / Новый пресет.
         content: Text(
           'Пресет "${preset.name}" применен для ${preset.userType == UserType.driver ? 'водителя' : 'пассажира'}',
           style: TextStyle(color: context.themeColors.textButtonSelected),
