@@ -282,6 +282,7 @@
         <type-2>trace (порядок вызовов callback через FakeAsync.elapse)</type-2>
         <type-3>forbidden (callback не вызывается после stopAutoHeat / после завершения)</type-3>
         <type-4>settings-regression (ManualHeatSettings duration/threshold меняют runtime sequence)</type-4>
+        <type-5>noise-regression (repeated same-plan sensor events do not restart schedule)</type-5>
       </evidence-types>
       <setup>AutoHeatService — синглтон. В каждом tearDown обязательно AutoHeatService().dispose(), чтобы сбросить listener/timer/current-temperature состояние.</setup>
       <scenarios>
@@ -297,12 +298,18 @@
         <scenario-10 kind="success">Custom ManualHeatSettings: threshold=5.0, durations level3=3m/level2=2m/level1=1m, temperature=4.0 → trace [3,2,1,0] именно по 3/2/1 минутам.</scenario-10>
         <scenario-11 kind="boundary">Custom threshold: temperature == threshold → callback(0) сразу и Timer не создаётся.</scenario-11>
         <scenario-12 kind="success">initialize(fakeHvac) + seedCurrentTemperatureFromHvac() при programmedTemperature=-3.0 → startAutoHeat(driver) сразу callback(3) без sensor event.</scenario-12>
+        <scenario-13 kind="invariant">Repeated same fallback range events: cold -3.0 → start callback(3), затем -3.2/-2.9 не добавляют callback(3) и исходный 6m Timer доходит до callback(2).</scenario-13>
+        <scenario-14 kind="success">Different fallback sequence: cold -3.0 → warm 7.0 рестартит ровно один раз и дальше идёт по warm durations 2/2/6.</scenario-14>
+        <scenario-15 kind="invariant">Repeated off events: active sequence → 12.0 даёт callback(0), последующие 13.0/14.0 не спамят callback(0).</scenario-15>
+        <scenario-16 kind="invariant">Explicit repeated startAutoHeat всё ещё рестартит с callback(3), чтобы сохранить semantics manual mode transition/idempotency.</scenario-16>
+        <scenario-17 kind="invariant">Custom ManualHeatSettings: repeated below-threshold events с теми же durations не рестартят sequence.</scenario-17>
       </scenarios>
       <forbidden-markers>
         <forbidden-1>После прохождения [3,2,1,0] активных Timer'ов в FakeAsync НЕ должно остаться (fakeAsync.pendingTimers.isEmpty).</forbidden-1>
         <forbidden-2>После stopAutoHeat(userType) callback НЕ должен срабатывать ни разу при любой последующей elapse.</forbidden-2>
         <forbidden-3>Timer одного userType НЕ должен влиять на другого (см. scenario-6).</forbidden-3>
         <forbidden-4>callback(level) НЕ должен повторяться для одного и того же уровня в рамках одной последовательности (Set(captureList).length == 4 для полной последовательности).</forbidden-4>
+        <forbidden-5>Passive sensor event с тем же effective plan key НЕ должен отменять Timer и НЕ должен вызывать callback(3) повторно.</forbidden-5>
       </forbidden-markers>
       <required-log-markers>
         <marker-1>[AutoHeatService][startHeatSequence][BLOCK_START_HEAT_SEQUENCE] started | userType=$userType, level=3</marker-1>
@@ -315,6 +322,7 @@
         <assertion-3>Сумма durations совпадает с HeatSequence из TemperatureConstants (cross-verification с V-M-CONSTANTS-TEMPERATURE) для fallback-пути без ManualHeatSettings.</assertion-3>
         <assertion-4>При ManualHeatSettings durations берутся по AutoHeatLevel.level, а temperatureThreshold заменяет TemperatureConstants off-range.</assertion-4>
         <assertion-5>Initial read через HvacService.getCabinTemperature публикуется в AutoHeatService до startAutoHeat или до восстановления persisted auto mode.</assertion-5>
+        <assertion-6>AutoHeatService сравнивает effective plan key (off или sequence durations): одинаковый passive key no-op; другой key controlled restart.</assertion-6>
       </required-trace-assertions>
       <wave-follow-up>Связка с ModeCubit (V-M-MODE wave-1): callback из AutoHeatService должен превращаться в setHeatLevel + setSeatHeatLevel на FakeHvacService.</wave-follow-up>
       <phase-follow-up>Smoke на голове с реальным датчиком при отрицательной температуре салона; проверить, что последовательность не сбрасывается из-за шумов сенсора.</phase-follow-up>

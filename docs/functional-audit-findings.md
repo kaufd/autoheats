@@ -117,6 +117,7 @@ Suggested fix direction:
 ### FA-005 — Частые события температуры могут бесконечно перезапускать auto sequence
 
 Priority: high  
+Status: addressed in Phase-4 Slice-4 by adding an effective-plan guard in `AutoHeatService`: passive sensor events with the same `off`/sequence key no-op, while explicit `startAutoHeat(...)` still restarts.
 Modules: `M-AUTO-HEAT`, `M-HVAC`  
 Related: `UC-002`, `DF-AUTO-HEAT`
 
@@ -130,10 +131,11 @@ Evidence:
 Observed consequence:
 - Если HVAC датчик шумит или часто эмитит одинаковый диапазон, сиденье может постоянно возвращаться на уровень 3 и никогда не дойти до 2/1/0.
 
-Suggested fix direction:
-- Хранить последний `TemperatureRange`/sequence per user и перезапускать только при изменении диапазона или явном mode transition.
-- Добавить debounce/throttle либо hysteresis around thresholds.
-- Добавить FakeAsync тест: repeated same-range temperature events не рестартят sequence.
+Resolution:
+- AutoHeatService хранит per-user effective plan key: `off` или `sequence:<level3>,<level2>,<level1>`.
+- Passive HVAC temperature events с тем же key не отменяют Timer и не вызывают повторный `callback(3)`/`callback(0)`.
+- Переход на другой key делает controlled restart, а explicit `startAutoHeat(...)` сохраняет прежнюю restart/idempotency семантику.
+- Verification: `test/unit/auto_heat_service_test.dart` scenarios 13-17.
 
 ---
 
@@ -287,7 +289,7 @@ Suggested ordering:
 1. `FA-001` + `FA-011`: addressed in Phase-4 Slice-1.
 2. `FA-002`: addressed in Phase-4 Slice-2.
 3. `FA-003`: addressed in Phase-4 Slice-3.
-4. `FA-005`: защитить auto sequence от sensor noise.
+4. `FA-005`: addressed in Phase-4 Slice-4.
 5. `FA-006`: отдельно hardened background lifecycle + head-unit smoke.
 6. `FA-009`/`FA-012`: UI/state cleanup.
 
@@ -295,6 +297,6 @@ Suggested ordering:
 
 - Widget smoke for `SettingsScreen` at target head-unit size.
 - Unit/integration test for `DF-PRESET-APPLY`: tap/apply preset causes `ModeCubit.setHeatLevel` and `HvacService.setSeatHeatLevel`.
-- FakeAsync test: repeated same-range temperature events do not restart sequence.
+- FakeAsync test: repeated same-range temperature events do not restart sequence — addressed in Phase-4 Slice-4 (`test/unit/auto_heat_service_test.dart` scenario-13).
 - Temperature display test: addressed in Phase-4 Slice-3 (`test/widget/cabin_temperature_display_test.dart`).
 - Background service manual smoke checklist for stop/restart/ignition OFF.

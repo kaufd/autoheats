@@ -4,10 +4,11 @@
 //   PURPOSE: Реализация авторежима — по температуре салона запускает расписание
 //            уровней подогрева 3->2->1->0 индивидуально для driver/passenger.
 //   SCOPE: подписка на HvacService cabin-temperature multi-listener,
-//          initial temperature seed, per-UserType Timer-каскады,
-//          startAutoHeat/stopAutoHeat, optional ManualHeatSettings runtime sequence.
+//          initial temperature seed, effective-plan guard от sensor noise,
+//          per-UserType Timer-каскады, startAutoHeat/stopAutoHeat,
+//          optional ManualHeatSettings runtime sequence.
 //   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS, M-LOGGER
-//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP, FA-002, FA-003
+//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP, FA-002, FA-003, FA-005
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -21,9 +22,10 @@
 //   currentTemperature - геттер последней известной температуры салона
 //   startAutoHeat(UserType, callback, settings?) - регистрация callback + optional custom settings
 //   stopAutoHeat(UserType) - отмена Timer'а и удаление callback/settings для UserType
-//   _handleCabinTemperature - listener target, cache + пересчёт активных users
+//   _handleCabinTemperature - listener target, cache + passive пересчёт активных users
 //   _updateAutoHeatForAllUsers - пересчёт расписания для всех активных UserType
-//   _updateAutoHeatForUser - отмена старого Timer'а и старт нового расписания
+//   _updateAutoHeatForUser - effective-plan guard, отмена Timer'а и старт нового расписания
+//   _planKeyFor - stable key: off или sequence durations для sensor-noise guard
 //   _startHeatSequence - callback(3) и Logger marker BLOCK_START_HEAT_SEQUENCE
 //   _scheduleNextLevel - Timer-переходы 2->1->0 + marker BLOCK_SCHEDULE_NEXT_LEVEL
 //   _getSequence - custom ManualHeatSettings sequence или TemperatureConstants fallback
@@ -31,8 +33,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.3.0 - Phase-4 Slice-3: подписка на HvacService multi-listener и initial seed]
-//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-2: ManualHeatSettings duration/threshold drive auto runtime]
+//   LAST_CHANGE: [v1.4.0 - Phase-4 Slice-4: effective-plan guard от sensor noise]
+//   PREVIOUS_CHANGE: [v1.3.0 - Phase-4 Slice-3: подписка на HvacService multi-listener и initial seed]
 // END_CHANGE_SUMMARY
 
 import 'dart:async';
@@ -54,6 +56,7 @@ class AutoHeatService {
   final Map<UserType, Timer?> _heatTimers = {};
   final Map<UserType, Function(int)> _heatLevelCallbacks = {};
   final Map<UserType, ManualHeatSettings> _manualSettingsByUser = {};
+  final Map<UserType, String> _activePlanKeys = {};
 
   void initialize(HvacService hvacService) {
     final previousHvacService = _hvacService;
@@ -89,7 +92,7 @@ class AutoHeatService {
 
   void _handleCabinTemperature(double temperature) {
     _currentTemperature = temperature;
-    _updateAutoHeatForAllUsers();
+    _updateAutoHeatForAllUsers(allowSamePlanRestart: false);
   }
 
   // START_CONTRACT: startAutoHeat
@@ -110,7 +113,8 @@ class AutoHeatService {
     } else {
       _manualSettingsByUser.remove(userType);
     }
-    _updateAutoHeatForUser(userType);
+    _activePlanKeys.remove(userType);
+    _updateAutoHeatForUser(userType, allowSamePlanRestart: true);
   }
 
   // START_CONTRACT: stopAutoHeat
@@ -126,6 +130,7 @@ class AutoHeatService {
     _heatTimers[userType] = null;
     _heatLevelCallbacks.remove(userType);
     _manualSettingsByUser.remove(userType);
+    _activePlanKeys.remove(userType);
     Logger.info(
       'AutoHeatService',
       'stopAutoHeat',
@@ -136,21 +141,33 @@ class AutoHeatService {
     // END_BLOCK_STOP
   }
 
-  void _updateAutoHeatForAllUsers() {
+  void _updateAutoHeatForAllUsers({required bool allowSamePlanRestart}) {
     for (final userType in _heatLevelCallbacks.keys) {
-      _updateAutoHeatForUser(userType);
+      _updateAutoHeatForUser(
+        userType,
+        allowSamePlanRestart: allowSamePlanRestart,
+      );
     }
   }
 
-  void _updateAutoHeatForUser(UserType userType) {
+  void _updateAutoHeatForUser(
+    UserType userType, {
+    required bool allowSamePlanRestart,
+  }) {
     if (_currentTemperature == null) return;
 
     final callback = _heatLevelCallbacks[userType];
     if (callback == null) return;
 
+    final sequence = _getSequence(userType);
+    final planKey = _planKeyFor(sequence);
+    if (!allowSamePlanRestart && _activePlanKeys[userType] == planKey) {
+      return;
+    }
+
+    _activePlanKeys[userType] = planKey;
     _heatTimers[userType]?.cancel();
 
-    final sequence = _getSequence(userType);
     if (sequence == null) {
       callback(0);
       return;
@@ -225,6 +242,11 @@ class AutoHeatService {
     // END_BLOCK_SCHEDULE_NEXT_LEVEL
   }
 
+  String _planKeyFor(HeatSequence? sequence) {
+    if (sequence == null) return 'off';
+    return 'sequence:${sequence.level3Duration},${sequence.level2Duration},${sequence.level1Duration}';
+  }
+
   HeatSequence? _getSequence(UserType userType) {
     if (_currentTemperature == null) return null;
 
@@ -264,6 +286,7 @@ class AutoHeatService {
     _heatTimers.clear();
     _heatLevelCallbacks.clear();
     _manualSettingsByUser.clear();
+    _activePlanKeys.clear();
     _hvacService = null;
     _temperatureListener = null;
     _currentTemperature = null;

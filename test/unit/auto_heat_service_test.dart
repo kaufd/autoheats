@@ -5,9 +5,9 @@
 //   SCOPE: последовательности 3->2->1->0 по диапазонам, отмена при смене
 //          температуры, stopAutoHeat, независимость UserType, idempotency,
 //          поведение при неизвестной температуре, проброс через initialize,
-//          initial read через HvacService seed.
+//          initial read через HvacService seed, защита от sensor-noise restart.
 //   DEPENDS: M-AUTO-HEAT, M-HVAC, M-CONSTANTS-TEMPERATURE, M-ENUMS, M-MANUAL-SETTINGS
-//   LINKS: V-M-AUTO-HEAT
+//   LINKS: V-M-AUTO-HEAT, FA-005
 //   ROLE: TEST
 //   MAP_MODE: LOCALS
 // END_MODULE_CONTRACT
@@ -260,6 +260,134 @@ void main() {
       expect(fakeHvac.getCabinTemperatureCallCount, 1);
     });
   });
+
+  // START_BLOCK_SENSOR_NOISE_GUARD
+  test(
+      'scenario-13: repeated same fallback range events do not restart sequence',
+      () {
+    fakeAsync((async) {
+      final fakeHvac = FakeHvacService();
+      final captured = <int>[];
+
+      AutoHeatService().initialize(fakeHvac);
+      fakeHvac.emitTemperature(-3.0);
+      AutoHeatService().startAutoHeat(UserType.driver, captured.add);
+      expect(captured, [3]);
+
+      async.elapse(const Duration(minutes: 3));
+      fakeHvac.emitTemperature(-3.2);
+      fakeHvac.emitTemperature(-2.9);
+      expect(captured, [3],
+          reason: 'same cold plan must not callback(3) again');
+
+      async.elapse(const Duration(minutes: 3));
+      expect(captured, [3, 2], reason: 'original 6m timer was not reset');
+      async.elapse(const Duration(minutes: 4));
+      expect(captured, [3, 2, 1]);
+      async.elapse(const Duration(minutes: 10));
+      expect(captured, [3, 2, 1, 0]);
+      expect(async.nonPeriodicTimerCount, 0);
+    });
+  });
+
+  test('scenario-14: different fallback sequence restarts once', () {
+    fakeAsync((async) {
+      final fakeHvac = FakeHvacService();
+      final captured = <int>[];
+
+      AutoHeatService().initialize(fakeHvac);
+      fakeHvac.emitTemperature(-3.0); // cold: 6/4/10
+      AutoHeatService().startAutoHeat(UserType.driver, captured.add);
+      expect(captured, [3]);
+
+      async.elapse(const Duration(minutes: 3));
+      fakeHvac.emitTemperature(7.0); // warm: 2/2/6
+      expect(captured, [3, 3]);
+
+      async.elapse(const Duration(minutes: 2));
+      expect(captured, [3, 3, 2]);
+      async.elapse(const Duration(minutes: 2));
+      expect(captured, [3, 3, 2, 1]);
+      async.elapse(const Duration(minutes: 6));
+      expect(captured, [3, 3, 2, 1, 0]);
+      expect(async.nonPeriodicTimerCount, 0);
+    });
+  });
+
+  test('scenario-15: repeated off events emit callback zero once', () {
+    fakeAsync((async) {
+      final fakeHvac = FakeHvacService();
+      final captured = <int>[];
+
+      AutoHeatService().initialize(fakeHvac);
+      fakeHvac.emitTemperature(-3.0);
+      AutoHeatService().startAutoHeat(UserType.driver, captured.add);
+      expect(captured, [3]);
+
+      fakeHvac.emitTemperature(12.0);
+      expect(captured, [3, 0]);
+      fakeHvac.emitTemperature(13.0);
+      fakeHvac.emitTemperature(14.0);
+      expect(captured, [3, 0]);
+      async.elapse(const Duration(minutes: 30));
+      expect(captured, [3, 0]);
+      expect(async.nonPeriodicTimerCount, 0);
+    });
+  });
+
+  test(
+      'scenario-16: explicit repeated startAutoHeat still restarts from level 3',
+      () {
+    fakeAsync((async) {
+      final captured = <int>[];
+      AutoHeatService().setTemperature(-3.0);
+      AutoHeatService().startAutoHeat(UserType.driver, captured.add);
+      expect(captured, [3]);
+      async.elapse(const Duration(minutes: 3));
+
+      AutoHeatService().startAutoHeat(UserType.driver, captured.add);
+
+      expect(captured, [3, 3]);
+      async.elapse(const Duration(minutes: 6));
+      expect(captured, [3, 3, 2]);
+    });
+  });
+
+  test(
+      'scenario-17: custom settings repeated below-threshold events do not restart',
+      () {
+    fakeAsync((async) {
+      final fakeHvac = FakeHvacService();
+      final captured = <int>[];
+      final settings = ManualHeatSettings(
+        autoHeatLevels: const [
+          AutoHeatLevel(level: 1, duration: 1),
+          AutoHeatLevel(level: 2, duration: 2),
+          AutoHeatLevel(level: 3, duration: 3),
+        ],
+        temperatureThreshold: 5.0,
+      );
+
+      AutoHeatService().initialize(fakeHvac);
+      fakeHvac.emitTemperature(4.0);
+      AutoHeatService()
+          .startAutoHeat(UserType.driver, captured.add, settings: settings);
+      expect(captured, [3]);
+
+      async.elapse(const Duration(minutes: 1));
+      fakeHvac.emitTemperature(3.5);
+      fakeHvac.emitTemperature(4.5);
+      expect(captured, [3]);
+
+      async.elapse(const Duration(minutes: 2));
+      expect(captured, [3, 2]);
+      async.elapse(const Duration(minutes: 2));
+      expect(captured, [3, 2, 1]);
+      async.elapse(const Duration(minutes: 1));
+      expect(captured, [3, 2, 1, 0]);
+    });
+  });
+  // END_BLOCK_SENSOR_NOISE_GUARD
 
   // START_BLOCK_HVAC_WIRING
   test(
