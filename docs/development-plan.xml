@@ -224,7 +224,7 @@
         <export-stopAutoHeat PURPOSE="Отменить таймеры и удалить колбэк" />
         <export-setTemperature PURPOSE="Ручная установка температуры (для тестов/диагностики)" />
       </interface>
-      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS</depends>
+      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE</depends>
       <target>
         <source>lib/src/services/auto_heat_service.dart</source>
         <tests>test/unit/auto_heat_service_test.dart</tests>
@@ -262,7 +262,7 @@
         <export-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <export-ModesState PURPOSE="Список ModeState для driver+passenger" />
       </interface>
-      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-MANUAL-SETTINGS, M-PRESET</depends>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-PRESET</depends>
       <target>
         <source>lib/src/services/mode_service.dart</source>
         <source>lib/src/cubit/mode_cubit.dart</source>
@@ -307,36 +307,6 @@
       <verification-ref>V-M-CABIN-TEMPERATURE</verification-ref>
     </M-CABIN-TEMPERATURE>
 
-    <M-MANUAL-SETTINGS NAME="ManualSettingsDomain" TYPE="CORE_LOGIC" LAYER="2" ORDER="3" STATUS="implemented">
-      <contract>
-        <purpose>Хранение параметров ручного режима.</purpose>
-        <inputs>
-          <param name="ManualSettings" type="model" />
-        </inputs>
-        <outputs>
-          <param name="ManualSettings" type="model" />
-        </outputs>
-        <errors />
-      </contract>
-      <interface>
-        <export-ManualSettingsService PURPOSE="JSON-сериализация через SharedPreferences" />
-        <export-ManualSettingsCubit PURPOSE="Состояние ручных настроек; успешные операции очищают transient error" />
-        <export-ManualSettings PURPOSE="Модель @JsonSerializable" />
-        <export-ManualSettingsState.copyWith PURPOSE="State copy с explicit clearError для очистки stale UI errors" />
-      </interface>
-      <depends>M-ENUMS</depends>
-      <target>
-        <source>lib/src/services/manual_settings_service.dart</source>
-        <source>lib/src/cubit/manual_settings_cubit.dart</source>
-        <source>lib/src/models/manual_settings.dart</source>
-        <source>lib/src/models/manual_settings.g.dart</source>
-      </target>
-      <observability>
-        <log-prefix>[ManualSettings]</log-prefix>
-      </observability>
-      <verification-ref>V-M-MANUAL-SETTINGS</verification-ref>
-    </M-MANUAL-SETTINGS>
-
     <M-PRESET NAME="PresetDomain" TYPE="CORE_LOGIC" LAYER="3" ORDER="1" STATUS="implemented">
       <contract>
         <purpose>CRUD пользовательских пресетов, selected preset id per UserType и применение к ModeCubit.</purpose>
@@ -351,9 +321,9 @@
       <interface>
         <export-PresetService PURPOSE="JSON-CRUD пресетов и selected preset id per UserType в SharedPreferences" />
         <export-PresetCubit PURPOSE="Состояние списка и активного пресета per UserType" />
-        <export-Preset PURPOSE="Модель @JsonSerializable: settings + runtime heatMode/heatLevel" />
+        <export-Preset PURPOSE="Модель @JsonSerializable: settings + metadata" />
       </interface>
-      <depends>M-MODE, M-ENUMS, M-MANUAL-SETTINGS</depends>
+      <depends>M-MODE, M-ENUMS</depends>
       <target>
         <source>lib/src/services/preset_service.dart</source>
         <source>lib/src/cubit/preset_cubit.dart</source>
@@ -440,7 +410,7 @@
         <export-setupServiceLocator PURPOSE="Async bootstrap DI; idempotent через isRegistered guards; должен вызываться И в UI-, И в background-изоляте" />
         <export-locator PURPOSE="GetIt.instance" />
       </interface>
-      <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
+      <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
       <target>
         <source>lib/src/di/service_locator.dart</source>
         <source>lib/src/di/app_bloc_providers.dart</source>
@@ -557,7 +527,7 @@
       <interface>
         <export-BlockProviders.initiateBlocs PURPOSE="Массив BlocProvider'ов на базе locator-singletons" />
       </interface>
-      <depends>M-DI, M-THEME, M-MODE, M-CABIN-TEMPERATURE, M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET</depends>
+      <depends>M-DI, M-THEME, M-MODE, M-CABIN-TEMPERATURE, M-SETTINGS, M-PRESET</depends>
       <target>
         <source>lib/src/di/app_bloc_providers.dart</source>
       </target>
@@ -639,7 +609,7 @@
         <export-PresetList PURPOSE="Список пресетов с edit/apply/delete + Новый пресет" />
         <export-UserSegmentToggle PURPOSE="Driver/Passenger segmented control" />
       </interface>
-      <depends>M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-ENUMS, M-THEME</depends>
+      <depends>M-PRESET, M-MODE, M-ENUMS, M-THEME</depends>
       <target>
         <source>lib/src/presentation/screens/presets/</source>
       </target>
@@ -736,34 +706,7 @@
       <step-5 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Расписание авторежима</step-5>
       <step-6 module="M-MODE" status="done" verification="V-M-MODE">ModeService + ModeCubit</step-6>
       <step-7 module="M-SETTINGS" status="done" verification="V-M-SETTINGS">SettingsService + SettingsCubit</step-7>
-      <step-8 module="M-MANUAL-SETTINGS" status="done" verification="V-M-MANUAL-SETTINGS">ManualSettingsService + Cubit</step-8>
-      <step-9 module="M-PRESET" status="done" verification="V-M-PRESET">PresetService + Cubit</step-9>
-      <step-10 module="M-THEME" status="done" verification="V-M-THEME">ThemeService/Cubit/Configurator</step-10>
-      <step-11 module="M-DI" status="done" verification="V-M-DI">service_locator.dart</step-11>
-      <step-12 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">Foreground-service + onStart</step-12>
-      <step-13 module="M-ACCESSIBILITY" status="done" verification="V-M-ACCESSIBILITY">Системный callback handle</step-13>
-      <step-14 module="M-BLOC-PROVIDERS" status="done" verification="V-M-BLOC-PROVIDERS">app_bloc_providers.dart — список BlocProvider'ов для MultiBlocProvider</step-14>
-      <step-15 module="M-UI-APP" status="done" verification="V-M-UI-APP">AppContent — корневой контейнер навигации Heat/Presets/Settings</step-15>
-      <step-16 module="M-UI-HEAT" status="done" verification="V-M-UI-HEAT">Главный экран</step-16>
-      <step-17 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">Экран пресетов</step-17>
-      <step-18 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">Экран настроек</step-18>
-      <step-19 module="M-MAIN" status="done" verification="V-M-MAIN">main.dart — точка входа: setupServiceLocator → инициализация кубитов → accessibility/background-service → runApp(AutoheatApp)</step-19>
-    </Phase-1>
-
-    <Phase-2 name="Verification baseline" status="done">
-      <goal>Покрыть критические pure-функции и контракты сервисов unit-тестами; ввести семантическую разметку в исходники.</goal>
-      <step-1 module="M-CONSTANTS-TEMPERATURE" status="done" verification="V-M-CONSTANTS-TEMPERATURE">Тесты getTemperatureRange / getHeatSequence на граничных значениях — 23 теста</step-1>
-      <step-2 module="M-ENUMS" status="done" verification="V-M-ENUMS">Тесты round-trip enum.name ↔ fromString — 13 тестов</step-2>
-      <step-3 module="M-MODE" status="done" verification="V-M-MODE">Тесты ModeService + ModeCubit (FakeHvacService, SharedPreferences mock) — 16 тестов</step-3>
-      <step-4 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Тесты расписания через FakeAsync — 10 тестов</step-4>
-      <step-5 module="M-HVAC" status="done" verification="V-M-HVAC">Тесты конверсии и событий через MethodChannel-мок; F-1 later resolved in Phase-4 Slice-7.</step-5>
-      <step-6 module="M-HVAC" status="done" verification="V-M-HVAC">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/hvac_service.dart</step-6>
-      <step-7 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/auto_heat_service.dart</step-7>
-      <step-8 module="M-MODE" status="done" verification="V-M-MODE">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/mode_service.dart и lib/src/cubit/mode_cubit.dart</step-8>
-      <step-9 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/background_service.dart</step-9>
-      <step-10 module="M-CONSTANTS-TEMPERATURE" status="done" verification="V-M-CONSTANTS-TEMPERATURE">Добавить START_MODULE_CONTRACT/MAP в lib/src/constants/temperature_constants.dart</step-10>
-      <step-11 module="M-ENUMS" status="done" verification="V-M-ENUMS">Добавить START_MODULE_CONTRACT/MAP в lib/src/app_enums.dart</step-11>
-      <step-12 module="M-DI" status="done" verification="V-M-DI">Добавить START_MODULE_CONTRACT/MAP в lib/src/di/service_locator.dart</step-12>
+      <step-8 module="M-PRESET" status="done" verification="V-M-PRESET">PresetService + Cubit</step-8>
     </Phase-2>
 
     <Phase-3 name="Reliability hardening" status="done">
@@ -801,6 +744,16 @@
       <step-3 module="M-UI-APP" status="done" verification="V-M-UI-APP">AppContent: новый порядок вкладок Управление→Пресеты→Настройки, подключение PresetsTab вместо PresetsListScreen.</step-3>
       <step-4 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">SettingsScreen schrunk to theme + cabin-temperature visibility; ManualSettingsCubit.initialize удалён из этого экрана.</step-4>
     </Phase-5>
+
+    <Phase-6 name="Mode-source decoupling" status="done">
+      <goal>Развязать HeatMode.auto и HeatMode.presets так, чтобы apply пресета не подменял системные настройки авторежима.</goal>
+      <step-1 module="M-PRESET" status="done" verification="V-M-PRESET">Удалить snapshot-поля Preset.heatMode/heatLevel и обновить createPresetFromCurrentSettings + PresetCubit.savePreset signatures.</step-1>
+      <step-2 module="M-MODE" status="done" verification="V-M-MODE">ModeCubit теряет ManualSettingsService dep; applyPreset всегда HeatMode.presets с preset.settings; setMode(auto) без settings → TemperatureConstants; setMode(presets, settings:) с переданными; _initializeHeatModes резолвит preset-settings через PresetService.</step-2>
+      <step-3 module="M-UI-HEAT" status="done" verification="V-M-UI-HEAT">ModeToggler сегмент «Пресеты» вызывает onPresetsSegmentTapped callback; AppContent либо навигирует на Presets-вкладку, либо применяет активный пресет.</step-3>
+      <step-4 module="M-UI-APP" status="done" verification="V-M-UI-APP">AppContent._applyPreset больше не пишет в ManualSettingsCubit.</step-4>
+      <step-5 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">PresetsTab._onDelete fallback на manual+0 при удалении активного пресета в presets-режиме.</step-5>
+      <step-6 module="M-MANUAL-SETTINGS" status="removed">Удалить ManualSettingsCubit, ManualSettingsService, ManualSettingsState и связанные DI/Provider регистрации.</step-6>
+    </Phase-6>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">
       <goal>Зафиксированы как replan-triggers — выполняются только при появлении конкретного триггера.</goal>

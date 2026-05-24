@@ -355,12 +355,15 @@
         <scenario-2 kind="success">setMode(driver, 'auto') → state.driver.heatMode==auto; prefs.getString('driver_mode')=='auto'.</scenario-2>
         <scenario-3 kind="success">setMode auto → setMode manual → stopAutoHeat: после emitTemperature(-3) уровень driver не меняется, recordedSetSeatHeatCalls пуст.</scenario-3>
         <scenario-4 kind="success">setMode(driver,'auto') + emitTemperature(-3.0) → callback AutoHeatService → setHeatLevel → state.driver.heatLevel==3, recordedSetSeatHeatCalls содержит (driver,3).</scenario-4>
-        <scenario-9 kind="success">applyPreset(preset) сохраняет preset.heatMode/heatLevel, вызывает HvacService.setSeatHeatLevel(user, level), обновляет prefs и ModesState.</scenario-9>
+        <scenario-9 kind="success">applyPreset(preset) всегда выставляет HeatMode.presets и стартует AutoHeatService с preset.settings; state.driver.heatMode==presets.</scenario-9>
         <scenario-10 kind="success">setMode(manual) при активном heatLevel&gt;0 отправляет HvacService.setSeatHeatLevel(user,0), сохраняет prefs и state.</scenario-10>
         <scenario-11 kind="success">toggleHeatLevel из presets/auto выполняет последовательный переход в manual level=1 без параллельной гонки.</scenario-11>
-        <scenario-12 kind="success">setMode(driver,'auto') читает persisted ManualHeatSettings через ManualSettingsService: при threshold=-10.0 и temperature=-3.0 AutoHeatService отдаёт level=0, а не fallback level=3.</scenario-12>
         <scenario-13 kind="success">setMode(driver,'auto') при programmedTemperature=-3.0 стартует callback(3) от initial read без fakeHvac.emitTemperature.</scenario-13>
-        <scenario-14 kind="success">applyPreset сохраняет selected preset id; setMode(manual/auto) и toggleHeatLevel из presets очищают persisted selected preset id.</scenario-14>
+        <scenario-decouple-1 kind="success">applyPreset(driver, preset) всегда выставляет HeatMode.presets.</scenario-decouple-1>
+        <scenario-decouple-2 kind="success">applyPreset(preset) стартует AutoHeatService с preset.settings: при threshold=8.0 и cabin temp=-5 → level 3 первым.</scenario-decouple-2>
+        <scenario-decouple-3 kind="success">setMode(driver,'auto') стартует AutoHeatService без settings → algorithm попадает в TemperatureConstants.getHeatSequence.</scenario-decouple-3>
+        <scenario-decouple-4 kind="success">Холодный старт с persisted (presets, selectedPresetId) восстанавливает алгоритм с preset.settings через PresetService.</scenario-decouple-4>
+        <scenario-decouple-5 kind="success">Холодный старт с persisted (presets, missing selectedPresetId) → fallback на manual heatLevel=0.</scenario-decouple-5>
       </scenarios>
       <forbidden-markers>
         <forbidden-1>После setMode manual событие датчика НЕ должно менять уровень driver (stopAutoHeat отработал) — scenario-3.</forbidden-1>
@@ -371,14 +374,13 @@
         <marker-2>[ModeCubit][setMode][BLOCK_SET_MODE] applied | userType=$userType, mode=$mode</marker-2>
         <marker-3>[ModeService][setHeatLevel][BLOCK_SET_HEAT_LEVEL] persisted | userType=$userType, level=$level</marker-3>
         <marker-4>[ModeService][setMode][BLOCK_SET_MODE] persisted | userType=$userType, mode=$mode</marker-4>
-        <marker-5>[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=$userType, mode=$mode, level=$level, presetId=$presetId</marker-5>
+        <marker-5>[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=$userType, presetId=$presetId</marker-5>
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>setHeatLevel пишет и в SharedPreferences, и в HvacService, и эмитит новое состояние (scenario-1).</assertion-1>
         <assertion-2>setMode auto подключает авторежим, setMode manual — отключает (scenario-3, scenario-4).</assertion-2>
-        <assertion-3>setMode auto загружает ManualSettingsService settings и передаёт их в AutoHeatService (scenario-12).</assertion-3>
-        <assertion-4>ModeCubit._initialize вызывает AutoHeatService.seedCurrentTemperatureFromHvac до восстановления auto modes (scenario-6, scenario-13).</assertion-4>
-        <assertion-5>ModeCubit синхронизирует PresetService selected preset id: apply сохраняет, non-presets переходы очищают (scenario-9, scenario-11, scenario-14).</assertion-5>
+        <assertion-3>ModeCubit._initialize вызывает AutoHeatService.seedCurrentTemperatureFromHvac до восстановления auto modes (scenario-6, scenario-13).</assertion-3>
+        <!-- assertion-5 removed: ModeCubit больше не пишет selectedPresetId (owned solely by PresetCubit). -->
       </required-trace-assertions>
       <open-questions>
         <O-1>Должен ли setHeatLevel ранним выходом блокировать повторную запись того же уровня? Сейчас код вызывает setSeatHeatLevel всегда. Решение: оставить как есть (плагин дешёвый, идемпотентность на нижнем слое). Tests отражают текущее поведение в scenario-8.</O-1>
@@ -432,8 +434,8 @@
         <scenario-1 kind="success">save + load + delete пресета.</scenario-1>
         <scenario-2 kind="success">ModeCubit.applyPreset(preset) сохраняет mode/level, вызывает HvacService.setSeatHeatLevel и эмитит state.</scenario-2>
         <scenario-3 kind="failure">load при битом JSON не валит изолят.</scenario-3>
-        <scenario-4 kind="success">Preset runtime fields: JSON round-trip сохраняет heatMode/heatLevel; legacy JSON без этих полей грузится как heatMode=presets, heatLevel=0.</scenario-4>
-        <scenario-5 kind="success">PresetService.createPresetFromCurrentSettings сохраняет heatMode/heatLevel в SharedPreferences round-trip.</scenario-5>
+        <scenario-4 kind="success">Legacy JSON без heatMode/heatLevel грузится безопасно.</scenario-4>
+        <scenario-5 kind="success">PresetService.createPresetFromCurrentSettings сохраняет пресет с настройками и восстанавливается из SharedPreferences.</scenario-5>
         <scenario-6 kind="success">PresetService хранит selected preset id отдельно для driver/passenger и очищает его при delete выбранного пресета.</scenario-6>
         <scenario-7 kind="success">PresetCubit.loadAllPresets восстанавливает selected preset per UserType; applyPreset сохраняет selected id; delete выбранного пресета очищает state.</scenario-7>
       </scenarios>
@@ -441,8 +443,8 @@
         <marker-1>[ModeCubit][applyPreset][BLOCK_APPLY_PRESET]</marker-1>
       </required-log-markers>
       <required-trace-assertions>
-        <assertion-1>Round-trip Preset.toJson() → jsonEncode → SharedPreferences → jsonDecode → Preset.fromJson не теряет settings, heatMode и heatLevel.</assertion-1>
-        <assertion-2>DF-PRESET-APPLY идёт через ModeCubit.applyPreset до HvacService.setSeatHeatLevel, а не только через ManualSettingsCubit.</assertion-2>
+        <assertion-1>Round-trip Preset.toJson() → jsonEncode → SharedPreferences → jsonDecode → Preset.fromJson не теряет settings и metadata.</assertion-1>
+        <assertion-2>DF-PRESET-APPLY идёт через ModeCubit.applyPreset (mode=presets + AutoHeatService с preset.settings) и PresetCubit.applyPreset (selectedPresetId + lastUsed).</assertion-2>
         <assertion-3>selected preset id является per-UserType state-machine metadata: apply сохраняет id, delete/manual/auto transition очищают id.</assertion-3>
       </required-trace-assertions>
       <wave-follow-up>Связка с UI PresetsScreen/AppContent._applyPreset.</wave-follow-up>
@@ -468,28 +470,6 @@
       <wave-follow-up>Сравнение с TemperatureConstants.sliderValues.</wave-follow-up>
       <phase-follow-up>n/a — pure persistence.</phase-follow-up>
     </V-M-SETTINGS>
-
-    <V-M-MANUAL-SETTINGS MODULE="M-MANUAL-SETTINGS" PRIORITY="medium">
-      <test-files>
-        <file>test/unit/manual_settings_service_test.dart (запланирован)</file>
-        <file>test/unit/manual_settings_cubit_test.dart</file>
-      </test-files>
-      <module-checks>
-        <check-1>flutter test test/unit/manual_settings_service_test.dart</check-1>
-        <check-2>flutter test test/unit/manual_settings_cubit_test.dart</check-2>
-      </module-checks>
-      <scenarios>
-        <scenario-1 kind="success">Сериализация-десериализация ManualSettings без потерь полей.</scenario-1>
-        <scenario-2 kind="success">После transient ошибки успешное изменение manual settings очищает ManualSettingsState.error (FA-012).</scenario-2>
-      </scenarios>
-      <required-log-markers />
-      <required-trace-assertions>
-        <assertion-1>jsonEncode(ManualSettings.toJson()) → jsonDecode → ManualSettings.fromJson() возвращает идентичный объект (поверх json_serializable codegen).</assertion-1>
-        <assertion-2>FailingManualSettingsService вызывает ошибку saveSettings, затем успешный updateTemperatureThreshold приводит к state.error == null.</assertion-2>
-      </required-trace-assertions>
-      <wave-follow-up>Связка с UI ManualSettingsSection (V-M-UI-SETTINGS).</wave-follow-up>
-      <phase-follow-up>Регрессия после изменений модели ManualSettings (codegen).</phase-follow-up>
-    </V-M-MANUAL-SETTINGS>
 
     <V-M-THEME MODULE="M-THEME" PRIORITY="low">
       <test-files>
@@ -544,7 +524,7 @@
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
-        <assertion-1>context.read&lt;ThemeCubit&gt;(), context.read&lt;ModeCubit&gt;(), context.read&lt;CabinTemperatureCubit&gt;(), context.read&lt;PresetCubit&gt;(), context.read&lt;SettingsCubit&gt;(), context.read&lt;ManualSettingsCubit&gt;() не бросают ProviderNotFoundException в дочернем виджете.</assertion-1>
+        <assertion-1>context.read&lt;ThemeCubit&gt;(), context.read&lt;ModeCubit&gt;(), context.read&lt;CabinTemperatureCubit&gt;(), context.read&lt;PresetCubit&gt;(), context.read&lt;SettingsCubit&gt;() не бросают ProviderNotFoundException в дочернем виджете.</assertion-1>
       </required-trace-assertions>
       <wave-follow-up>При добавлении нового Cubit обновить BlockProviders.initiateBlocs() и расширить scenario-1.</wave-follow-up>
       <phase-follow-up>n/a — структурная проверка, регрессии маловероятны.</phase-follow-up>
@@ -770,7 +750,7 @@
   <AutonomyReadiness>
     <summary>
       <ready-for-execute>V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS, V-M-LOGGER — самодостаточные, pure-friendly, &lt; 1 сек на проверку.</ready-for-execute>
-      <ready-for-execute-with-harness>V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS — требуют SharedPreferencesMock. V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE — ВЫПОЛНЕНЫ в Phase-2 (FakeHvacService и AutomotiveMethodChannelMock созданы и валидированы).</ready-for-execute-with-harness>
+      <ready-for-execute-with-harness>V-M-PRESET, V-M-SETTINGS — требуют SharedPreferencesMock. V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE — ВЫПОЛНЕНЫ в Phase-2 (FakeHvacService и AutomotiveMethodChannelMock созданы и валидированы).</ready-for-execute-with-harness>
       <ready-for-execute-manual-only>V-M-BACKGROUND, V-M-ACCESSIBILITY и эмпирическая сверка формулы (raw - 84) / 2 на голове — нужен физический head unit. Не блокируют автономные волны на остальных модулях.</ready-for-execute-manual-only>
       <not-ready>n/a — все запланированные V-M-* имеют чёткий next step.</not-ready>
     </summary>
@@ -787,7 +767,7 @@
       <step-1 status="done">Phase-2 step-0: scaffold TestInfrastructure. DONE: dev_deps (fake_async/bloc_test/mocktail) установлены; test/_helpers/fake_hvac_service.dart создан. AutomotiveMethodChannelMock (harness-2) перенесён в step-3 — валидируется реальным тестом, а не только analyze.</step-1>
       <step-2 status="done">Phase-2 steps 1-2: V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS — 36 тестов. DONE.</step-2>
       <step-3 status="done">Phase-2 steps 3-5: V-M-AUTO-HEAT, V-M-MODE, V-M-HVAC. DONE. fake_plugin.dart создан в step-5. Находка F-1 позже закрыта в Phase-4 Slice-7.</step-3>
-      <step-4>Phase-2 step-6: V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS, V-M-THEME — параллельно (независимые JSON round-trip).</step-4>
+      <step-4>Phase-2 step-6: V-M-PRESET, V-M-SETTINGS, V-M-THEME — параллельно (независимые JSON round-trip).</step-4>
       <step-5>Phase-3 step-1: V-M-LOGGER (sequential, foundation для последующего sweep).</step-5>
       <step-6>Phase-3 step-2: sweep print → Logger в M-HVAC, M-AUTO-HEAT, M-MODE, M-BACKGROUND, M-PLUGIN. Параллельная волна, каждый воркер активирует TODO(phase-3) marker-assertions в своём модуле.</step-6>
       <step-7>Manual smoke на голове: V-M-BACKGROUND, V-M-ACCESSIBILITY, эмпирическая сверка формулы (raw - 84) / 2.</step-7>

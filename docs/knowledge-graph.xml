@@ -17,7 +17,7 @@
     <M-DI NAME="ServiceLocator" TYPE="UTILITY" STATUS="implemented">
       <purpose>GetIt-регистрация всех сервисов и кубитов; idempotent per isolate</purpose>
       <path>lib/src/di/service_locator.dart</path>
-      <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
+      <depends>M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS, M-THEME, M-AUTO-HEAT</depends>
       <verification-ref>V-M-DI</verification-ref>
       <annotations>
         <fn-setupServiceLocator PURPOSE="Регистрирует SharedPreferences и все singletons через isRegistered guards; вызывается и в UI- и в background-изоляте" />
@@ -65,7 +65,7 @@
     <M-AUTO-HEAT NAME="AutoHeatService" TYPE="CORE_LOGIC" STATUS="implemented">
       <purpose>Реализация авторежима: по температуре салона и optional ManualHeatSettings запускает расписание уровней 3→2→1→0 по таймерам, индивидуально для driver/passenger.</purpose>
       <path>lib/src/services/auto_heat_service.dart</path>
-      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS</depends>
+      <depends>M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE</depends>
       <verification-ref>V-M-AUTO-HEAT</verification-ref>
       <annotations>
         <class-AutoHeatService PURPOSE="Синглтон; initialize(hvacService) подписывает addCabinTemperatureListener; seedCurrentTemperatureFromHvac выполняет initial read" />
@@ -78,11 +78,11 @@
     <M-MODE NAME="ModeDomain" TYPE="CORE_LOGIC" STATUS="implemented">
       <purpose>Состояние режимов (manual/presets/auto), уровня подогрева и selected preset id для driver/passenger. Persistence и команда на HVAC.</purpose>
       <path>lib/src/services/mode_service.dart, lib/src/cubit/mode_cubit.dart, lib/src/cubit/mode_state_cubit.dart</path>
-      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-DI, M-MANUAL-SETTINGS, M-PRESET</depends>
+      <depends>M-HVAC, M-AUTO-HEAT, M-ENUMS, M-DI, M-PRESET</depends>
       <verification-ref>V-M-MODE</verification-ref>
       <annotations>
         <class-ModeService PURPOSE="Чтение/запись режимов и уровней в SharedPreferences" />
-        <class-ModeCubit PURPOSE="setHeatMode, setHeatLevel, applyPreset; синхронизирует SharedPreferences, HvacService, ManualSettingsService, PresetService и AutoHeatService" />
+        <class-ModeCubit PURPOSE="setMode/setHeatLevel/applyPreset/toggleHeatLevel; routes settings to AutoHeatService: auto→TemperatureConstants, presets→preset.settings; cold-start via PresetService for presets recovery" />
         <class-ModeState PURPOSE="userType + heatMode + heatLevel" />
         <class-ModesState PURPOSE="Список ModeState (driver + passenger)" />
       </annotations>
@@ -102,12 +102,12 @@
     <M-PRESET NAME="PresetDomain" TYPE="CORE_LOGIC" STATUS="implemented">
       <purpose>Сохранение, selected preset id per UserType и применение пользовательских пресетов конфигурации подогрева.</purpose>
       <path>lib/src/services/preset_service.dart, lib/src/cubit/preset_cubit.dart, lib/src/models/preset.dart</path>
-      <depends>M-MODE, M-ENUMS, M-MANUAL-SETTINGS</depends>
+      <depends>M-MODE, M-ENUMS</depends>
       <verification-ref>V-M-PRESET</verification-ref>
       <annotations>
         <class-PresetService PURPOSE="CRUD пресетов и selected preset id per UserType через SharedPreferences (JSON-сериализация)" />
         <class-PresetCubit PURPOSE="Состояние списка пресетов и активного пресета per UserType" />
-        <type-Preset PURPOSE="Модель пресета (@JsonSerializable): settings + runtime heatMode/heatLevel" />
+        <type-Preset PURPOSE="Модель пресета (@JsonSerializable): settings + metadata" />
       </annotations>
     </M-PRESET>
 
@@ -121,19 +121,6 @@
         <class-SettingsCubit PURPOSE="initialize(); экспонирует пороги для UI" />
       </annotations>
     </M-SETTINGS>
-
-    <M-MANUAL-SETTINGS NAME="ManualSettingsDomain" TYPE="CORE_LOGIC" STATUS="implemented">
-      <purpose>Параметры ручного режима для driver/passenger.</purpose>
-      <path>lib/src/services/manual_settings_service.dart, lib/src/cubit/manual_settings_cubit.dart, lib/src/models/manual_settings.dart</path>
-      <depends>M-ENUMS</depends>
-      <verification-ref>V-M-MANUAL-SETTINGS</verification-ref>
-      <annotations>
-        <class-ManualSettingsService PURPOSE="Persistence ManualSettings через SharedPreferences" />
-        <class-ManualSettingsCubit PURPOSE="Состояние ручных настроек; очищает stale error после успешных операций" />
-        <type-ManualSettings PURPOSE="Модель ручных настроек (@JsonSerializable)" />
-        <type-ManualSettingsState.copyWith PURPOSE="Explicit clearError для transient UI errors" />
-      </annotations>
-    </M-MANUAL-SETTINGS>
 
     <M-THEME NAME="ThemeDomain" TYPE="UI_COMPONENT" STATUS="implemented">
       <purpose>Выбор и применение визуальной темы.</purpose>
@@ -235,7 +222,7 @@
     <M-UI-PRESETS NAME="PresetsTab" TYPE="UI_COMPONENT" STATUS="implemented">
       <purpose>Объединённая вкладка пресетов: Driver/Passenger toggle, редактор пресета (threshold + auto-heat levels + name), список со значками edit/apply/delete и кнопкой «Новый пресет».</purpose>
       <path>lib/src/presentation/screens/presets/</path>
-      <depends>M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-ENUMS, M-THEME</depends>
+      <depends>M-PRESET, M-MODE, M-ENUMS, M-THEME</depends>
       <verification-ref>V-M-UI-PRESETS</verification-ref>
       <annotations>
         <class-PresetsTab PURPOSE="Stateful orchestrator вкладки пресетов" />
@@ -266,7 +253,6 @@
     <CrossLink from="M-DI" to="M-CABIN-TEMPERATURE" relation="registers-cubit" />
     <CrossLink from="M-DI" to="M-PRESET" relation="registers-cubit" />
     <CrossLink from="M-DI" to="M-SETTINGS" relation="registers-cubit" />
-    <CrossLink from="M-DI" to="M-MANUAL-SETTINGS" relation="registers-cubit" />
     <CrossLink from="M-DI" to="M-THEME" relation="registers-cubit" />
     <CrossLink from="M-HVAC" to="M-PLUGIN" relation="wraps" />
     <CrossLink from="M-HVAC" to="M-LOGGER" relation="logs-via" />
@@ -276,11 +262,9 @@
     <CrossLink from="M-HVAC" to="M-CABIN-TEMPERATURE" relation="publishes-temperature" />
     <CrossLink from="M-AUTO-HEAT" to="M-HVAC" relation="subscribes-to-temperature" />
     <CrossLink from="M-AUTO-HEAT" to="M-CONSTANTS-TEMPERATURE" relation="reads-fallback-heat-sequence" />
-    <CrossLink from="M-AUTO-HEAT" to="M-MANUAL-SETTINGS" relation="uses-custom-auto-settings" />
     <CrossLink from="M-MODE" to="M-HVAC" relation="commands-seat-heat" />
     <CrossLink from="M-MODE" to="M-AUTO-HEAT" relation="starts-stops-auto-mode" />
-    <CrossLink from="M-MODE" to="M-MANUAL-SETTINGS" relation="loads-auto-settings" />
-    <CrossLink from="M-MODE" to="M-PRESET" relation="syncs-selected-preset-id" />
+    <CrossLink from="M-MODE" to="M-PRESET" relation="reads-selected-preset-settings" />
     <CrossLink from="M-PRESET" to="M-MODE" relation="applies-preset" />
     <CrossLink from="M-BACKGROUND" to="M-PLUGIN" relation="uses-in-isolate" />
     <CrossLink from="M-BACKGROUND" to="M-MODE" relation="updates-state-from-isolate" />
@@ -290,7 +274,6 @@
     <CrossLink from="M-UI-SETTINGS" to="M-SETTINGS" relation="edits" />
     <CrossLink from="M-UI-SETTINGS" to="M-THEME" relation="edits" />
     <CrossLink from="M-UI-PRESETS" to="M-PRESET" relation="lists-and-edits" />
-    <CrossLink from="M-UI-PRESETS" to="M-MANUAL-SETTINGS" relation="edits-settings" />
     <CrossLink from="M-UI-PRESETS" to="M-MODE" relation="applies-preset" />
 
   </Project>
