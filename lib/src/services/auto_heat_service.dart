@@ -348,10 +348,14 @@ class AutoHeatService {
       return 0;
     }
 
+    final t = settings.temperatureThreshold;
     return HeatSequence(
       level3Duration: durationFor(3),
       level2Duration: durationFor(2),
       level1Duration: durationFor(1),
+      level3StepDownCelsius: t - 10,
+      level2StepDownCelsius: t - 4,
+      level1StepDownCelsius: t,
     );
   }
 
