@@ -206,6 +206,7 @@ Suggested fix direction:
 
 ### FA-009 — Settings layout: `Expanded` inside scrollable/intrinsic tree может упасть при build
 
+Status: addressed in Phase-4 Slice-6 by removing the unbounded vertical `Expanded` in `PresetsSettings`, making `ThemeSelector` wrap-safe, and adding a 1024x600 `SettingsScreen` widget smoke test.
 Priority: medium  
 Modules: `M-UI-SETTINGS`
 
@@ -267,6 +268,7 @@ Suggested fix direction:
 
 ### FA-012 — `ManualSettingsState.copyWith` не может очистить error
 
+Status: addressed in Phase-4 Slice-6 by adding `ManualSettingsState.copyWith(clearError: true)` and clearing stale errors on successful `ManualSettingsCubit` operations.
 Priority: low  
 Modules: `M-MANUAL-SETTINGS`
 

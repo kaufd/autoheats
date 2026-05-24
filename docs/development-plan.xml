@@ -783,6 +783,7 @@
       <step-6 module="M-CABIN-TEMPERATURE" status="done" verification="V-M-CABIN-TEMPERATURE">FA-003: initial read и HVAC events публикуются в UI через CabinTemperatureCubit/CabinTemperatureDisplay.</step-6>
       <step-7 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">FA-005: effective-plan guard предотвращает restart расписания на repeated same-range/same-settings sensor events.</step-7>
       <step-8 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">FA-006: BackgroundRuntimeController управляет stopService, awaited ignition OFF shutdown и bounded restart-backoff.</step-8>
+      <step-9 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">FA-009/FA-012: SettingsScreen head-unit smoke, wrap-safe ThemeSelector, PresetsSettings без unbounded vertical Expanded, ManualSettingsState clearError.</step-9>
     </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">
