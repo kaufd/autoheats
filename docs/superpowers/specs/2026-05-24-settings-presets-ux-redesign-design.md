@@ -1,6 +1,6 @@
 # Settings & Presets UX Redesign
 
-> **Status:** Brainstorm complete, design approved by user. Ready for `superpowers:writing-plans`.
+> **Status:** Implemented 2026-05-24 (plan `docs/superpowers/plans/2026-05-24-settings-presets-ux-redesign.md`).
 >
 > **Owner / Date:** Kirill Mikhaylin, 2026-05-24
 >
