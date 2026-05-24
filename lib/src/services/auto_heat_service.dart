@@ -169,6 +169,12 @@ class AutoHeatService {
     final callback = _heatLevelCallbacks[userType];
     if (callback == null) return;
 
+    // Для пресетов, которые уже запущены: фиксированное расписание до конца.
+    // Порог temperatureThreshold влияет только на старт, но не прерывает каскад.
+    final isPresetRunning = _manualSettingsByUser.containsKey(userType) &&
+        _activeLevels[userType] != null;
+    if (isPresetRunning) return;
+
     final sequence = _getSequence(userType);
 
     // Выше порога авторежима — выключить
@@ -189,13 +195,6 @@ class AutoHeatService {
     if (activeLevel == null || activeLevel == 0) {
       _startTemperatures[userType] = _currentTemperature!;
       _stepDownLevel(userType, 3, sequence, callback);
-      return;
-    }
-
-    // Для пресетов: фиксированное расписание, без адаптации по температуре.
-    // Max-timer уже запланирован в _stepDownLevel — он отработает каскад
-    // 3→2→1→0 строго по заданным длительностям.
-    if (_manualSettingsByUser.containsKey(userType)) {
       return;
     }
 
