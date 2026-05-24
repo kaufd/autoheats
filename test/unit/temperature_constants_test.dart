@@ -48,37 +48,37 @@ void main() {
     test('7.0 -> warm (2, 2, 6)', () {
       final s = TemperatureConstants.getHeatSequence(7.0);
       expect(s, isNotNull);
-      expect(s!.level3Duration, 2);
+      expect(s!.level3Duration, 3);
       expect(s.level2Duration, 2);
-      expect(s.level1Duration, 6);
+      expect(s.level1Duration, 5);
     });
-    test('0.0 -> cool (4, 2, 8)', () {
+    test('0.0 -> cool (5, 3, 7)', () {
       final s = TemperatureConstants.getHeatSequence(0.0);
       expect(s, isNotNull);
-      expect(s!.level3Duration, 4);
-      expect(s.level2Duration, 2);
-      expect(s.level1Duration, 8);
+      expect(s!.level3Duration, 5);
+      expect(s.level2Duration, 3);
+      expect(s.level1Duration, 7);
     });
-    test('-3.0 -> cold (6, 4, 10)', () {
+    test('-3.0 -> cold (8, 5, 7)', () {
       final s = TemperatureConstants.getHeatSequence(-3.0);
       expect(s, isNotNull);
-      expect(s!.level3Duration, 6);
-      expect(s.level2Duration, 4);
-      expect(s.level1Duration, 10);
+      expect(s!.level3Duration, 8);
+      expect(s.level2Duration, 5);
+      expect(s.level1Duration, 7);
     });
-    test('-7.0 -> freezing (8, 6, 12)', () {
+    test('-7.0 -> freezing (12, 7, 7)', () {
       final s = TemperatureConstants.getHeatSequence(-7.0);
       expect(s, isNotNull);
-      expect(s!.level3Duration, 8);
-      expect(s.level2Duration, 6);
-      expect(s.level1Duration, 12);
+      expect(s!.level3Duration, 12);
+      expect(s.level2Duration, 7);
+      expect(s.level1Duration, 7);
     });
-    test('-15.0 -> extreme (10, 8, 15)', () {
+    test('-15.0 -> extreme (15, 10, 8)', () {
       final s = TemperatureConstants.getHeatSequence(-15.0);
       expect(s, isNotNull);
-      expect(s!.level3Duration, 10);
-      expect(s.level2Duration, 8);
-      expect(s.level1Duration, 15);
+      expect(s!.level3Duration, 15);
+      expect(s.level2Duration, 10);
+      expect(s.level1Duration, 8);
     });
   });
   // END_BLOCK_GET_HEAT_SEQUENCE

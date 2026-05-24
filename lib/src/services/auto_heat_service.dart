@@ -2,13 +2,13 @@
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Реализация авторежима — по температуре салона запускает расписание
-//            уровней подогрева 3->2->1->0 индивидуально для driver/passenger.
+//            уровней подогрева с адаптивным step-down по температуре, холодным
+//            стартом и безопасным таймером-максимумом.
 //   SCOPE: подписка на HvacService cabin-temperature multi-listener,
-//          initial temperature seed, effective-plan guard от sensor noise,
-//          per-UserType Timer-каскады, startAutoHeat/stopAutoHeat,
-//          optional ManualHeatSettings runtime sequence.
-//   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE, M-MANUAL-SETTINGS, M-LOGGER
-//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP, FA-002, FA-003, FA-005
+//          initial temperature seed, per-UserType адаптивные переходы 3→2→1→0,
+//          startAutoHeat/stopAutoHeat, optional ManualHeatSettings runtime sequence.
+//   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE
+//   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -22,19 +22,20 @@
 //   currentTemperature - геттер последней известной температуры салона
 //   startAutoHeat(UserType, callback, settings?) - регистрация callback + optional custom settings
 //   stopAutoHeat(UserType) - отмена Timer'а и удаление callback/settings для UserType
-//   _handleCabinTemperature - listener target, cache + passive пересчёт активных users
-//   _updateAutoHeatForAllUsers - пересчёт расписания для всех активных UserType
-//   _updateAutoHeatForUser - effective-plan guard, отмена Timer'а и старт нового расписания
-//   _planKeyFor - stable key: off или sequence durations для sensor-noise guard
-//   _startHeatSequence - callback(3) и Logger marker BLOCK_START_HEAT_SEQUENCE
-//   _scheduleNextLevel - Timer-переходы 2->1->0 + marker BLOCK_SCHEDULE_NEXT_LEVEL
+//   _handleCabinTemperature - listener target, cache + пересчёт активных users
+//   _updateAutoHeatForAllUsers - пересчёт для всех активных UserType
+//   _updateAutoHeatForUser - адаптивный step-down: temperature-driven + max-timer safety
+//   _stepDownLevel - снизить уровень, callback + schedule max-timer для следующего
+//   _temperatureBasedLevel - вычислить целевой уровень по текущей температуре
+//   _durationForLevel - длительность уровня из ManualHeatSettings или HeatSequence
+//   _stepDownThresholdFor - порог step-down для уровня
 //   _getSequence - custom ManualHeatSettings sequence или TemperatureConstants fallback
 //   dispose - отписка listener, отмена Timer'ов и очистка состояния
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.4.0 - Phase-4 Slice-4: effective-plan guard от sensor noise]
-//   PREVIOUS_CHANGE: [v1.3.0 - Phase-4 Slice-3: подписка на HvacService multi-listener и initial seed]
+//   LAST_CHANGE: [v2.0.0 - Adaptive auto-heat: temperature-driven step-down + cold-start + no level-3 restart on warming]
+//   PREVIOUS_CHANGE: [v1.4.0 - Phase-4 Slice-4: effective-plan guard от sensor noise]
 // END_CHANGE_SUMMARY
 
 import 'dart:async';
@@ -56,7 +57,12 @@ class AutoHeatService {
   final Map<UserType, Timer?> _heatTimers = {};
   final Map<UserType, Function(int)> _heatLevelCallbacks = {};
   final Map<UserType, ManualHeatSettings> _manualSettingsByUser = {};
-  final Map<UserType, String> _activePlanKeys = {};
+
+  /// Текущий уровень подогрева (3/2/1/0). null = неактивен.
+  final Map<UserType, int> _activeLevels = {};
+
+  /// Температура салона на момент вызова startAutoHeat (для cold-start detection).
+  final Map<UserType, double> _startTemperatures = {};
 
   void initialize(HvacService hvacService) {
     final previousHvacService = _hvacService;
@@ -78,7 +84,7 @@ class AutoHeatService {
   //   INPUTS: none
   //   OUTPUTS: { Future<void> }
   //   SIDE_EFFECTS: HvacService.getCabinTemperature публикует температуру listener'ам.
-  //   LINKS: M-AUTO-HEAT, M-HVAC, V-M-AUTO-HEAT, DF-INIT-TEMP, FA-003
+  //   LINKS: M-AUTO-HEAT, M-HVAC, V-M-AUTO-HEAT, DF-INIT-TEMP
   // END_CONTRACT: seedCurrentTemperatureFromHvac
   Future<void> seedCurrentTemperatureFromHvac() async {
     await _hvacService?.getCabinTemperature();
@@ -92,7 +98,7 @@ class AutoHeatService {
 
   void _handleCabinTemperature(double temperature) {
     _currentTemperature = temperature;
-    _updateAutoHeatForAllUsers(allowSamePlanRestart: false);
+    _updateAutoHeatForAllUsers();
   }
 
   // START_CONTRACT: startAutoHeat
@@ -100,7 +106,7 @@ class AutoHeatService {
   //   INPUTS: { userType, onHeatLevelChanged, settings? }
   //   OUTPUTS: { void }
   //   SIDE_EFFECTS: Может вызвать callback сразу и создать Timer.
-  //   LINKS: M-AUTO-HEAT, M-MANUAL-SETTINGS, V-M-AUTO-HEAT, FA-002
+  //   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT
   // END_CONTRACT: startAutoHeat
   void startAutoHeat(
     UserType userType,
@@ -113,8 +119,9 @@ class AutoHeatService {
     } else {
       _manualSettingsByUser.remove(userType);
     }
-    _activePlanKeys.remove(userType);
-    _updateAutoHeatForUser(userType, allowSamePlanRestart: true);
+    _activeLevels.remove(userType);
+    _startTemperatures.remove(userType);
+    _updateAutoHeatForUser(userType);
   }
 
   // START_CONTRACT: stopAutoHeat
@@ -130,7 +137,8 @@ class AutoHeatService {
     _heatTimers[userType] = null;
     _heatLevelCallbacks.remove(userType);
     _manualSettingsByUser.remove(userType);
-    _activePlanKeys.remove(userType);
+    _activeLevels.remove(userType);
+    _startTemperatures.remove(userType);
     Logger.info(
       'AutoHeatService',
       'stopAutoHeat',
@@ -141,110 +149,184 @@ class AutoHeatService {
     // END_BLOCK_STOP
   }
 
-  void _updateAutoHeatForAllUsers({required bool allowSamePlanRestart}) {
+  void _updateAutoHeatForAllUsers() {
     for (final userType in _heatLevelCallbacks.keys) {
-      _updateAutoHeatForUser(
-        userType,
-        allowSamePlanRestart: allowSamePlanRestart,
-      );
+      _updateAutoHeatForUser(userType);
     }
   }
 
-  void _updateAutoHeatForUser(
-    UserType userType, {
-    required bool allowSamePlanRestart,
-  }) {
+  /// Главный метод: принимает решение о смене уровня по температуре.
+  ///
+  /// - Если не активен — старт с уровня 3, запись startTemperature.
+  /// - Если активен — проверка: не пора ли step-down по температуре?
+  /// - Max-duration timer как safety net: если температура не достигла
+  ///   порога step-down за отведённое время, таймер форсирует переход.
+  /// - При пересечении границы диапазона вверх НЕ перезапускает уровень 3 —
+  ///   продолжает с текущего уровня, просто меняя дельты.
+  void _updateAutoHeatForUser(UserType userType) {
     if (_currentTemperature == null) return;
 
     final callback = _heatLevelCallbacks[userType];
     if (callback == null) return;
 
     final sequence = _getSequence(userType);
-    final planKey = _planKeyFor(sequence);
-    if (!allowSamePlanRestart && _activePlanKeys[userType] == planKey) {
-      return;
-    }
 
-    _activePlanKeys[userType] = planKey;
-    _heatTimers[userType]?.cancel();
-
+    // Выше порога авторежима — выключить
     if (sequence == null) {
-      callback(0);
+      _heatTimers[userType]?.cancel();
+      final sentOffBefore = _activeLevels[userType] == 0;
+      _activeLevels[userType] = 0;
+      _startTemperatures.remove(userType);
+      if (!sentOffBefore) {
+        callback(0);
+      }
       return;
     }
 
-    _startHeatSequence(userType, sequence);
+    final activeLevel = _activeLevels[userType];
+
+    // Первый старт, перезапуск после stop, или re-entry из off-состояния
+    if (activeLevel == null || activeLevel == 0) {
+      _startTemperatures[userType] = _currentTemperature!;
+      _stepDownLevel(userType, 3, sequence, callback);
+      return;
+    }
+
+    // Уже работает — проверяем, не пора ли step-down
+    final temp = _currentTemperature!;
+
+    // Если температура ушла в диапазон, где естественный уровень ниже текущего —
+    // шагаем вниз сразу до целевого уровня (не по одному)
+    final tempBasedLevel = _temperatureBasedLevel(temp, sequence);
+    if (tempBasedLevel < activeLevel) {
+      _stepDownLevel(userType, tempBasedLevel, sequence, callback);
+      return;
+    }
+
+    final stepDownAt = _stepDownThresholdFor(activeLevel, sequence);
+
+    if (temp >= stepDownAt) {
+      // Достигнут порог — шагаем вниз
+      final nextLevel = activeLevel - 1;
+      _stepDownLevel(userType, nextLevel, sequence, callback);
+    }
+    // Если temp < stepDownAt — остаёмся на текущем уровне.
+    // Max-duration timer сработает сам, если температура не поднимется вовремя.
   }
 
-  // START_CONTRACT: _startHeatSequence
-  //   PURPOSE: Начать расписание с уровня 3 и запланировать переход на 2.
-  //   INPUTS: { userType: UserType, sequence: HeatSequence }
-  //   OUTPUTS: { void }
-  //   SIDE_EFFECTS: callback(3), Logger marker BLOCK_START_HEAT_SEQUENCE.
-  //   LINKS: M-AUTO-HEAT, M-CONSTANTS-TEMPERATURE, M-LOGGER, V-M-AUTO-HEAT
-  // END_CONTRACT: _startHeatSequence
-  void _startHeatSequence(UserType userType, HeatSequence sequence) {
-    // START_BLOCK_START_HEAT_SEQUENCE
-    final callback = _heatLevelCallbacks[userType];
-    if (callback == null) return;
+  /// Снизить уровень, вызвать callback и запланировать max-timer для следующего шага.
+  void _stepDownLevel(
+    UserType userType,
+    int newLevel,
+    HeatSequence sequence,
+    Function(int) callback,
+  ) {
+    _activeLevels[userType] = newLevel;
 
     Logger.info(
       'AutoHeatService',
-      'startHeatSequence',
-      'BLOCK_START_HEAT_SEQUENCE',
-      'started',
-      {'userType': userType.name, 'level': 3},
+      'stepDownLevel',
+      'BLOCK_STEP_DOWN',
+      'level changed',
+      {
+        'userType': userType.name,
+        'level': newLevel,
+        'temperature': _currentTemperature,
+      },
     );
-    callback(3);
-    _scheduleNextLevel(userType, 2, sequence.level3Duration);
-    // END_BLOCK_START_HEAT_SEQUENCE
+
+    callback(newLevel);
+
+    if (newLevel <= 0) {
+      _startTemperatures.remove(userType);
+      return;
+    }
+
+    // Запланировать max-duration timer для перехода на следующий уровень.
+    // Таймер — safety net: если температура не достигнет порога step-down,
+    // уровень всё равно снизится по истечении максимального времени.
+    final duration = _durationForLevel(newLevel, sequence);
+    _scheduleMaxTimer(userType, newLevel - 1, duration, sequence);
   }
 
-  // START_CONTRACT: _scheduleNextLevel
-  //   PURPOSE: Запланировать следующий переход уровня авторежима.
-  //   INPUTS: { userType: UserType, nextLevel: int, currentDuration: int minutes }
-  //   OUTPUTS: { void }
-  //   SIDE_EFFECTS: Создаёт Timer, Logger marker BLOCK_SCHEDULE_NEXT_LEVEL.
-  //   LINKS: M-AUTO-HEAT, M-CONSTANTS-TEMPERATURE, M-LOGGER, V-M-AUTO-HEAT
-  // END_CONTRACT: _scheduleNextLevel
-  void _scheduleNextLevel(
-      UserType userType, int nextLevel, int currentDuration) {
-    // START_BLOCK_SCHEDULE_NEXT_LEVEL
-    if (currentDuration == 0) return;
+  void _scheduleMaxTimer(
+    UserType userType,
+    int nextLevel,
+    int maxDurationMinutes,
+    HeatSequence sequence,
+  ) {
+    _heatTimers[userType]?.cancel();
+    if (maxDurationMinutes <= 0) return;
 
     Logger.info(
       'AutoHeatService',
-      'scheduleNextLevel',
-      'BLOCK_SCHEDULE_NEXT_LEVEL',
+      'scheduleMaxTimer',
+      'BLOCK_SCHEDULE_MAX_TIMER',
       'scheduled',
       {
         'userType': userType.name,
-        'level': nextLevel,
-        'duration': currentDuration
+        'nextLevel': nextLevel,
+        'maxMinutes': maxDurationMinutes,
       },
     );
-    _heatTimers[userType] = Timer(Duration(minutes: currentDuration), () {
+
+    _heatTimers[userType] = Timer(Duration(minutes: maxDurationMinutes), () {
       final callback = _heatLevelCallbacks[userType];
       if (callback == null) return;
 
-      if (nextLevel == 2) {
-        callback(2);
-        _scheduleNextLevel(
-            userType, 1, _getSequence(userType)?.level2Duration ?? 0);
-      } else if (nextLevel == 1) {
-        callback(1);
-        _scheduleNextLevel(
-            userType, 0, _getSequence(userType)?.level1Duration ?? 0);
-      } else {
+      final seq = _getSequence(userType);
+      if (seq == null) {
         callback(0);
+        return;
       }
+
+      Logger.info(
+        'AutoHeatService',
+        'scheduleMaxTimer',
+        'BLOCK_MAX_TIMER_FIRED',
+        'max duration reached, stepping down',
+        {
+          'userType': userType.name,
+          'nextLevel': nextLevel,
+        },
+      );
+
+      _stepDownLevel(userType, nextLevel, seq, callback);
     });
-    // END_BLOCK_SCHEDULE_NEXT_LEVEL
   }
 
-  String _planKeyFor(HeatSequence? sequence) {
-    if (sequence == null) return 'off';
-    return 'sequence:${sequence.level3Duration},${sequence.level2Duration},${sequence.level1Duration}';
+  /// Определить естественный уровень по температуре в данном sequence.
+  int _temperatureBasedLevel(double temp, HeatSequence sequence) {
+    if (temp >= sequence.level1StepDownCelsius) return 0;
+    if (temp >= sequence.level2StepDownCelsius) return 1;
+    if (temp >= sequence.level3StepDownCelsius) return 2;
+    return 3;
+  }
+
+  int _durationForLevel(int level, HeatSequence sequence) {
+    switch (level) {
+      case 3:
+        return sequence.level3Duration;
+      case 2:
+        return sequence.level2Duration;
+      case 1:
+        return sequence.level1Duration;
+      default:
+        return 0;
+    }
+  }
+
+  double _stepDownThresholdFor(int level, HeatSequence sequence) {
+    switch (level) {
+      case 3:
+        return sequence.level3StepDownCelsius;
+      case 2:
+        return sequence.level2StepDownCelsius;
+      case 1:
+        return sequence.level1StepDownCelsius;
+      default:
+        return double.infinity;
+    }
   }
 
   HeatSequence? _getSequence(UserType userType) {
@@ -286,7 +368,8 @@ class AutoHeatService {
     _heatTimers.clear();
     _heatLevelCallbacks.clear();
     _manualSettingsByUser.clear();
-    _activePlanKeys.clear();
+    _activeLevels.clear();
+    _startTemperatures.clear();
     _hvacService = null;
     _temperatureListener = null;
     _currentTemperature = null;

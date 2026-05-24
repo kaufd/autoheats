@@ -42,10 +42,20 @@ class HeatSequence {
   final int level2Duration;
   final int level1Duration;
 
+  /// Температура, при которой уровень 3 → уровень 2 (досрочно, не дожидаясь таймера)
+  final double level3StepDownCelsius;
+  /// Температура, при которой уровень 2 → уровень 1
+  final double level2StepDownCelsius;
+  /// Температура, при которой уровень 1 → 0
+  final double level1StepDownCelsius;
+
   const HeatSequence({
     required this.level3Duration,
     required this.level2Duration,
     required this.level1Duration,
+    this.level3StepDownCelsius = double.negativeInfinity,
+    this.level2StepDownCelsius = double.negativeInfinity,
+    this.level1StepDownCelsius = double.negativeInfinity,
   });
 }
 
@@ -70,29 +80,44 @@ class TemperatureConstants {
 
   static const Map<TemperatureRange, HeatSequence> temperatureSequences = {
     TemperatureRange.warm: HeatSequence(
-      level3Duration: 2,
+      level3Duration: 3,
       level2Duration: 2,
-      level1Duration: 6,
+      level1Duration: 5,
+      level3StepDownCelsius: 6.0,
+      level2StepDownCelsius: 8.0,
+      level1StepDownCelsius: 11.0,
     ), // +5°C до +10°C: 10 мин
     TemperatureRange.cool: HeatSequence(
-      level3Duration: 4,
-      level2Duration: 2,
-      level1Duration: 8,
-    ), // 0°C до +5°C: 14 мин
+      level3Duration: 5,
+      level2Duration: 3,
+      level1Duration: 7,
+      level3StepDownCelsius: 2.0,
+      level2StepDownCelsius: 6.0,
+      level1StepDownCelsius: 9.0,
+    ), // 0°C до +5°C: 15 мин
     TemperatureRange.cold: HeatSequence(
-      level3Duration: 6,
-      level2Duration: 4,
-      level1Duration: 10,
+      level3Duration: 8,
+      level2Duration: 5,
+      level1Duration: 7,
+      level3StepDownCelsius: -2.0,
+      level2StepDownCelsius: 3.0,
+      level1StepDownCelsius: 7.0,
     ), // -5°C до 0°C: 20 мин
     TemperatureRange.freezing: HeatSequence(
-      level3Duration: 8,
-      level2Duration: 6,
-      level1Duration: 12,
+      level3Duration: 12,
+      level2Duration: 7,
+      level1Duration: 7,
+      level3StepDownCelsius: -7.0,
+      level2StepDownCelsius: -2.0,
+      level1StepDownCelsius: 4.0,
     ), // -10°C до -5°C: 26 мин
     TemperatureRange.extreme: HeatSequence(
-      level3Duration: 10,
-      level2Duration: 8,
-      level1Duration: 15,
+      level3Duration: 15,
+      level2Duration: 10,
+      level1Duration: 8,
+      level3StepDownCelsius: -12.0,
+      level2StepDownCelsius: -7.0,
+      level1StepDownCelsius: 0.0,
     ), // < -10°C: 33 мин
   };
 
