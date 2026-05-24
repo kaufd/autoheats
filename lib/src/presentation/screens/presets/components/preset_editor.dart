@@ -79,15 +79,19 @@ class PresetEditor extends StatelessWidget {
     final title = presetName ?? 'Создайте новый пресет';
     return Row(
       children: [
-        if (isActive)
-          Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: Icon(Icons.star, size: 18, color: context.themeColors.primary),
-          ),
         Expanded(
-          child: Text(
-            title,
-            style: context.textStyle.textSettings,
+          child: Text.rich(
+            TextSpan(
+              style: context.textStyle.textSettings,
+              children: [
+                TextSpan(text: title),
+                if (isActive)
+                  TextSpan(
+                    text: ' (активен)',
+                    style: TextStyle(color: context.themeColors.primary),
+                  ),
+              ],
+            ),
             overflow: TextOverflow.ellipsis,
           ),
         ),

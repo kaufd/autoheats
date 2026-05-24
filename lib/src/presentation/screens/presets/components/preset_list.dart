@@ -90,16 +90,19 @@ class PresetList extends StatelessWidget {
         ),
         child: Row(
           children: [
-            if (isActive)
-              Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: Icon(Icons.star,
-                    size: 18, color: context.themeColors.primary),
-              ),
             Expanded(
-              child: Text(
-                preset.name,
-                style: context.textStyle.paragraph1,
+              child: Text.rich(
+                TextSpan(
+                  style: context.textStyle.paragraph1,
+                  children: [
+                    TextSpan(text: preset.name),
+                    if (isActive)
+                      TextSpan(
+                        text: ' (активен)',
+                        style: TextStyle(color: context.themeColors.primary),
+                      ),
+                  ],
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
