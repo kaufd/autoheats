@@ -18,9 +18,11 @@ class LogsScreen extends StatefulWidget {
 }
 
 class _LogsScreenState extends State<LogsScreen> {
-  // Quick-shortcut значения для инжектора. Не слайдер — обычные chips,
-  // потому что в head-unit landscape ширина sidebar'а ограничена.
-  static const List<double> _quickValues = [0, 5, 10, 15, 20, 25, 30];
+  // Quick-shortcut значения для инжектора. Покрывают все ключевые границы
+  // TemperatureRange: extreme(<-10), freezing(-10..-5), cold(-5..0),
+  // cool(0..5), warm(5..10), off(>=10). 25/30 не нужны — реальная летняя
+  // температура и так в этом диапазоне.
+  static const List<double> _quickValues = [-15, -10, -5, 0, 5, 10];
 
   late final ScrollController _scrollController;
   late final VoidCallback _bufferListener;
@@ -273,11 +275,11 @@ class _LogsScreenState extends State<LogsScreen> {
           const SizedBox(height: 16),
           Text('Быстрые значения', style: context.textStyle.paragraph2),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _quickValues.map((v) => _buildQuickChip(context, v)).toList(),
-          ),
+          // Жёстко 2 ряда по 3 чипа: [-15,-10,-5] / [0,5,10]. Expanded даёт
+          // равную ширину, поэтому ряды визуально выровнены.
+          _buildQuickRow(context, _quickValues.sublist(0, 3)),
+          const SizedBox(height: 8),
+          _buildQuickRow(context, _quickValues.sublist(3, 6)),
           const SizedBox(height: 20),
           Text('Произвольное значение', style: context.textStyle.paragraph2),
           const SizedBox(height: 8),
@@ -344,12 +346,23 @@ class _LogsScreenState extends State<LogsScreen> {
     );
   }
 
+  Widget _buildQuickRow(BuildContext context, List<double> values) {
+    final children = <Widget>[];
+    for (var i = 0; i < values.length; i++) {
+      children.add(Expanded(child: _buildQuickChip(context, values[i])));
+      if (i != values.length - 1) {
+        children.add(const SizedBox(width: 8));
+      }
+    }
+    return Row(children: children);
+  }
+
   Widget _buildQuickChip(BuildContext context, double value) {
     return InkWell(
       onTap: () => _inject(value),
       borderRadius: BorderRadius.circular(8),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
           color: context.themeColors.primary.withValues(alpha: 0.18),
           borderRadius: BorderRadius.circular(8),
@@ -360,6 +373,7 @@ class _LogsScreenState extends State<LogsScreen> {
         ),
         child: Text(
           '${value.toStringAsFixed(0)}°C',
+          textAlign: TextAlign.center,
           style: context.textStyle.paragraph2.copyWith(
             color: context.themeColors.primary,
             fontWeight: FontWeight.w600,
