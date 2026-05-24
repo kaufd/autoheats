@@ -15,7 +15,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-6: remove self-Expanded and wrap buttons within bounded width]
+//   LAST_CHANGE: [v1.2.0 - White theme selected button uses selected foreground token]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-6: remove self-Expanded and wrap buttons within bounded width]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
@@ -81,7 +82,7 @@ class ThemeSelector extends StatelessWidget {
         onPressed: () => themeManager.changeTheme(themeType),
         style: ButtonStyle(
           foregroundColor: WidgetStatePropertyAll(
-            isSelected ? context.themeColors.textButtonPrimary : Colors.white,
+            isSelected ? context.themeColors.textButtonSelected : Colors.white,
           ),
           backgroundColor: WidgetStatePropertyAll(
             isSelected ? context.themeColors.primary : Colors.transparent,

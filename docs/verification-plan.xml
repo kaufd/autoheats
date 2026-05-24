@@ -494,16 +494,20 @@
     <V-M-THEME MODULE="M-THEME" PRIORITY="low">
       <test-files>
         <file>test/unit/theme_cubit_test.dart (запланирован)</file>
+        <file>test/unit/theme_colors_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/theme_cubit_test.dart</check-1>
+        <check-2>flutter test test/unit/theme_colors_test.dart</check-2>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">initialize читает сохранённую тему; setTheme сохраняет и эмитит.</scenario-1>
+        <scenario-2 kind="regression">AppThemeColors.lerp интерполирует целевую палитру без fallback в base/green.</scenario-2>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
         <assertion-1>setTheme → ThemeCubit emit нового ThemeType → SharedPreferences round-trip сохраняет значение.</assertion-1>
+        <assertion-2>redThemeColors.lerp(whiteThemeColors, t) возвращает target/mid colors, а не ColorConstants.accentGreen.</assertion-2>
       </required-trace-assertions>
       <wave-follow-up>Интеграция с ThemeSelector в V-M-UI-SETTINGS scenario-2.</wave-follow-up>
       <phase-follow-up>n/a — не критично для подогрева.</phase-follow-up>
@@ -599,17 +603,19 @@
 
     <V-M-MAIN MODULE="M-MAIN" PRIORITY="medium">
       <test-files>
-        <file>test/widget/app_smoke_test.dart (запланирован)</file>
+        <file>test/widget/app_smoke_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/widget/app_smoke_test.dart</check-1>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">runApp(AutoheatApp) монтируется и рендерит AppContent.</scenario-1>
+        <scenario-2 kind="regression">AutoheatApp отключает MaterialApp theme animation, чтобы при смене темы не мелькала старая палитра.</scenario-2>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
         <assertion-1>Порядок инициализации в main(): WidgetsFlutterBinding.ensureInitialized → setupServiceLocator → ThemeCubit.initialize → SettingsCubit.initialize → initializeAccessibilityService → initializeBackgroundService → runApp. Изменение порядка ломает background-isolate setup.</assertion-1>
+        <assertion-2>WidgetTester pump AutoheatApp → MaterialApp.themeAnimationDuration == Duration.zero.</assertion-2>
       </required-trace-assertions>
       <wave-follow-up>При добавлении новой инициализационной функции в main — обновить assertion-1.</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: cold start приложения, проверка времени до появления AppContent.</phase-follow-up>
@@ -676,20 +682,24 @@
     <V-M-UI-SETTINGS MODULE="M-UI-SETTINGS" PRIORITY="low">
       <test-files>
         <file>test/widget/settings_screen_test.dart</file>
+        <file>test/widget/white_theme_button_contrast_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/widget/settings_screen_test.dart</check-1>
+        <check-2>flutter test test/widget/white_theme_button_contrast_test.dart</check-2>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">Изменение TemperatureThresholdSlider обновляет SettingsCubit.</scenario-1>
         <scenario-2 kind="success">ThemeSelector переключает тему через ThemeCubit.</scenario-2>
         <scenario-3 kind="smoke">SettingsScreen build/layout на размере 1024x600 проходит без Flutter layout exception (FA-009).</scenario-3>
+        <scenario-4 kind="regression">Primary/selected кнопки в белой теме используют чёрный foreground и остаются читаемыми.</scenario-4>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
         <assertion-1>WidgetTester.drag на TemperatureThresholdSlider → mocktail.verify(fakeSettingsCubit.setThreshold(any())).called(1).</assertion-1>
         <assertion-2>WidgetTester.tap на ThemeSelector → mocktail.verify(fakeThemeCubit.setTheme(any())).called(1).</assertion-2>
         <assertion-3>WidgetTester с physicalSize 1024x600 pump SettingsScreen → tester.takeException() == null.</assertion-3>
+        <assertion-4>CustomAlertDialog confirm, PresetsSettings save и selected ThemeSelector button resolve foregroundColor == ColorConstants.systemBlack в white theme.</assertion-4>
       </required-trace-assertions>
       <wave-follow-up>Cross-check с V-M-SETTINGS и V-M-THEME: после drag/tap значение должно реально сохраниться в SharedPreferences.</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: визуальная проверка всех секций settings.</phase-follow-up>

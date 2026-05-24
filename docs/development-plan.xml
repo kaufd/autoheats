@@ -408,9 +408,12 @@
         <export-ThemeCubit PURPOSE="initialize(); getCurrentTheme(context)" />
         <export-ThemeConfigurator PURPOSE="Сборка ThemeData" />
         <export-ThemeType PURPOSE="enum доступных тем" />
+        <export-AppThemeColors PURPOSE="ThemeExtension цветовых токенов с контрастным white-theme foreground и field-wise lerp" />
       </interface>
       <depends>none</depends>
       <target>
+        <source>lib/src/config/app_theme.dart</source>
+        <source>lib/src/config/theme_colors.dart</source>
         <source>lib/src/presentation/themes/theme_service.dart</source>
         <source>lib/src/presentation/themes/theme_cubit.dart</source>
         <source>lib/src/presentation/themes/theme_configurator.dart</source>
@@ -525,7 +528,7 @@
       </contract>
       <interface>
         <export-main PURPOSE="WidgetsFlutterBinding.ensureInitialized + setupServiceLocator + initializeAccessibilityService + initializeBackgroundService + runApp" />
-        <export-AutoheatApp PURPOSE="Корневой MaterialApp с BlocBuilder&lt;ThemeCubit&gt;" />
+        <export-AutoheatApp PURPOSE="Корневой MaterialApp с BlocBuilder&lt;ThemeCubit&gt;; themeAnimationDuration=zero для переключения без flicker" />
       </interface>
       <depends>M-DI, M-BLOC-PROVIDERS, M-THEME, M-SETTINGS, M-ACCESSIBILITY, M-BACKGROUND, M-UI-APP</depends>
       <target>
@@ -657,7 +660,7 @@
       <interface>
         <export-SettingsScreen PURPOSE="Контейнер настроек" />
         <export-TemperatureThresholdSlider PURPOSE="Слайдер порога" />
-        <export-ThemeSelector PURPOSE="Выбор темы; wrap-safe layout внутри SettingsScreen" />
+        <export-ThemeSelector PURPOSE="Выбор темы; wrap-safe layout и контраст selected-кнопки внутри SettingsScreen" />
         <export-PresetsSection PURPOSE="Секция пресетов" />
         <export-ManualSettingsSection PURPOSE="Секция ручных настроек" />
       </interface>

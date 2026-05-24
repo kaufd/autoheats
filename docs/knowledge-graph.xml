@@ -10,7 +10,7 @@
       <verification-ref>V-M-MAIN</verification-ref>
       <annotations>
         <fn-main PURPOSE="WidgetsFlutterBinding + setupServiceLocator + initializeAccessibilityService + initializeBackgroundService + runApp" />
-        <class-AutoheatApp PURPOSE="Корневой MaterialApp с BlocBuilder&lt;ThemeCubit&gt;" />
+        <class-AutoheatApp PURPOSE="Корневой MaterialApp с BlocBuilder&lt;ThemeCubit&gt; и zero-duration theme switch" />
       </annotations>
     </M-MAIN>
 
@@ -137,7 +137,7 @@
 
     <M-THEME NAME="ThemeDomain" TYPE="UI_COMPONENT" STATUS="implemented">
       <purpose>Выбор и применение визуальной темы.</purpose>
-      <path>lib/src/presentation/themes/</path>
+      <path>lib/src/presentation/themes/ + lib/src/config/theme_*.dart</path>
       <depends>none</depends>
       <verification-ref>V-M-THEME</verification-ref>
       <annotations>
@@ -145,6 +145,7 @@
         <class-ThemeCubit PURPOSE="initialize(); getCurrentTheme(context)" />
         <class-ThemeConfigurator PURPOSE="Сборка ThemeData из ThemeType" />
         <type-ThemeType PURPOSE="enum имеющихся тем" />
+        <type-AppThemeColors PURPOSE="ThemeExtension токены: white-theme contrast и field-wise lerp без base/green fallback" />
       </annotations>
     </M-THEME>
 
@@ -249,7 +250,7 @@
       <annotations>
         <class-SettingsScreen PURPOSE="Композиция секций settings/components" />
         <class-TemperatureThresholdSlider PURPOSE="Слайдер порога авторежима (sliderValues)" />
-        <class-ThemeSelector PURPOSE="Выбор темы; wrap-safe на head-unit ширине" />
+        <class-ThemeSelector PURPOSE="Выбор темы; wrap-safe и contrast-safe selected-кнопка" />
       </annotations>
     </M-UI-SETTINGS>
 

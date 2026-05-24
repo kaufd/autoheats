@@ -18,8 +18,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-6: remove unbounded vertical Expanded in settings layout]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: save preset snapshots include ModeCubit mode/level]
+//   LAST_CHANGE: [v1.3.0 - White theme save button uses selected foreground token]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-6: remove unbounded vertical Expanded in settings layout]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -102,7 +102,7 @@ class PresetsSettings extends StatelessWidget {
       onPressed: () => _savePresetForUser(context, userType),
       style: ButtonStyle(
         foregroundColor:
-            WidgetStatePropertyAll(context.themeColors.textButtonPrimary),
+            WidgetStatePropertyAll(context.themeColors.textButtonSelected),
         backgroundColor: WidgetStatePropertyAll(context.themeColors.primary),
         side: WidgetStatePropertyAll(
           BorderSide(color: context.themeColors.primary, width: 0.5),

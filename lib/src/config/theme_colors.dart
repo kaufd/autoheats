@@ -1,3 +1,25 @@
+// FILE: lib/src/config/theme_colors.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: ThemeExtension color tokens for base/red/white app themes.
+//   SCOPE: AppThemeColors token sets, copyWith, field-wise lerp for theme transitions.
+//   DEPENDS: none
+//   LINKS: M-THEME, V-M-THEME
+//   ROLE: TYPES
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   AppThemeColors - ThemeExtension token container for app UI colors
+//   baseThemeColors/redThemeColors/whiteThemeColors - concrete theme palettes
+//   copyWith - token override copy
+//   lerp - field-wise Color.lerp without base/green fallback
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - White theme contrast and field-wise theme color lerp]
+// END_CHANGE_SUMMARY
+
 import 'package:flutter/material.dart';
 import 'color_constants.dart';
 
@@ -13,7 +35,7 @@ class AppThemeColors extends ThemeExtension<AppThemeColors> {
   final Color textMuted;
   final Color tabbarDefault;
 
-  AppThemeColors({
+  const AppThemeColors({
     required this.primary,
     required this.backgroundButtonPrimary,
     required this.backgroundButtonInactive,
@@ -66,12 +88,66 @@ class AppThemeColors extends ThemeExtension<AppThemeColors> {
   );
 
   @override
-  ThemeExtension<AppThemeColors> copyWith() {
-    return AppThemeColors.baseThemeColors;
+  AppThemeColors copyWith({
+    Color? primary,
+    Color? backgroundButtonPrimary,
+    Color? backgroundButtonInactive,
+    Color? switchThumb,
+    Color? sliderInactiveTrack,
+    Color? textButtonPrimary,
+    Color? textButtonSelected,
+    Color? textBody,
+    Color? textMuted,
+    Color? tabbarDefault,
+  }) {
+    return AppThemeColors(
+      primary: primary ?? this.primary,
+      backgroundButtonPrimary:
+          backgroundButtonPrimary ?? this.backgroundButtonPrimary,
+      backgroundButtonInactive:
+          backgroundButtonInactive ?? this.backgroundButtonInactive,
+      switchThumb: switchThumb ?? this.switchThumb,
+      sliderInactiveTrack: sliderInactiveTrack ?? this.sliderInactiveTrack,
+      textButtonPrimary: textButtonPrimary ?? this.textButtonPrimary,
+      textButtonSelected: textButtonSelected ?? this.textButtonSelected,
+      textBody: textBody ?? this.textBody,
+      textMuted: textMuted ?? this.textMuted,
+      tabbarDefault: tabbarDefault ?? this.tabbarDefault,
+    );
   }
 
   @override
-  ThemeExtension<AppThemeColors> lerp(covariant ThemeExtension<AppThemeColors>? other, double t) {
-    return AppThemeColors.baseThemeColors;
+  AppThemeColors lerp(
+    covariant ThemeExtension<AppThemeColors>? other,
+    double t,
+  ) {
+    if (other is! AppThemeColors) return this;
+
+    return AppThemeColors(
+      primary: Color.lerp(primary, other.primary, t)!,
+      backgroundButtonPrimary: Color.lerp(
+        backgroundButtonPrimary,
+        other.backgroundButtonPrimary,
+        t,
+      )!,
+      backgroundButtonInactive: Color.lerp(
+        backgroundButtonInactive,
+        other.backgroundButtonInactive,
+        t,
+      )!,
+      switchThumb: Color.lerp(switchThumb, other.switchThumb, t)!,
+      sliderInactiveTrack: Color.lerp(
+        sliderInactiveTrack,
+        other.sliderInactiveTrack,
+        t,
+      )!,
+      textButtonPrimary:
+          Color.lerp(textButtonPrimary, other.textButtonPrimary, t)!,
+      textButtonSelected:
+          Color.lerp(textButtonSelected, other.textButtonSelected, t)!,
+      textBody: Color.lerp(textBody, other.textBody, t)!,
+      textMuted: Color.lerp(textMuted, other.textMuted, t)!,
+      tabbarDefault: Color.lerp(tabbarDefault, other.tabbarDefault, t)!,
+    );
   }
 }

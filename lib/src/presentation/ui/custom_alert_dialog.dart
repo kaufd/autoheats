@@ -1,3 +1,23 @@
+// FILE: lib/src/presentation/ui/custom_alert_dialog.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Общий themed alert dialog с cancel/confirm actions.
+//   SCOPE: dialog chrome, cancel button, optional primary confirm button.
+//   DEPENDS: M-THEME, M-UI-SETTINGS, M-UI-PRESETS
+//   LINKS: M-THEME, V-M-UI-SETTINGS, V-M-THEME
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   CustomAlertDialog - themed AlertDialog wrapper
+//   build - renders content and contrast-safe action buttons
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - White theme primary confirm button contrast]
+// END_CHANGE_SUMMARY
+
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:flutter/material.dart';
 
@@ -27,7 +47,9 @@ class CustomAlertDialog extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       contentPadding: const EdgeInsets.all(24),
-      title: title != null ? Text(title!, style: context.textStyle.heading3) : null,
+      title: title != null
+          ? Text(title!, style: context.textStyle.heading3)
+          : null,
       content: content,
       actions: [
         Row(
@@ -53,6 +75,11 @@ class CustomAlertDialog extends StatelessWidget {
                 child: TextButton(
                   onPressed: isConfirmEnabled ? onConfirm : null,
                   style: ButtonStyle(
+                    foregroundColor: WidgetStateProperty.resolveWith(
+                      (states) => states.contains(WidgetState.disabled)
+                          ? context.themeColors.textMuted
+                          : context.themeColors.textButtonSelected,
+                    ),
                     backgroundColor: WidgetStatePropertyAll(
                       isConfirmEnabled
                           ? context.themeColors.backgroundButtonPrimary
