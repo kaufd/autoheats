@@ -15,8 +15,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.3.0 - Restore plain Column; selector reserves layout space via Visibility(maintainSize) so ModeToggler stays at constant Y across modes]
-//   PREVIOUS_CHANGE: [v1.1.0 - Add centered compact manual heat level selector]
+//   LAST_CHANGE: [v1.4.0 - Mode-source decoupling: pass onPresetsSegmentTapped callback to ModeToggler]
+//   PREVIOUS_CHANGE: [v1.3.0 - Restore plain Column; selector reserves layout space via Visibility(maintainSize) so ModeToggler stays at constant Y across modes]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -29,7 +29,9 @@ import 'components/seat.dart';
 import 'components/cabin_temperature_display.dart';
 
 class HeatScreen extends StatelessWidget {
-  const HeatScreen({super.key});
+  final void Function(UserType user) onPresetsSegmentTapped;
+
+  const HeatScreen({super.key, required this.onPresetsSegmentTapped});
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +50,11 @@ class HeatScreen extends StatelessWidget {
                   children: [
                     Column(
                       children: [
-                        ModeToggler(user: UserType.driver),
+                        ModeToggler(
+                          user: UserType.driver,
+                          onPresetsSegmentTapped: () =>
+                              onPresetsSegmentTapped(UserType.driver),
+                        ),
                         const SizedBox(height: 60),
                         ManualHeatLevelSelector(userType: UserType.driver),
                       ],
@@ -71,7 +77,11 @@ class HeatScreen extends StatelessWidget {
                     SeatBlock(userType: UserType.passenger),
                     Column(
                       children: [
-                        ModeToggler(user: UserType.passenger),
+                        ModeToggler(
+                          user: UserType.passenger,
+                          onPresetsSegmentTapped: () =>
+                              onPresetsSegmentTapped(UserType.passenger),
+                        ),
                         const SizedBox(height: 60),
                         ManualHeatLevelSelector(userType: UserType.passenger),
                       ],

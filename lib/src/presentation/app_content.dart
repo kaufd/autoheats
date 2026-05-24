@@ -15,12 +15,12 @@
 //   _selectTab - перейти на вкладку
 //   build - Scaffold/AppBar/TabBarView с themed background
 //   _buildTabButton - nav button для вкладки
-//   _applyPreset - сохранить ManualSettings и применить Preset runtime через ModeCubit/HVAC
+//   _applyPreset - применить Preset через ModeCubit и PresetCubit
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Settings/Presets UX redesign: tab order Управление→Пресеты→Настройки, merged PresetsTab]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: preset apply delegates to ModeCubit.applyPreset]
+//   LAST_CHANGE: [v1.3.0 - Mode-source decoupling: onPresetsSegmentTapped routes to apply or tab navigation]
+//   PREVIOUS_CHANGE: [v1.2.0 - Settings/Presets UX redesign: tab order Управление→Пресеты→Настройки, merged PresetsTab]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -75,6 +75,17 @@ class AppContentState extends State<AppContent>
     _tabController.animateTo(index);
   }
 
+  void _onPresetsSegmentTapped(UserType user) {
+    final presetCubit = context.read<PresetCubit>();
+    final activePreset = presetCubit.state.selectedPresets[user];
+    if (activePreset == null) {
+      _selectTab(1); // tab «Пресеты»
+      return;
+    }
+    // С активным пресетом — обычный apply flow (тот же, что у ▶ apply в списке).
+    _applyPreset(activePreset);
+  }
+
   @override
   Widget build(BuildContext context) {
     final String themeName = context.read<ThemeCubit>().state.key;
@@ -117,7 +128,7 @@ class AppContentState extends State<AppContent>
             child: TabBarView(
               controller: _tabController,
               children: [
-                HeatScreen(),
+                HeatScreen(onPresetsSegmentTapped: _onPresetsSegmentTapped),
                 PresetsTab(
                   onPresetApplied: (preset) {
                     _applyPreset(preset);
