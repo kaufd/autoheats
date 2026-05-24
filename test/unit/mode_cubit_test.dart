@@ -188,7 +188,7 @@ void main() {
     );
   });
 
-  test('scenario-10: setMode manual с активным уровнем отправляет HVAC 0',
+  test('scenario-10: setMode manual сохраняет текущий уровень подогрева',
       () async {
     final (cubit, fakeHvac, prefs, _) = await buildCubit({});
     await cubit.setHeatLevel(UserType.driver, 3);
@@ -197,12 +197,10 @@ void main() {
     await cubit.setMode(UserType.driver, HeatMode.manual.name);
 
     expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.manual);
-    expect(stateOf(cubit, UserType.driver).heatLevel, 0);
+    expect(stateOf(cubit, UserType.driver).heatLevel, 3);
     expect(prefs.getString('driver_mode'), 'manual');
-    expect(prefs.getInt('driver_heat_level'), 0);
-    expect(fakeHvac.recordedSetSeatHeatCalls, [
-      (userType: UserType.driver, level: 0),
-    ]);
+    expect(prefs.getInt('driver_heat_level'), 3);
+    expect(fakeHvac.recordedSetSeatHeatCalls, isEmpty);
   });
 
   test(

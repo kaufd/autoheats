@@ -139,18 +139,11 @@ class ModeCubit extends Cubit<ModesState> {
   }) async {
     // START_BLOCK_SET_MODE
     final heatMode = HeatModeExtension.fromString(newMode);
-    final currentState = _getStateByUser(userType);
 
     await _modeService.setMode(userType, heatMode);
     _updateUserState(userType, mode: heatMode);
 
     await _manageAutoHeat(userType, heatMode, settings: settings);
-
-    if (heatMode == HeatMode.manual && currentState.heatLevel != 0) {
-      await _persistAndApplyHeatLevel(userType, 0);
-    } else if (heatMode == HeatMode.manual) {
-      _updateUserState(userType, heatLevel: 0);
-    }
 
     Logger.info(
       'ModeCubit',
