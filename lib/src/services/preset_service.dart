@@ -3,8 +3,7 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: JSON-CRUD пользовательских пресетов в SharedPreferences.
 //   SCOPE: load/save/delete presets per UserType, createPresetFromCurrentSettings,
-//          lastUsed metadata, runtime heatMode/heatLevel persistence,
-//          selected preset id per UserType.
+//          lastUsed metadata, selected preset id per UserType.
 //   DEPENDS: M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: M-PRESET, V-M-PRESET, FA-001, FA-011, DF-PRESET-APPLY
 //   ROLE: RUNTIME
@@ -20,14 +19,14 @@
 //   getPresetById - nullable lookup
 //   getSelectedPresetId/setSelectedPresetId/clearSelectedPresetId - selection per UserType
 //   updatePresetLastUsed - обновить metadata
-//   createPresetFromCurrentSettings - snapshot settings + heatMode + heatLevel
+//   createPresetFromCurrentSettings - snapshot settings
 //   _savePresets - JSON encode + SharedPreferences write
 //   clearAllPresets - очистить оба списка
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-9: selected preset id persists per user]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: Preset сохраняет runtime heatMode/heatLevel]
+//   LAST_CHANGE: [v1.3.0 - Mode-source decoupling: drop heatMode/heatLevel from createPresetFromCurrentSettings]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-9: selected preset id persists per user]
 // END_CHANGE_SUMMARY
 
 import 'dart:convert';
@@ -138,18 +137,16 @@ class PresetService {
   }
 
   // START_CONTRACT: createPresetFromCurrentSettings
-  //   PURPOSE: Создать snapshot пресета из текущих settings + runtime mode/level.
-  //   INPUTS: { name, userType, settings, heatMode, heatLevel }
+  //   PURPOSE: Создать snapshot пресета из настроек user'а.
+  //   INPUTS: { name, userType, settings }
   //   OUTPUTS: { Future<Preset> }
   //   SIDE_EFFECTS: SharedPreferences write через savePreset.
-  //   LINKS: M-PRESET, M-MODE, V-M-PRESET, FA-001, FA-011
+  //   LINKS: M-PRESET, V-M-PRESET
   // END_CONTRACT: createPresetFromCurrentSettings
   Future<Preset> createPresetFromCurrentSettings({
     required String name,
     required UserType userType,
     required ManualHeatSettings settings,
-    required HeatMode heatMode,
-    required int heatLevel,
   }) async {
     // START_BLOCK_CREATE_PRESET_FROM_CURRENT_SETTINGS
     final preset = Preset(
@@ -157,8 +154,6 @@ class PresetService {
       name: name,
       userType: userType,
       settings: settings,
-      heatMode: heatMode,
-      heatLevel: heatLevel.clamp(0, 3),
       createdAt: DateTime.now(),
     );
 

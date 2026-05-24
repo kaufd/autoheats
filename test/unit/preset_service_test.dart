@@ -35,8 +35,6 @@ void main() {
       name: 'Трасса',
       userType: UserType.driver,
       settings: ManualHeatSettings.defaultFor(UserType.driver),
-      heatMode: HeatMode.presets,
-      heatLevel: 2,
     );
 
     final loaded = await service.getPresets(UserType.driver);
@@ -73,8 +71,6 @@ void main() {
       name: 'Зима',
       userType: UserType.driver,
       settings: ManualHeatSettings.defaultFor(UserType.driver),
-      heatMode: HeatMode.presets,
-      heatLevel: 2,
     );
     await service.setSelectedPresetId(UserType.driver, preset.id);
 

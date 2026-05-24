@@ -33,7 +33,6 @@
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
-import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
@@ -241,17 +240,10 @@ class _PresetsTabState extends State<PresetsTab> {
       if (name == null || name.trim().isEmpty) return;
       if (!mounted) return;
 
-      final modeCubit = context.read<ModeCubit>();
-      final heatMode = HeatModeExtension.fromString(
-          modeCubit.getModeByUser(_selectedUser));
-      final heatLevel = modeCubit.getHeatLevelByUser(_selectedUser);
-
       await context.read<PresetCubit>().savePreset(
             name: name.trim(),
             userType: _selectedUser,
             settings: draft,
-            heatMode: heatMode,
-            heatLevel: heatLevel,
           );
 
       if (!mounted) return;

@@ -87,8 +87,6 @@ void main() {
       name: 'Зима ${userType.name}',
       userType: userType,
       settings: ManualHeatSettings.defaultFor(userType),
-      heatMode: heatMode,
-      heatLevel: heatLevel,
       createdAt: DateTime.parse('2026-01-02T03:04:05.000'),
     );
   }
@@ -174,21 +172,19 @@ void main() {
   test('scenario-9: applyPreset выставляет mode/level, prefs и HVAC', () async {
     final (cubit, fakeHvac, prefs, presetService) = await buildCubit({});
 
-    await cubit.applyPreset(preset(heatMode: HeatMode.presets, heatLevel: 2));
+    await cubit.applyPreset(preset());
 
     expect(stateOf(cubit, UserType.driver).heatMode, HeatMode.presets);
-    expect(stateOf(cubit, UserType.driver).heatLevel, 2);
     expect(prefs.getString('driver_mode'), 'presets');
-    expect(prefs.getInt('driver_heat_level'), 2);
     expect(await presetService.getSelectedPresetId(UserType.driver),
         'preset-driver');
     expect(fakeHvac.recordedSetSeatHeatCalls, [
-      (userType: UserType.driver, level: 2),
+      (userType: UserType.driver, level: 0),
     ]);
     expect(
       logs.lines,
       contains(
-          '[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=driver, mode=presets, level=2, presetId=preset-driver'),
+          '[ModeCubit][applyPreset][BLOCK_APPLY_PRESET] applied | userType=driver, mode=presets, level=0, presetId=preset-driver'),
     );
   });
 

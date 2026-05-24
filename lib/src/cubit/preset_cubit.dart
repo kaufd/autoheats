@@ -2,7 +2,7 @@
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Bloc-слой списка пресетов: load/save/delete/apply metadata.
-//   SCOPE: PresetState, CRUD через PresetService, сохранение runtime heatMode/heatLevel,
+//   SCOPE: PresetState, CRUD через PresetService,
 //          selected preset per UserType.
 //   DEPENDS: M-PRESET, M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: M-PRESET, V-M-PRESET, FA-001, FA-011, DF-PRESET-APPLY
@@ -14,7 +14,7 @@
 //   PresetCubit - Cubit<PresetState> для списка и selectedPreset per user
 //   loadPresets(UserType) - загрузить пресеты одного сиденья
 //   loadAllPresets - загрузить driver + passenger
-//   savePreset - сохранить settings + runtime mode/level snapshot
+//   savePreset - сохранить settings snapshot
 //   updatePresetSettings - upsert settings on an existing Preset by id; reload list
 //   deletePreset - удалить, очистить selection при совпадении и перезагрузить список
 //   applyPreset - обновить lastUsed и selectedPreset metadata/persistence
@@ -23,8 +23,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.3.0 - Add updatePresetSettings for in-place editing of saved presets]
-//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-9: selected preset persists per user]
+//   LAST_CHANGE: [v1.4.0 - Mode-source decoupling: savePreset больше не принимает heatMode/heatLevel snapshot]
+//   PREVIOUS_CHANGE: [v1.3.0 - Add updatePresetSettings for in-place editing of saved presets]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -86,18 +86,16 @@ class PresetCubit extends Cubit<PresetState> {
   }
 
   // START_CONTRACT: savePreset
-  //   PURPOSE: Сохранить пресет как snapshot settings + runtime mode/level.
-  //   INPUTS: { name, userType, settings, heatMode, heatLevel }
+  //   PURPOSE: Сохранить пресет как snapshot settings.
+  //   INPUTS: { name, userType, settings }
   //   OUTPUTS: { Future<void> }
   //   SIDE_EFFECTS: SharedPreferences write через PresetService, reload list.
-  //   LINKS: M-PRESET, M-MODE, V-M-PRESET, FA-001, FA-011
+  //   LINKS: M-PRESET, V-M-PRESET
   // END_CONTRACT: savePreset
   Future<void> savePreset({
     required String name,
     required UserType userType,
     required ManualHeatSettings settings,
-    required HeatMode heatMode,
-    required int heatLevel,
   }) async {
     // START_BLOCK_SAVE_PRESET
     try {
@@ -105,8 +103,6 @@ class PresetCubit extends Cubit<PresetState> {
         name: name,
         userType: userType,
         settings: settings,
-        heatMode: heatMode,
-        heatLevel: heatLevel,
       );
 
       await loadAllPresets();
@@ -117,7 +113,7 @@ class PresetCubit extends Cubit<PresetState> {
   }
 
   // START_CONTRACT: updatePresetSettings
-  //   PURPOSE: Persist new settings into an existing preset by id (keeps name/createdAt/heatMode/heatLevel).
+  //   PURPOSE: Persist new settings into an existing preset by id (keeps name/createdAt).
   //   INPUTS: { preset: Preset, settings: ManualHeatSettings }
   //   OUTPUTS: { Future<void> }
   //   SIDE_EFFECTS: SharedPreferences write через PresetService.savePreset upsert, reload list.

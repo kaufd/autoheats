@@ -193,8 +193,8 @@ class ModeCubit extends Cubit<ModesState> {
   Future<void> applyPreset(Preset preset) async {
     // START_BLOCK_APPLY_PRESET
     final userType = preset.userType;
-    final heatMode = preset.heatMode;
-    final heatLevel = preset.heatLevel.clamp(0, 3);
+    final heatMode = HeatMode.presets;
+    final heatLevel = 0;
 
     await _manageAutoHeat(userType, heatMode);
 
