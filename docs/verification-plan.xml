@@ -536,23 +536,32 @@
 
     <V-M-BACKGROUND MODULE="M-BACKGROUND" PRIORITY="high">
       <test-files>
-        <file>test/integration/background_service_test.dart (smoke; основная верификация — ручная)</file>
+        <file>test/unit/background_runtime_controller_test.dart</file>
+        <file>test/integration/background_service_test.dart (smoke; основная верификация lifecycle на голове — ручная)</file>
       </test-files>
       <module-checks>
-        <check-1>flutter test test/integration/background_service_test.dart</check-1>
-        <check-2>Ручной smoke: запуск с adb shell am start-service, наблюдение нотификации, прохождение ignition ON/OFF.</check-2>
+        <check-1>flutter test test/unit/background_runtime_controller_test.dart</check-1>
+        <check-2>flutter test test/integration/background_service_test.dart</check-2>
+        <check-3>Ручной smoke: запуск с adb shell am start-service, наблюдение нотификации, прохождение ignition ON/OFF, stopService command.</check-3>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">initializeBackgroundService выставляет правильный AndroidConfiguration (channel my_foreground, id 888, autoStart).</scenario-1>
-        <scenario-2 kind="success">onStart вызывает DartPluginRegistrant.ensureInitialized и setupServiceLocator.</scenario-2>
-        <scenario-3 kind="failure">При исключении в onStart срабатывает backoff и не превышается _maxRestartAttempts.</scenario-3>
+        <scenario-2 kind="success">onStart вызывает DartPluginRegistrant.ensureInitialized, setupServiceLocator и создаёт BackgroundRuntimeController.</scenario-2>
+        <scenario-3 kind="failure">При исключении runtime startup срабатывает bounded backoff и не превышается maxRestartAttempts.</scenario-3>
+        <scenario-4 kind="success">BackgroundRuntimeController: stopService command → awaited driver/passenger level=0 → stopSelf().</scenario-4>
+        <scenario-5 kind="success">BackgroundRuntimeController: ignition OFF await'ит driver/passenger level=0 до завершения handler Future.</scenario-5>
+        <scenario-6 kind="failure">Malformed ignition event логируется и не валит isolate.</scenario-6>
+        <scenario-7 kind="failure">Start failure at max attempts вызывает stopSelf() и не schedule'ит retry.</scenario-7>
       </scenarios>
       <required-log-markers>
         <marker-1>[BackgroundService][onStart][BLOCK_ON_START]</marker-1>
         <marker-2>[BackgroundService][onStart][BLOCK_RESTART_BACKOFF]</marker-2>
+        <marker-3>[BackgroundService][handleIgnition][BLOCK_HANDLE_IGNITION]</marker-3>
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>В background-изоляте не должно быть обращений к UI-уровневым synchronizer'ам или ThemeCubit.</assertion-1>
+        <assertion-2>Seat shutdown failure одного userType не должен блокировать попытку выключить второй userType.</assertion-2>
+        <assertion-3>stopSelf вызывается для stopService command даже если seat shutdown warning был залогирован.</assertion-3>
       </required-trace-assertions>
       <wave-follow-up>Smoke на голове после изменения onStart.</wave-follow-up>
       <phase-follow-up>Регрессия после апдейтов flutter_background_service. Отдельно: cold-boot smoke — проверить, что нотификация 'AutoHeat Service' появляется после рестарта головы (см. development-plan risk-4 про удалённый Future.delayed(1s)).</phase-follow-up>

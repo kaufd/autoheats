@@ -463,11 +463,13 @@
       </contract>
       <interface>
         <export-initializeBackgroundService PURPOSE="Конфигурация и autoStart" />
-        <export-onStart PURPOSE="@pragma('vm:entry-point'); ensureInitialized + setupServiceLocator + подписки" />
+        <export-onStart PURPOSE="@pragma('vm:entry-point'); ensureInitialized + setupServiceLocator + BackgroundRuntimeController" />
+        <export-BackgroundRuntimeController PURPOSE="Testable lifecycle owner: stopService, ignition OFF shutdown, bounded restart-backoff" />
       </interface>
       <depends>M-PLUGIN, M-MODE, M-HVAC, M-DI</depends>
       <target>
         <source>lib/src/services/background_service.dart</source>
+        <source>lib/src/services/background_runtime_controller.dart</source>
         <source>android/app/src/main/AndroidManifest.xml</source>
       </target>
       <observability>
@@ -480,6 +482,7 @@
       <notes>
         <note-1>Канал нотификации 'my_foreground', id 888. Без него Android 13+ убивает процесс.</note-1>
         <note-2>В onStart обязательно DartPluginRegistrant.ensureInitialized() и повторный setupServiceLocator() — изолят отдельный.</note-2>
+        <note-3>Phase-4 Slice-5: stopService command обрабатывается в background isolate; ignition OFF и stop shutdown await'ят driver/passenger level=0; retry bounded через BackgroundRuntimeController.</note-3>
       </notes>
     </M-BACKGROUND>
 
@@ -778,6 +781,7 @@
       <step-5 module="M-HVAC" status="done" verification="V-M-HVAC">FA-003: HvacService перешёл на cached multi-listener API; AutoHeatService и CabinTemperatureCubit подписываются независимо.</step-5>
       <step-6 module="M-CABIN-TEMPERATURE" status="done" verification="V-M-CABIN-TEMPERATURE">FA-003: initial read и HVAC events публикуются в UI через CabinTemperatureCubit/CabinTemperatureDisplay.</step-6>
       <step-7 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">FA-005: effective-plan guard предотвращает restart расписания на repeated same-range/same-settings sensor events.</step-7>
+      <step-8 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">FA-006: BackgroundRuntimeController управляет stopService, awaited ignition OFF shutdown и bounded restart-backoff.</step-8>
     </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">

@@ -3,10 +3,10 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Foreground-service flutter_background_service — живёт пока приложение
 //            в фоне; слушает ignition, синхронизирует ModeCubit в своём изоляте.
-//   SCOPE: конфигурация AndroidConfiguration, onStart entry-point, реакция на
-//          ignition ON/OFF, restart-backoff, остановка сервиса.
+//   SCOPE: конфигурация AndroidConfiguration, onStart entry-point, runtime-controller
+//          для stopService, ignition ON/OFF, restart-backoff, остановка сервиса.
 //   DEPENDS: M-PLUGIN, M-MODE, M-HVAC, M-DI, M-LOGGER
-//   LINKS: M-BACKGROUND, V-M-BACKGROUND, DF-BACKGROUND
+//   LINKS: M-BACKGROUND, V-M-BACKGROUND, DF-BACKGROUND, FA-006
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -14,28 +14,27 @@
 // START_MODULE_MAP
 //   initializeBackgroundService - конфигурация (channel my_foreground, id 888) + startService
 //   onStart - @pragma('vm:entry-point'); ensureInitialized + setupServiceLocator + Logger marker
-//   _androidAutomotivePlugin - локальный плагин background-изолята
+//   _startRuntimeConnection - plugin sensor callback + connect + automotive_connected flag
+//   _retryRuntimeStart - bounded retry wrapper delegated from BackgroundRuntimeController
 //   _modeCubit - ModeCubit, поднятый в background-изоляте
-//   _isServiceRunning / _restartAttempts / _maxRestartAttempts - состояние restart-backoff
-//   _onCarSensorEvent - обработка ignition + Logger marker BLOCK_HANDLE_IGNITION
-//   stopBackgroundService - сброс уровней и остановка сервиса
+//   _runtimeController - BackgroundRuntimeController lifecycle owner
+//   _maxRestartAttempts - retry limit для restart-backoff
+//   stopBackgroundService - отправка stopService command в background isolate
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers foreground-service lifecycle]
-//   PREVIOUS_CHANGE: [v0.2.0 - GRACE-инициализация: добавлены MODULE_CONTRACT и MODULE_MAP]
+//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-5: lifecycle вынесен в BackgroundRuntimeController]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-3: добавлены Logger markers foreground-service lifecycle]
 // END_CHANGE_SUMMARY
 
 import 'dart:async';
 import 'dart:ui';
 
 import 'package:android_automotive_plugin/android_automotive_plugin.dart';
-import 'package:android_automotive_plugin/car/car_sensor_event.dart';
-import 'package:android_automotive_plugin/car/car_sensor_types.dart';
-import 'package:android_automotive_plugin/car/ignition_state.dart';
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/di/service_locator.dart';
+import 'package:autoheat/src/services/background_runtime_controller.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
 import 'package:autoheat/src/utils/logger.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
@@ -80,41 +79,42 @@ Future<void> initializeBackgroundService() async {
   }
 }
 
-late AndroidAutomotivePlugin _androidAutomotivePlugin;
-late ModeCubit _modeCubit;
-bool _isServiceRunning = false;
-int _restartAttempts = 0;
+ModeCubit? _modeCubit;
+BackgroundRuntimeController? _runtimeController;
 const int _maxRestartAttempts = 3;
 
 @pragma('vm:entry-point')
 onStart(ServiceInstance service) async {
   // START_BLOCK_ON_START
-  try {
-    _isServiceRunning = true;
-    _restartAttempts = 0;
+  BackgroundRuntimeController? runtimeController;
+  AndroidAutomotivePlugin? plugin;
 
+  try {
     DartPluginRegistrant.ensureInitialized();
     Logger.info('BackgroundService', 'onStart', 'BLOCK_ON_START', 'started');
 
-    if (service is AndroidServiceInstance) {
-      service.setForegroundNotificationInfo(
-        title: 'AutoHeat Service',
-        content: 'Мониторинг состояния автомобиля активен',
-      );
-    }
+    final servicePort = ServiceInstanceBackgroundServicePort(service);
+    await servicePort.setForegroundNotificationInfo(
+      title: 'AutoHeat Service',
+      content: 'Мониторинг состояния автомобиля активен',
+    );
 
     await setupServiceLocator();
-    _modeCubit = locator<ModeCubit>();
-    _androidAutomotivePlugin = locator<HvacService>().androidAutomotivePlugin;
+    final modeCubit = locator<ModeCubit>();
+    plugin = locator<HvacService>().androidAutomotivePlugin;
 
-    final completer = Completer();
+    _modeCubit = modeCubit;
+    runtimeController = BackgroundRuntimeController(
+      servicePort: servicePort,
+      modePort: ModeCubitBackgroundModePort(modeCubit),
+      maxRestartAttempts: _maxRestartAttempts,
+    );
+    _runtimeController = runtimeController;
+    runtimeController.registerStopHandler();
 
-    _androidAutomotivePlugin.onCarSensorEventCallback = _onCarSensorEvent;
-    await _androidAutomotivePlugin.connect();
+    await _startRuntimeConnection(runtimeController, plugin);
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('automotive_connected', true);
-
+    final completer = Completer<void>();
     Timer(Duration(seconds: 30), () {
       if (!completer.isCompleted) {
         completer.complete();
@@ -123,91 +123,61 @@ onStart(ServiceInstance service) async {
 
     await completer.future;
   } catch (e) {
-    _isServiceRunning = false;
-    Logger.error(
-      'BackgroundService',
-      'onStart',
-      'BLOCK_ON_START',
-      'failed',
-      {'error': e},
-    );
-
-    if (service is AndroidServiceInstance &&
-        _restartAttempts < _maxRestartAttempts) {
-      _restartAttempts++;
-      Logger.warn(
-        'BackgroundService',
-        'onStart',
-        'BLOCK_RESTART_BACKOFF',
-        'restart scheduled',
-        {'attempt': _restartAttempts, 'maxAttempts': _maxRestartAttempts},
+    final controller = runtimeController;
+    final retryPlugin = plugin;
+    if (controller != null && retryPlugin != null) {
+      await controller.handleStartFailure(
+        e,
+        retry: () => _retryRuntimeStart(controller, retryPlugin),
       );
-
-      Timer(Duration(seconds: 10), () {
-        if (!_isServiceRunning) {
-          service.setForegroundNotificationInfo(
-            title: 'AutoHeat Service',
-            content: 'Перезапуск сервиса...',
-          );
-        }
-      });
-    } else if (_restartAttempts >= _maxRestartAttempts) {
+    } else {
       Logger.error(
         'BackgroundService',
         'onStart',
-        'BLOCK_RESTART_BACKOFF',
-        'max attempts reached',
-        {'attempt': _restartAttempts, 'maxAttempts': _maxRestartAttempts},
+        'BLOCK_ON_START',
+        'failed before runtime controller was ready',
+        {'error': e},
       );
-      if (service is AndroidServiceInstance) {
-        service.stopSelf();
-      }
+      await service.stopSelf();
     }
   }
   // END_BLOCK_ON_START
 }
 
-_onCarSensorEvent(CarSensorEvent carSensorEvent) async {
-  // START_BLOCK_HANDLE_IGNITION
-  try {
-    if (carSensorEvent.sensorType ==
-        CarSensorTypes.SENSOR_TYPE_IGNITION_STATE) {
-      int ignitionState = carSensorEvent.intValues.first;
-      bool ignitionOn = ignitionState == IgnitionState.IGNITION_STATE_ON;
-      Logger.info(
-        'BackgroundService',
-        'handleIgnition',
-        'BLOCK_HANDLE_IGNITION',
-        'ignition event',
-        {'ignitionOn': ignitionOn, 'ignitionState': ignitionState},
-      );
+Future<void> _startRuntimeConnection(
+  BackgroundRuntimeController runtimeController,
+  AndroidAutomotivePlugin plugin,
+) async {
+  plugin.onCarSensorEventCallback = runtimeController.handleIgnition;
+  await plugin.connect();
 
-      if (ignitionOn) {
-        // ModeCubit уже инициализирован и сам запустит нужную логику
-        // на основе сохраненных настроек пользователей
-      } else {
-        _modeCubit.setHeatLevel(UserType.driver, 0);
-        _modeCubit.setHeatLevel(UserType.passenger, 0);
-      }
-    }
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('automotive_connected', true);
+
+  runtimeController.markStarted();
+}
+
+Future<void> _retryRuntimeStart(
+  BackgroundRuntimeController runtimeController,
+  AndroidAutomotivePlugin plugin,
+) async {
+  try {
+    await _startRuntimeConnection(runtimeController, plugin);
   } catch (e) {
-    Logger.warn(
-      'BackgroundService',
-      'handleIgnition',
-      'BLOCK_HANDLE_IGNITION',
-      'ignored malformed ignition event',
-      {'error': e},
+    await runtimeController.handleStartFailure(
+      e,
+      retry: () => _retryRuntimeStart(runtimeController, plugin),
     );
   }
-  // END_BLOCK_HANDLE_IGNITION
 }
 
 Future<void> stopBackgroundService() async {
   try {
-    _isServiceRunning = false;
-
-    _modeCubit.setHeatLevel(UserType.driver, 0);
-    _modeCubit.setHeatLevel(UserType.passenger, 0);
+    final modeCubit = _modeCubit;
+    if (_runtimeController == null && modeCubit != null) {
+      await modeCubit.setHeatLevel(UserType.driver, 0);
+      await modeCubit.setHeatLevel(UserType.passenger, 0);
+    }
 
     final service = FlutterBackgroundService();
     service.invoke('stopService');

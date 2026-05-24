@@ -142,6 +142,7 @@ Resolution:
 ### FA-006 — Background service stop/restart lifecycle неполный
 
 Priority: high  
+Status: addressed in Phase-4 Slice-5 by introducing `BackgroundRuntimeController` for stop command handling, awaited ignition OFF shutdown, and bounded restart-backoff. Manual head-unit smoke remains required.
 Modules: `M-BACKGROUND`, `M-DI`, `M-PLUGIN`  
 Related: `UC-004`, `DF-BACKGROUND`, `V-M-BACKGROUND`
 
@@ -156,11 +157,11 @@ Observed consequence:
 - При ошибке старта может появиться «Перезапуск сервиса...», но реальный reconnect не произойдёт.
 - Ignition OFF может завершиться до применения HVAC=0.
 
-Suggested fix direction:
-- Добавить `service.on('stopService').listen(...)` с `stopSelf()` для Android.
-- Сформулировать retry contract: reconnect plugin, restart service, или fail-stop после max attempts.
-- Await/sequence ignition OFF heat-level calls и логировать failure per seat.
-- Проверять только manual smoke на голове или выделить абстракцию для unit harness.
+Resolution:
+- `BackgroundRuntimeController` подписывается на `service.on('stopService')`, await'ит driver/passenger `setHeatLevel(0)` и вызывает `stopSelf()`.
+- Ignition OFF теперь await'ит shutdown обоих сидений; ошибка одного сиденья логируется и не блокирует второе.
+- Restart-backoff получил явный contract: ниже лимита schedule retry callback; на max attempts — `stopSelf()`.
+- Verification: `test/unit/background_runtime_controller_test.dart` scenarios 1-5; hardware lifecycle still requires manual smoke.
 
 ---
 
@@ -290,7 +291,7 @@ Suggested ordering:
 2. `FA-002`: addressed in Phase-4 Slice-2.
 3. `FA-003`: addressed in Phase-4 Slice-3.
 4. `FA-005`: addressed in Phase-4 Slice-4.
-5. `FA-006`: отдельно hardened background lifecycle + head-unit smoke.
+5. `FA-006`: addressed in Phase-4 Slice-5; manual head-unit smoke remains open.
 6. `FA-009`/`FA-012`: UI/state cleanup.
 
 ## Verification gaps to add before fixing
@@ -299,4 +300,4 @@ Suggested ordering:
 - Unit/integration test for `DF-PRESET-APPLY`: tap/apply preset causes `ModeCubit.setHeatLevel` and `HvacService.setSeatHeatLevel`.
 - FakeAsync test: repeated same-range temperature events do not restart sequence — addressed in Phase-4 Slice-4 (`test/unit/auto_heat_service_test.dart` scenario-13).
 - Temperature display test: addressed in Phase-4 Slice-3 (`test/widget/cabin_temperature_display_test.dart`).
-- Background service manual smoke checklist for stop/restart/ignition OFF.
+- Background service manual smoke checklist for stop/restart/ignition OFF remains required after Phase-4 Slice-5.
