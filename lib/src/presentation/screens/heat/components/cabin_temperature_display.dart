@@ -18,14 +18,19 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - LongPress toggles debug mode (SettingsCubit.toggleDebugMode + SnackBar)]
-//   PREVIOUS_CHANGE: [v1.0.0 - Phase-4 Slice-3: UI читает CabinTemperatureCubit]
+//   LAST_CHANGE: [v1.2.0 - Debug OFF восстанавливает реальную температуру через HvacService и очищает LogRingBuffer]
+//   PREVIOUS_CHANGE: [v1.1.0 - LongPress toggles debug mode (SettingsCubit.toggleDebugMode + SnackBar)]
 // END_CHANGE_SUMMARY
+
+import 'dart:async';
 
 import 'package:autoheat/src/config/color_constants.dart';
 import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
+import 'package:autoheat/src/di/service_locator.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
+import 'package:autoheat/src/services/hvac_service.dart';
+import 'package:autoheat/src/utils/logger.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -71,13 +76,28 @@ class CabinTemperatureDisplay extends StatelessWidget {
     await cubit.toggleDebugMode();
     if (!context.mounted) return;
     final enabled = cubit.state.debugMode;
+
+    if (!enabled) {
+      // Возвращаем все debug-side-effects в норму, чтобы выключенный режим
+      // не влиял на реальную работу.
+      // 1. Инжектированная температура в AutoHeatService должна уступить
+      //    место реальному значению — getCabinTemperature() сам опубликует
+      //    его всем listener'ам, AutoHeatService пересчитает уровни.
+      //    Не await'им: HVAC может быть недоступен (на эмуляторе/в fallback),
+      //    но даже там publish(20.0) обновит state. Ошибки логируются внутри.
+      // 2. LogRingBuffer чистим — экран Логов скрыт, дальнейшее накопление
+      //    впустую расходует память до повторного включения debug.
+      unawaited(locator<HvacService>().getCabinTemperature());
+      LogRingBuffer.instance.clear();
+    }
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         duration: const Duration(seconds: 2),
         content: Text(
           enabled
               ? 'Debug mode ON — появилась вкладка «Логи» с инжектором температуры'
-              : 'Debug mode OFF',
+              : 'Debug mode OFF — реальная температура восстановлена',
           style: TextStyle(color: context.themeColors.textButtonSelected),
         ),
         backgroundColor: context.themeColors.primary,

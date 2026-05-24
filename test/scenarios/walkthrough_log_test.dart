@@ -246,6 +246,40 @@ void main() {
   });
 
   // ----------------------------------------------------------------------
+  // Сценарий 6: debug OFF — injected temperature должна уступить место
+  // реальной. Имитируем то, что делает CabinTemperatureDisplay._toggleDebugMode
+  // в выключенной ветке: AutoHeatService.setTemperature(-3) (инжектор), затем
+  // hvacService.getCabinTemperature() (восстановление). После восстановления
+  // авто-режим должен ВЫКЛЮЧИТЬСЯ (реальная t° 25°C → off-диапазон).
+  // ----------------------------------------------------------------------
+  test('Сценарий 6: debug OFF восстанавливает реальную температуру', () {
+    fakeAsync((async) {
+      final (:cubit, :hvac) = buildCubit(async, initialTemperature: 25.0);
+
+      cubit.setMode(UserType.driver, 'auto');
+      async.flushMicrotasks();
+
+      // Инжектор debug-режима: −3°C → cold-диапазон, каскад с уровня 3.
+      AutoHeatService().setTemperature(-3.0);
+      async.flushMicrotasks();
+      final levelDuringInject = hvac.recordedSetSeatHeatCalls.last.level;
+
+      // Имитация выключения debug: getCabinTemperature() публикует реальные
+      // 25°C, AutoHeatService._handleCabinTemperature → off-branch → 0.
+      hvac.getCabinTemperature();
+      async.flushMicrotasks();
+      final levelAfterRestore = hvac.recordedSetSeatHeatCalls.last.level;
+
+      dumpLogs('Сценарий 6');
+
+      expect(levelDuringInject, 3,
+          reason: 'injected -3°C → cold cascade level 3');
+      expect(levelAfterRestore, 0,
+          reason: 'restore real 25°C → off-range → level 0');
+    });
+  });
+
+  // ----------------------------------------------------------------------
   // Сценарий 5: переключения режимов manual ↔ auto ↔ presets.
   // Прогон: setMode(manual) → setHeatLevel(2) → setMode(auto) →
   // applyPreset(P) → setMode(manual). Логи должны показать чёткую
