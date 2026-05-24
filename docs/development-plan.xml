@@ -621,34 +621,37 @@
       <verification-ref>V-M-UI-HEAT</verification-ref>
     </M-UI-HEAT>
 
-    <M-UI-PRESETS NAME="PresetsScreen" TYPE="UI_COMPONENT" LAYER="5" ORDER="2" STATUS="implemented">
+    <M-UI-PRESETS NAME="PresetsTab" TYPE="UI_COMPONENT" LAYER="5" ORDER="2" STATUS="implemented">
       <contract>
-        <purpose>Список пресетов с применением и удалением.</purpose>
+        <purpose>Объединённая вкладка: Driver/Passenger toggle, редактор (threshold + auto-heat levels + опциональное имя для нового пресета), список с edit/apply/delete + «Новый пресет». Реализует E1 (apply неявно сохраняет dirty-edit того же пресета) и case 3-α (silent jump при смене активного пресета).</purpose>
         <inputs>
           <param name="presets" type="List&lt;Preset&gt;" />
+          <param name="selectedPresets" type="Map&lt;UserType, Preset?&gt;" />
         </inputs>
         <outputs>
-          <param name="UserAction" type="event" />
+          <param name="onPresetApplied" type="callback(Preset)" />
         </outputs>
         <errors />
       </contract>
       <interface>
-        <export-PresetsListScreen PURPOSE="Экран списка" />
-        <export-PresetList PURPOSE="Виджет списка" />
+        <export-PresetsTab PURPOSE="Stateful orchestrator вкладки (selectedUser, editingPresetId, draftSettings, nameController)" />
+        <export-PresetEditor PURPOSE="Слайдеры + опциональное name field + Сохранить" />
+        <export-PresetList PURPOSE="Список пресетов с edit/apply/delete + Новый пресет" />
+        <export-UserSegmentToggle PURPOSE="Driver/Passenger segmented control" />
       </interface>
-      <depends>M-PRESET</depends>
+      <depends>M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-ENUMS, M-THEME</depends>
       <target>
         <source>lib/src/presentation/screens/presets/</source>
       </target>
       <observability>
-        <log-prefix>[PresetsScreen]</log-prefix>
+        <log-prefix>[PresetsTab]</log-prefix>
       </observability>
       <verification-ref>V-M-UI-PRESETS</verification-ref>
     </M-UI-PRESETS>
 
     <M-UI-SETTINGS NAME="SettingsScreen" TYPE="UI_COMPONENT" LAYER="5" ORDER="3" STATUS="implemented">
       <contract>
-        <purpose>Экран настроек: тема, порог автоподогрева, пресеты, ручные настройки.</purpose>
+        <purpose>Slim-экран глобальных настроек: тема и видимость температуры в салоне. Все настройки пресетов переехали в M-UI-PRESETS.</purpose>
         <inputs>
           <param name="SettingsState" type="bloc-state" />
         </inputs>
@@ -658,13 +661,10 @@
         <errors />
       </contract>
       <interface>
-        <export-SettingsScreen PURPOSE="Контейнер настроек" />
-        <export-TemperatureThresholdSlider PURPOSE="Слайдер порога" />
-        <export-ThemeSelector PURPOSE="Выбор темы; wrap-safe layout и контраст selected-кнопки внутри SettingsScreen" />
-        <export-PresetsSection PURPOSE="Секция пресетов" />
-        <export-ManualSettingsSection PURPOSE="Секция ручных настроек" />
+        <export-SettingsScreen PURPOSE="Slim StatelessWidget c двумя строками: тема + видимость температуры" />
+        <export-ThemeSelector PURPOSE="Выбор темы; wrap-safe layout и контраст selected-кнопки" />
       </interface>
-      <depends>M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET, M-THEME</depends>
+      <depends>M-SETTINGS, M-THEME</depends>
       <target>
         <source>lib/src/presentation/screens/settings/</source>
       </target>
@@ -793,6 +793,14 @@
       <step-13 module="M-MODE" status="done" verification="V-M-MODE">FA-011: ModeCubit apply/manual/auto transitions synchronize selected preset id with runtime mode state.</step-13>
       <step-14 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">FA-011: PresetList highlights selected preset independently for driver/passenger.</step-14>
     </Phase-4>
+
+    <Phase-5 name="UX redesign" status="done">
+      <goal>UX-объединение настройки и применения пресетов в один экран; slim settings.</goal>
+      <step-1 module="M-PRESET" status="done" verification="V-M-PRESET">PresetCubit.updatePresetSettings: upsert settings on existing preset by id, reload list.</step-1>
+      <step-2 module="M-UI-PRESETS" status="done" verification="V-M-UI-PRESETS">Объединённая вкладка PresetsTab: Driver/Passenger toggle, PresetEditor, PresetList с edit/apply/delete + «Новый пресет». Реализует E1 (apply implicitly saves dirty edit) и case 3-α (silent jump при смене активного).</step-2>
+      <step-3 module="M-UI-APP" status="done" verification="V-M-UI-APP">AppContent: новый порядок вкладок Управление→Пресеты→Настройки, подключение PresetsTab вместо PresetsListScreen.</step-3>
+      <step-4 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">SettingsScreen schrunk to theme + cabin-temperature visibility; ManualSettingsCubit.initialize удалён из этого экрана.</step-4>
+    </Phase-5>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">
       <goal>Зафиксированы как replan-triggers — выполняются только при появлении конкретного триггера.</goal>

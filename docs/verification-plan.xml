@@ -633,7 +633,7 @@
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
-        <assertion-1>WidgetTester.tap на каждой вкладке → текущий экран меняется (find.byType(HeatScreen|PresetsListScreen|SettingsScreen)).</assertion-1>
+        <assertion-1>WidgetTester.tap на каждой вкладке → текущий экран меняется (find.byType(HeatScreen|PresetsTab|SettingsScreen)). Порядок вкладок: Управление → Пресеты → Настройки.</assertion-1>
       </required-trace-assertions>
       <wave-follow-up>При добавлении новой вкладки расширить scenario-1.</wave-follow-up>
       <phase-follow-up>n/a — структурный shell, регрессии маловероятны.</phase-follow-up>
@@ -663,20 +663,32 @@
 
     <V-M-UI-PRESETS MODULE="M-UI-PRESETS" PRIORITY="low">
       <test-files>
-        <file>test/widget/presets_list_screen_test.dart (запланирован)</file>
+        <file>test/widget/presets_tab_test.dart (запланирован)</file>
+        <file>test/widget/white_theme_button_contrast_test.dart (покрывает PresetEditor save-кнопку)</file>
       </test-files>
       <module-checks>
-        <check-1>flutter test test/widget/presets_list_screen_test.dart</check-1>
+        <check-1>flutter test test/widget/presets_tab_test.dart</check-1>
+        <check-2>flutter test test/widget/white_theme_button_contrast_test.dart</check-2>
       </module-checks>
       <scenarios>
-        <scenario-1 kind="success">Tap на пресете вызывает PresetCubit.apply.</scenario-1>
+        <scenario-1 kind="success">PresetsTab рендерит UserSegmentToggle + PresetEditor + PresetList.</scenario-1>
+        <scenario-2 kind="success">Tap на edit-иконке пресета загружает его settings в PresetEditor; editingPresetId = preset.id.</scenario-2>
+        <scenario-3 kind="success">Tap на apply-иконке вызывает onPresetApplied(preset) и обновляет ★ маркер.</scenario-3>
+        <scenario-4 kind="success">E1: apply на том же пресете при dirty draft сохраняет draft до onPresetApplied.</scenario-4>
+        <scenario-5 kind="success">case 3-α: apply другого пресета во время edit'a первого → editor молча сбрасывается на новый активный (без диалога).</scenario-5>
+        <scenario-6 kind="success">Empty-state: при отсутствии активного и editing-пресета редактор показывает ManualHeatSettings.defaultFor(userType) и подпись «Создайте новый пресет».</scenario-6>
+        <scenario-7 kind="success">«Новый пресет» открывает draft с name-полем; Сохранить disabled пока имя пустое; после сохранения список содержит новый пресет.</scenario-7>
+        <scenario-8 kind="regression">PresetEditor save-кнопка в white-теме использует чёрный foreground (textButtonSelected).</scenario-8>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
-        <assertion-1>WidgetTester.tap на ListTile пресета → mocktail.verify(fakePresetCubit.apply(preset)).called(1).</assertion-1>
+        <assertion-1>WidgetTester.tap на edit-IconButton → editingPresetId = preset.id (внутреннее состояние PresetsTab).</assertion-1>
+        <assertion-2>WidgetTester.tap на play-IconButton → onPresetApplied callback вызван с preset.</assertion-2>
+        <assertion-3>При dirty draft same-preset + tap apply: mocktail.verify(PresetCubit.updatePresetSettings(preset, draftSettings)).called(1) перед onPresetApplied.</assertion-3>
+        <assertion-4>При смене selectedPresets[user] на другой preset во время editing: editingPresetId == null после listener.</assertion-4>
       </required-trace-assertions>
       <wave-follow-up>Cross-check с V-M-PRESET scenario-2: apply пресета должен пройти полный каскад до HvacService.</wave-follow-up>
-      <phase-follow-up>Ручной smoke на голове: создание + применение пресета.</phase-follow-up>
+      <phase-follow-up>Ручной smoke на голове: создание, edit, apply implicit save, silent jump, delete.</phase-follow-up>
     </V-M-UI-PRESETS>
 
     <V-M-UI-SETTINGS MODULE="M-UI-SETTINGS" PRIORITY="low">
@@ -689,17 +701,17 @@
         <check-2>flutter test test/widget/white_theme_button_contrast_test.dart</check-2>
       </module-checks>
       <scenarios>
-        <scenario-1 kind="success">Изменение TemperatureThresholdSlider обновляет SettingsCubit.</scenario-1>
-        <scenario-2 kind="success">ThemeSelector переключает тему через ThemeCubit.</scenario-2>
-        <scenario-3 kind="smoke">SettingsScreen build/layout на размере 1024x600 проходит без Flutter layout exception (FA-009).</scenario-3>
-        <scenario-4 kind="regression">Primary/selected кнопки в белой теме используют чёрный foreground и остаются читаемыми.</scenario-4>
+        <scenario-1 kind="success">ThemeSelector переключает тему через ThemeCubit.</scenario-1>
+        <scenario-2 kind="success">CustomSwitch видимости температуры обновляет SettingsCubit.showCabinTemperature.</scenario-2>
+        <scenario-3 kind="smoke">SettingsScreen рендерит обе строки (тема + видимость температуры) above the fold на размере 1920x720 без scroll и без layout exception (FA-009).</scenario-3>
+        <scenario-4 kind="regression">CustomAlertDialog confirm и selected ThemeSelector button в белой теме используют чёрный foreground.</scenario-4>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
-        <assertion-1>WidgetTester.drag на TemperatureThresholdSlider → mocktail.verify(fakeSettingsCubit.setThreshold(any())).called(1).</assertion-1>
-        <assertion-2>WidgetTester.tap на ThemeSelector → mocktail.verify(fakeThemeCubit.setTheme(any())).called(1).</assertion-2>
-        <assertion-3>WidgetTester с physicalSize 1024x600 pump SettingsScreen → tester.takeException() == null.</assertion-3>
-        <assertion-4>CustomAlertDialog confirm, PresetsSettings save и selected ThemeSelector button resolve foregroundColor == ColorConstants.systemBlack в white theme.</assertion-4>
+        <assertion-1>WidgetTester.tap на ThemeSelector → mocktail.verify(fakeThemeCubit.setTheme(any())).called(1).</assertion-1>
+        <assertion-2>WidgetTester.tap на CustomSwitch → mocktail.verify(fakeSettingsCubit.setCabinTemperatureVisibility(any())).called(1).</assertion-2>
+        <assertion-3>WidgetTester с physicalSize 1920x720 pump SettingsScreen → tester.takeException() == null и оба Row видны без scroll.</assertion-3>
+        <assertion-4>CustomAlertDialog confirm и selected ThemeSelector button resolve foregroundColor == ColorConstants.systemBlack в white theme.</assertion-4>
       </required-trace-assertions>
       <wave-follow-up>Cross-check с V-M-SETTINGS и V-M-THEME: после drag/tap значение должно реально сохраниться в SharedPreferences.</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: визуальная проверка всех секций settings.</phase-follow-up>

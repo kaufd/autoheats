@@ -232,24 +232,26 @@
       </annotations>
     </M-UI-HEAT>
 
-    <M-UI-PRESETS NAME="PresetsScreen" TYPE="UI_COMPONENT" STATUS="implemented">
-      <purpose>Список сохранённых пресетов с возможностью применения и удаления.</purpose>
+    <M-UI-PRESETS NAME="PresetsTab" TYPE="UI_COMPONENT" STATUS="implemented">
+      <purpose>Объединённая вкладка пресетов: Driver/Passenger toggle, редактор пресета (threshold + auto-heat levels + name), список со значками edit/apply/delete и кнопкой «Новый пресет».</purpose>
       <path>lib/src/presentation/screens/presets/</path>
-      <depends>M-PRESET</depends>
+      <depends>M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-ENUMS, M-THEME</depends>
       <verification-ref>V-M-UI-PRESETS</verification-ref>
       <annotations>
-        <class-PresetsListScreen PURPOSE="UI поверх PresetCubit" />
+        <class-PresetsTab PURPOSE="Stateful orchestrator вкладки пресетов" />
+        <class-PresetEditor PURPOSE="Слайдеры + опциональное поле имени + кнопка Сохранить" />
+        <class-PresetList PURPOSE="Список пресетов с edit/apply/delete + Новый пресет" />
+        <class-UserSegmentToggle PURPOSE="Driver/Passenger segmented control" />
       </annotations>
     </M-UI-PRESETS>
 
     <M-UI-SETTINGS NAME="SettingsScreen" TYPE="UI_COMPONENT" STATUS="implemented">
-      <purpose>Экран настроек: тема, порог автоподогрева, пресеты, ручные настройки.</purpose>
+      <purpose>Slim-экран глобальных настроек: тема + видимость температуры в салоне.</purpose>
       <path>lib/src/presentation/screens/settings/</path>
-      <depends>M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET, M-THEME</depends>
+      <depends>M-SETTINGS, M-THEME</depends>
       <verification-ref>V-M-UI-SETTINGS</verification-ref>
       <annotations>
-        <class-SettingsScreen PURPOSE="Композиция секций settings/components" />
-        <class-TemperatureThresholdSlider PURPOSE="Слайдер порога авторежима (sliderValues)" />
+        <class-SettingsScreen PURPOSE="Две строки: ThemeSelector и CustomSwitch видимости температуры" />
         <class-ThemeSelector PURPOSE="Выбор темы; wrap-safe и contrast-safe selected-кнопка" />
       </annotations>
     </M-UI-SETTINGS>
@@ -286,10 +288,10 @@
     <CrossLink from="M-UI-HEAT" to="M-MODE" relation="reads-and-commands" />
     <CrossLink from="M-UI-HEAT" to="M-CABIN-TEMPERATURE" relation="reads-cabin-temperature-state" />
     <CrossLink from="M-UI-SETTINGS" to="M-SETTINGS" relation="edits" />
-    <CrossLink from="M-UI-SETTINGS" to="M-MANUAL-SETTINGS" relation="edits" />
-    <CrossLink from="M-UI-SETTINGS" to="M-PRESET" relation="edits" />
     <CrossLink from="M-UI-SETTINGS" to="M-THEME" relation="edits" />
-    <CrossLink from="M-UI-PRESETS" to="M-PRESET" relation="reads-and-applies" />
+    <CrossLink from="M-UI-PRESETS" to="M-PRESET" relation="lists-and-edits" />
+    <CrossLink from="M-UI-PRESETS" to="M-MANUAL-SETTINGS" relation="edits-settings" />
+    <CrossLink from="M-UI-PRESETS" to="M-MODE" relation="applies-preset" />
 
   </Project>
 </KnowledgeGraph>
