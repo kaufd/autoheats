@@ -280,9 +280,40 @@ class AutoHeatService {
       final callback = _heatLevelCallbacks[userType];
       if (callback == null) return;
 
+      // Для пресетов: каскад должен дойти до конца независимо от температуры.
+      // _getSequence для пресета может вернуть null, если t° >= threshold,
+      // но running-пресет не должен прерываться.
+      final isPreset = _manualSettingsByUser.containsKey(userType);
+      if (!isPreset) {
+        final seq = _getSequence(userType);
+        if (seq == null) {
+          callback(0);
+          return;
+        }
+        _stepDownLevel(userType, nextLevel, seq, callback);
+        return;
+      }
+
       final seq = _getSequence(userType);
       if (seq == null) {
-        callback(0);
+        // Порог превышен на старте (первый тик) — завершаем.
+        // Но если пресет уже был запущен, _activeLevels != null и _getSequence
+        // не вызывается из _updateAutoHeatForUser. Здесь мы в max-timer колбэке.
+        // Для безопасности: если seq == null (t° >= threshold), но пресет активен —
+        // продолжаем каскад с дефолтными длительностями из сохранённых settings.
+        final settings = _manualSettingsByUser[userType]!;
+        int dur(int level) {
+          for (final l in settings.autoHeatLevels) {
+            if (l.level == level) return l.duration.clamp(0, 15);
+          }
+          return 0;
+        }
+        final fallback = HeatSequence(
+          level3Duration: dur(3),
+          level2Duration: dur(2),
+          level1Duration: dur(1),
+        );
+        _stepDownLevel(userType, nextLevel, fallback, callback);
         return;
       }
 
