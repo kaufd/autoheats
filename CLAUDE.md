@@ -119,6 +119,10 @@ flutter run
 # Голова Changan UNI-S / CS55 Plus — arm64 (MediaTek MT8666 family, '_64_car' build).
 # Flutter native libs контролируются ИМЕННО через --target-platform, abiFilters
 # в build.gradle на libflutter.so/libapp.so не действует.
+# Итоговый файл: build/app/outputs/apk/release/AutoHeat-v3.apk
+# (имя задано через outputFileName в android/app/build.gradle).
+# Параллельно Flutter кладёт свою копию в build/app/outputs/flutter-apk/app-release.apk
+# — она нужна ему для flutter install/run, переименовывать не следует.
 flutter build apk --release --target-platform android-arm64
 
 # Анализ
