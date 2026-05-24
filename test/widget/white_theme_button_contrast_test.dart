@@ -64,8 +64,6 @@ void main() {
               settings: ManualHeatSettings.defaultFor(UserType.driver),
               presetName: 'Тестовый пресет',
               isActive: false,
-              isNewPresetDraft: false,
-              nameController: null,
               isSaveEnabled: true,
               onAutoHeatLevelChanged: (_, __) {},
               onTemperatureThresholdChanged: (_) {},

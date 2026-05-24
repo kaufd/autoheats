@@ -1,7 +1,7 @@
 // FILE: lib/src/presentation/screens/presets/components/preset_editor.dart
-// VERSION: 1.0.0
+// VERSION: 1.1.0
 // START_MODULE_CONTRACT
-//   PURPOSE: Editor pane для одного пресета: name (new draft only), threshold + level sliders, Save button.
+//   PURPOSE: Editor pane для одного пресета: header (title или active marker) + threshold/level sliders + Save button.
 //   SCOPE: read-only props + onChange callbacks, no Bloc access, parent owns state.
 //   DEPENDS: M-UI-PRESETS, M-MANUAL-SETTINGS, M-ENUMS, M-THEME
 //   LINKS: M-UI-PRESETS, DF-PRESET-APPLY, FA-001
@@ -10,13 +10,14 @@
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
-//   PresetEditor - StatelessWidget: sliders + optional name field + save button
-//   _buildHeader - title or name TextField depending on isNewPresetDraft
-//   _buildSaveButton - styled TextButton wired to onSave (disabled when invalid)
+//   PresetEditor - StatelessWidget: header + sliders + Save aligned center
+//   _buildHeader - title row with optional star marker
+//   _buildSaveButton - filled TextButton; disabled when isSaveEnabled=false
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.0.0 - Initial PresetEditor for merged Presets tab]
+//   LAST_CHANGE: [v1.1.0 - Drop inline name TextField; name запрашивается через SavePresetDialog после Save]
+//   PREVIOUS_CHANGE: [v1.0.0 - Initial PresetEditor for merged Presets tab]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -28,10 +29,8 @@ import 'package:flutter/material.dart';
 class PresetEditor extends StatelessWidget {
   final UserType userType;
   final ManualHeatSettings settings;
-  final String? presetName; // null when editing default/empty state
-  final bool isActive; // true when this preset is the user's selectedPreset
-  final bool isNewPresetDraft;
-  final TextEditingController? nameController;
+  final String? presetName; // null → empty/idle state
+  final bool isActive; // true когда показанный пресет является selectedPresets[user]
   final bool isSaveEnabled;
   final void Function(AutoHeatLevel, int) onAutoHeatLevelChanged;
   final ValueChanged<double> onTemperatureThresholdChanged;
@@ -43,8 +42,6 @@ class PresetEditor extends StatelessWidget {
     required this.settings,
     required this.presetName,
     required this.isActive,
-    required this.isNewPresetDraft,
-    required this.nameController,
     required this.isSaveEnabled,
     required this.onAutoHeatLevelChanged,
     required this.onTemperatureThresholdChanged,
@@ -70,7 +67,7 @@ class PresetEditor extends StatelessWidget {
           // с «Новый пресет» в PresetList (оба внутри Padding(all:16)).
           const Spacer(),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: Alignment.center,
             child: _buildSaveButton(context),
           ),
         ],
@@ -79,24 +76,6 @@ class PresetEditor extends StatelessWidget {
   }
 
   Widget _buildHeader(BuildContext context) {
-    if (isNewPresetDraft && nameController != null) {
-      return TextField(
-        controller: nameController,
-        style: TextStyle(color: context.themeColors.textBody),
-        decoration: InputDecoration(
-          hintText: 'Название нового пресета',
-          hintStyle:
-              TextStyle(color: context.themeColors.textBody.withValues(alpha: 0.5)),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(8),
-            borderSide: BorderSide(
-              color: context.themeColors.primary.withValues(alpha: 0.3),
-            ),
-          ),
-        ),
-      );
-    }
-
     final title = presetName ?? 'Создайте новый пресет';
     return Row(
       children: [
@@ -123,6 +102,9 @@ class PresetEditor extends StatelessWidget {
         foregroundColor:
             WidgetStatePropertyAll(context.themeColors.textButtonSelected),
         backgroundColor: WidgetStatePropertyAll(context.themeColors.primary),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+        ),
       ),
       child: const Text('Сохранить'),
     );

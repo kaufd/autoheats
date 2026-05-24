@@ -49,7 +49,7 @@ class PresetList extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Align(
-            alignment: Alignment.centerRight,
+            alignment: Alignment.center,
             child: _buildNewPresetButton(context),
           ),
         ],
@@ -131,14 +131,17 @@ class PresetList extends StatelessWidget {
   }
 
   Widget _buildNewPresetButton(BuildContext context) {
-    return OutlinedButton.icon(
+    return TextButton(
       onPressed: onNewPreset,
-      icon: const Icon(Icons.add),
-      label: const Text('Новый пресет'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: context.themeColors.primary,
-        side: BorderSide(color: context.themeColors.primary, width: 1),
+      style: ButtonStyle(
+        foregroundColor:
+            WidgetStatePropertyAll(context.themeColors.textButtonSelected),
+        backgroundColor: WidgetStatePropertyAll(context.themeColors.primary),
+        padding: const WidgetStatePropertyAll(
+          EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+        ),
       ),
+      child: const Text('Новый пресет'),
     );
   }
 

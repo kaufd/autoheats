@@ -1,9 +1,10 @@
 // FILE: lib/src/presentation/screens/presets/presets_tab.dart
-// VERSION: 1.0.0
+// VERSION: 1.1.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Merged Presets tab — Driver/Passenger toggle + editor + list + new-preset flow.
-//   SCOPE: local state (selectedUser, editingPresetId, draftSettings, nameController),
-//          wires PresetEditor + PresetList + UserSegmentToggle, delegates apply to parent.
+//   SCOPE: local state (selectedUser, editingPresetId, draftSettings, isNewPresetDraft),
+//          wires PresetEditor + PresetList + UserSegmentToggle, delegates apply to parent,
+//          name запрашивается через SavePresetDialog после нажатия Сохранить.
 //   DEPENDS: M-UI-PRESETS, M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-ENUMS, M-THEME
 //   LINKS: M-UI-PRESETS, V-M-UI-PRESETS, DF-PRESET-APPLY, FA-001, FA-011
 //   ROLE: RUNTIME
@@ -19,13 +20,15 @@
 //   _PresetsTabState._onEdit - clone preset settings into draft, set editingPresetId
 //   _PresetsTabState._onApply - save dirty edits if same preset, then onPresetApplied (E1)
 //   _PresetsTabState._onDelete - delete preset, clear draft if was editing it
-//   _PresetsTabState._onNewPreset - open empty/default draft with name field
-//   _PresetsTabState._onSave - upsert preset via PresetCubit.updatePresetSettings or savePreset
+//   _PresetsTabState._onNewPreset - open empty/default draft (title = «Новый пресет»)
+//   _PresetsTabState._onSave - update в edit-режиме или show SavePresetDialog для имени в new-режиме
+//   _PresetsTabState._ensureDraftTarget - первое движение слайдера из idle поднимает edit/new режим
 //   _PresetsTabState._handleActivePresetJump - case 3-α silent jump on selected preset change
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.0.0 - Initial merged Presets tab]
+//   LAST_CHANGE: [v1.1.0 - Имя нового пресета через SavePresetDialog после Save (вместо inline TextField)]
+//   PREVIOUS_CHANGE: [v1.0.0 - Initial merged Presets tab]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -38,6 +41,7 @@ import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/presentation/screens/presets/components/preset_editor.dart';
 import 'package:autoheat/src/presentation/screens/presets/components/preset_list.dart';
 import 'package:autoheat/src/presentation/screens/presets/components/user_segment_toggle.dart';
+import 'package:autoheat/src/presentation/screens/settings/components/save_preset_dialog.dart';
 import 'package:autoheat/src/presentation/ui/error_block.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -56,19 +60,12 @@ class _PresetsTabState extends State<PresetsTab> {
   String? _editingPresetId;
   ManualHeatSettings? _draftSettings;
   bool _isNewPresetDraft = false;
-  TextEditingController? _nameController;
 
   @override
   void initState() {
     super.initState();
     context.read<ManualSettingsCubit>().initialize();
     context.read<PresetCubit>().loadAllPresets();
-  }
-
-  @override
-  void dispose() {
-    _nameController?.dispose();
-    super.dispose();
   }
 
   @override
@@ -142,7 +139,7 @@ class _PresetsTabState extends State<PresetsTab> {
     final displayedSettings = _draftSettings ?? fallbackSettings;
 
     final displayedName = _isNewPresetDraft
-        ? null
+        ? 'Новый пресет'
         : (editingPreset?.name ?? activePreset?.name);
 
     final isActiveShown = !_isNewPresetDraft &&
@@ -150,22 +147,17 @@ class _PresetsTabState extends State<PresetsTab> {
         activePreset != null;
 
     // Save имеет цель только когда:
-    //  - new-preset draft с непустым именем, или
+    //  - new-preset draft (имя спросим в диалоге), или
     //  - редактируется существующий пресет (editingPresetId).
-    // В idle (нет ни активного редактирования, ни нового draft'а) Save заблокирован,
-    // т.к. сохранять некуда — slider-handlers сами поднимут draft-target при первом
-    // изменении и тогда Save станет активен.
-    final isSaveEnabled = _isNewPresetDraft
-        ? (_nameController?.text.trim().isNotEmpty ?? false)
-        : _editingPresetId != null;
+    // В idle Save заблокирован; первое движение слайдера из idle через
+    // _ensureDraftTarget переключит режим и Save станет активен.
+    final isSaveEnabled = _isNewPresetDraft || _editingPresetId != null;
 
     return PresetEditor(
       userType: _selectedUser,
       settings: displayedSettings,
       presetName: displayedName,
       isActive: isActiveShown,
-      isNewPresetDraft: _isNewPresetDraft,
-      nameController: _nameController,
       isSaveEnabled: isSaveEnabled,
       onAutoHeatLevelChanged: _onAutoHeatLevelChanged,
       onTemperatureThresholdChanged: _onTemperatureThresholdChanged,
@@ -193,8 +185,6 @@ class _PresetsTabState extends State<PresetsTab> {
       _editingPresetId = null;
       _draftSettings = null;
       _isNewPresetDraft = false;
-      _nameController?.dispose();
-      _nameController = null;
     });
   }
 
@@ -203,8 +193,6 @@ class _PresetsTabState extends State<PresetsTab> {
       _editingPresetId = preset.id;
       _draftSettings = preset.settings;
       _isNewPresetDraft = false;
-      _nameController?.dispose();
-      _nameController = null;
     });
   }
 
@@ -233,9 +221,6 @@ class _PresetsTabState extends State<PresetsTab> {
       _editingPresetId = null;
       _draftSettings = ManualHeatSettings.defaultFor(_selectedUser);
       _isNewPresetDraft = true;
-      _nameController?.dispose();
-      _nameController = TextEditingController()
-        ..addListener(() => setState(() {})); // re-evaluate save-enabled
     });
   }
 
@@ -244,8 +229,12 @@ class _PresetsTabState extends State<PresetsTab> {
     if (draft == null) return;
 
     if (_isNewPresetDraft) {
-      final name = _nameController?.text.trim() ?? '';
-      if (name.isEmpty) return;
+      final name = await showDialog<String>(
+        context: context,
+        builder: (_) => const SavePresetDialog(),
+      );
+      if (name == null || name.trim().isEmpty) return;
+      if (!mounted) return;
 
       final modeCubit = context.read<ModeCubit>();
       final heatMode = HeatModeExtension.fromString(
@@ -253,7 +242,7 @@ class _PresetsTabState extends State<PresetsTab> {
       final heatLevel = modeCubit.getHeatLevelByUser(_selectedUser);
 
       await context.read<PresetCubit>().savePreset(
-            name: name,
+            name: name.trim(),
             userType: _selectedUser,
             settings: draft,
             heatMode: heatMode,
@@ -263,8 +252,6 @@ class _PresetsTabState extends State<PresetsTab> {
       if (!mounted) return;
       setState(() {
         _isNewPresetDraft = false;
-        _nameController?.dispose();
-        _nameController = null;
         _draftSettings = null;
         _editingPresetId = null;
       });
@@ -316,7 +303,7 @@ class _PresetsTabState extends State<PresetsTab> {
 
   // Первое изменение slider'а из idle должно зафиксировать «цель сохранения»:
   // если есть активный пресет — переходим в его edit-режим; если нет — в new-preset
-  // draft с пустым именем. Без этого Save не знал бы, куда писать (см. fix idle-save).
+  // draft (имя спросим в диалоге при Save).
   void _ensureDraftTarget(PresetState state) {
     if (_isNewPresetDraft || _editingPresetId != null) return;
     final active = state.selectedPresets[_selectedUser];
@@ -325,9 +312,6 @@ class _PresetsTabState extends State<PresetsTab> {
       return;
     }
     _isNewPresetDraft = true;
-    _nameController?.dispose();
-    _nameController = TextEditingController()
-      ..addListener(() => setState(() {}));
   }
 
   ManualHeatSettings _currentEditorSettings(PresetState presetState) {
