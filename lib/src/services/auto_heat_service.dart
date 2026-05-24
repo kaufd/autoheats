@@ -69,6 +69,10 @@ class AutoHeatService {
   /// при повторных событиях датчика в off-диапазоне.
   final Set<UserType> _offCallbackSent = {};
 
+  /// Ключ плана на момент завершения каскада. При следующем событии:
+  /// если план не изменился — рестарта нет, если изменился — перезапуск.
+  final Map<UserType, String> _finishedPlanKeys = {};
+
   void initialize(HvacService hvacService) {
     final previousHvacService = _hvacService;
     final previousListener = _temperatureListener;
@@ -127,6 +131,7 @@ class AutoHeatService {
     _activeLevels.remove(userType);
     _startTemperatures.remove(userType);
     _offCallbackSent.remove(userType);
+    _finishedPlanKeys.remove(userType);
     _updateAutoHeatForUser(userType);
   }
 
@@ -146,6 +151,7 @@ class AutoHeatService {
     _activeLevels.remove(userType);
     _startTemperatures.remove(userType);
     _offCallbackSent.remove(userType);
+    _finishedPlanKeys.remove(userType);
     Logger.info(
       'AutoHeatService',
       'stopAutoHeat',
@@ -199,10 +205,22 @@ class AutoHeatService {
     final activeLevel = _activeLevels[userType];
 
     // Первый старт, перезапуск после stop, или re-entry из off-состояния
-    if (activeLevel == null || activeLevel == 0) {
+    if (activeLevel == null) {
       _offCallbackSent.remove(userType);
+      _finishedPlanKeys.remove(userType);
       _startTemperatures[userType] = _currentTemperature!;
       _stepDownLevel(userType, 3, sequence, callback);
+      return;
+    }
+
+    // Каскад завершён (level 0) — перезапуск только если план изменился
+    if (activeLevel == 0) {
+      final currentKey = _planKeyFor(sequence);
+      if (currentKey != _finishedPlanKeys[userType]) {
+        _finishedPlanKeys.remove(userType);
+        _startTemperatures[userType] = _currentTemperature!;
+        _stepDownLevel(userType, 3, sequence, callback);
+      }
       return;
     }
 
@@ -252,6 +270,7 @@ class AutoHeatService {
     callback(newLevel);
 
     if (newLevel <= 0) {
+      _finishedPlanKeys[userType] = _planKeyFor(sequence);
       _startTemperatures.remove(userType);
       return;
     }
@@ -361,6 +380,11 @@ class AutoHeatService {
     }
   }
 
+  String _planKeyFor(HeatSequence sequence) {
+    return '${sequence.level3Duration},${sequence.level2Duration},${sequence.level1Duration}'
+        ',${sequence.level3StepDownCelsius},${sequence.level2StepDownCelsius},${sequence.level1StepDownCelsius}';
+  }
+
   double _stepDownThresholdFor(int level, HeatSequence sequence) {
     switch (level) {
       case 3:
@@ -416,6 +440,7 @@ class AutoHeatService {
     _activeLevels.clear();
     _startTemperatures.clear();
     _offCallbackSent.clear();
+    _finishedPlanKeys.clear();
     _hvacService = null;
     _temperatureListener = null;
     _currentTemperature = null;
