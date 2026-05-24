@@ -188,8 +188,12 @@ class AppContentState extends State<AppContent>
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        // SnackBar foreground в теме задан под dark surfaceVariant; в белой теме
+        // он остаётся светлым и сливается с primary-фоном. Явно задаём текст
+        // через тот же контрастный токен, что и у Save / Новый пресет.
         content: Text(
           'Пресет "${preset.name}" применен для ${preset.userType == UserType.driver ? 'водителя' : 'пассажира'}',
+          style: TextStyle(color: context.themeColors.textButtonSelected),
         ),
         backgroundColor: context.themeColors.primary,
       ),
