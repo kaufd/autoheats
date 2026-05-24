@@ -1,6 +1,6 @@
 # Mode-Source Decoupling: Auto vs User Presets
 
-> **Status:** Approved 2026-05-24. Ready for `superpowers:writing-plans`.
+> **Status:** Implemented 2026-05-24 (plan `docs/superpowers/plans/2026-05-24-mode-source-decoupling.md`).
 >
 > **Owner / Date:** Kirill Mikhaylin, 2026-05-24
 >
