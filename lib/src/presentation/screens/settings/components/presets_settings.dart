@@ -12,12 +12,14 @@
 //
 // START_MODULE_MAP
 //   PresetsSettings - layout настроек пресетов driver/passenger
+//   _buildManualSettingsColumn - вертикальная колонка без flex child под scrollable
 //   _buildSavePresetButton - кнопка сохранения для UserType
 //   _savePresetForUser - диалог имени + PresetCubit.savePreset с mode/level snapshot
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-1: save preset snapshots include ModeCubit mode/level]
+//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-6: remove unbounded vertical Expanded in settings layout]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: save preset snapshots include ModeCubit mode/level]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -54,61 +56,43 @@ class PresetsSettings extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ManualSettingsSection(
-                        userType: UserType.driver,
-                        settings: settingsState.driverSettings,
-                        onAutoHeatLevelChanged: (autoHeatLevel, level) {
-                          onAutoHeatLevelChanged(
-                              autoHeatLevel, level, UserType.driver);
-                        },
-                        onTemperatureThresholdChanged: (temperature) {
-                          onTemperatureThresholdChanged(
-                              temperature, UserType.driver);
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSavePresetButton(context, UserType.driver),
-                  ],
-                ),
-              ),
+              child: _buildManualSettingsColumn(context, UserType.driver),
             ),
             Container(
               color: context.themeColors.primary.withAlpha(70),
               width: 2,
             ),
             Expanded(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ManualSettingsSection(
-                        userType: UserType.passenger,
-                        settings: settingsState.passengerSettings,
-                        onAutoHeatLevelChanged: (autoHeatLevel, level) {
-                          onAutoHeatLevelChanged(
-                              autoHeatLevel, level, UserType.passenger);
-                        },
-                        onTemperatureThresholdChanged: (temperature) {
-                          onTemperatureThresholdChanged(
-                              temperature, UserType.passenger);
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildSavePresetButton(context, UserType.passenger),
-                  ],
-                ),
-              ),
+              child: _buildManualSettingsColumn(context, UserType.passenger),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildManualSettingsColumn(BuildContext context, UserType userType) {
+    final isDriver = userType == UserType.driver;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          ManualSettingsSection(
+            userType: userType,
+            settings: isDriver
+                ? settingsState.driverSettings
+                : settingsState.passengerSettings,
+            onAutoHeatLevelChanged: (autoHeatLevel, level) {
+              onAutoHeatLevelChanged(autoHeatLevel, level, userType);
+            },
+            onTemperatureThresholdChanged: (temperature) {
+              onTemperatureThresholdChanged(temperature, userType);
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildSavePresetButton(context, userType),
+        ],
       ),
     );
   }

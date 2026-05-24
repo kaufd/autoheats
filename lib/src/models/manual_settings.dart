@@ -14,10 +14,12 @@
 //   ManualHeatSettings.defaultFor - дефолтные настройки UserType
 //   AutoHeatLevel - duration + level
 //   ManualSettingsState - Cubit state для driver/passenger settings
+//   ManualSettingsState.copyWith - explicit clearError для transient UI errors
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-1: explicitToJson для вложенных пресетов]
+//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-6: ManualSettingsState.copyWith supports clearError]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: explicitToJson для вложенных пресетов]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -115,12 +117,13 @@ class ManualSettingsState extends Equatable {
     ManualHeatSettings? passengerSettings,
     bool? isLoading,
     String? error,
+    bool clearError = false,
   }) {
     return ManualSettingsState(
       driverSettings: driverSettings ?? this.driverSettings,
       passengerSettings: passengerSettings ?? this.passengerSettings,
       isLoading: isLoading ?? this.isLoading,
-      error: error ?? this.error,
+      error: clearError ? null : (error ?? this.error),
     );
   }
 

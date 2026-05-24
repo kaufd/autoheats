@@ -465,16 +465,20 @@
     <V-M-MANUAL-SETTINGS MODULE="M-MANUAL-SETTINGS" PRIORITY="medium">
       <test-files>
         <file>test/unit/manual_settings_service_test.dart (запланирован)</file>
+        <file>test/unit/manual_settings_cubit_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/unit/manual_settings_service_test.dart</check-1>
+        <check-2>flutter test test/unit/manual_settings_cubit_test.dart</check-2>
       </module-checks>
       <scenarios>
         <scenario-1 kind="success">Сериализация-десериализация ManualSettings без потерь полей.</scenario-1>
+        <scenario-2 kind="success">После transient ошибки успешное изменение manual settings очищает ManualSettingsState.error (FA-012).</scenario-2>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
         <assertion-1>jsonEncode(ManualSettings.toJson()) → jsonDecode → ManualSettings.fromJson() возвращает идентичный объект (поверх json_serializable codegen).</assertion-1>
+        <assertion-2>FailingManualSettingsService вызывает ошибку saveSettings, затем успешный updateTemperatureThreshold приводит к state.error == null.</assertion-2>
       </required-trace-assertions>
       <wave-follow-up>Связка с UI ManualSettingsSection (V-M-UI-SETTINGS).</wave-follow-up>
       <phase-follow-up>Регрессия после изменений модели ManualSettings (codegen).</phase-follow-up>
@@ -663,7 +667,7 @@
 
     <V-M-UI-SETTINGS MODULE="M-UI-SETTINGS" PRIORITY="low">
       <test-files>
-        <file>test/widget/settings_screen_test.dart (запланирован)</file>
+        <file>test/widget/settings_screen_test.dart</file>
       </test-files>
       <module-checks>
         <check-1>flutter test test/widget/settings_screen_test.dart</check-1>
@@ -671,11 +675,13 @@
       <scenarios>
         <scenario-1 kind="success">Изменение TemperatureThresholdSlider обновляет SettingsCubit.</scenario-1>
         <scenario-2 kind="success">ThemeSelector переключает тему через ThemeCubit.</scenario-2>
+        <scenario-3 kind="smoke">SettingsScreen build/layout на размере 1024x600 проходит без Flutter layout exception (FA-009).</scenario-3>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
         <assertion-1>WidgetTester.drag на TemperatureThresholdSlider → mocktail.verify(fakeSettingsCubit.setThreshold(any())).called(1).</assertion-1>
         <assertion-2>WidgetTester.tap на ThemeSelector → mocktail.verify(fakeThemeCubit.setTheme(any())).called(1).</assertion-2>
+        <assertion-3>WidgetTester с physicalSize 1024x600 pump SettingsScreen → tester.takeException() == null.</assertion-3>
       </required-trace-assertions>
       <wave-follow-up>Cross-check с V-M-SETTINGS и V-M-THEME: после drag/tap значение должно реально сохраниться в SharedPreferences.</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: визуальная проверка всех секций settings.</phase-follow-up>

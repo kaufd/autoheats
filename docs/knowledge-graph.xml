@@ -129,8 +129,9 @@
       <verification-ref>V-M-MANUAL-SETTINGS</verification-ref>
       <annotations>
         <class-ManualSettingsService PURPOSE="Persistence ManualSettings через SharedPreferences" />
-        <class-ManualSettingsCubit PURPOSE="Состояние ручных настроек" />
+        <class-ManualSettingsCubit PURPOSE="Состояние ручных настроек; очищает stale error после успешных операций" />
         <type-ManualSettings PURPOSE="Модель ручных настроек (@JsonSerializable)" />
+        <type-ManualSettingsState.copyWith PURPOSE="Explicit clearError для transient UI errors" />
       </annotations>
     </M-MANUAL-SETTINGS>
 
@@ -248,7 +249,7 @@
       <annotations>
         <class-SettingsScreen PURPOSE="Композиция секций settings/components" />
         <class-TemperatureThresholdSlider PURPOSE="Слайдер порога авторежима (sliderValues)" />
-        <class-ThemeSelector PURPOSE="Выбор темы" />
+        <class-ThemeSelector PURPOSE="Выбор темы; wrap-safe на head-unit ширине" />
       </annotations>
     </M-UI-SETTINGS>
 

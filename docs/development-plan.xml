@@ -320,8 +320,9 @@
       </contract>
       <interface>
         <export-ManualSettingsService PURPOSE="JSON-сериализация через SharedPreferences" />
-        <export-ManualSettingsCubit PURPOSE="Состояние ручных настроек" />
+        <export-ManualSettingsCubit PURPOSE="Состояние ручных настроек; успешные операции очищают transient error" />
         <export-ManualSettings PURPOSE="Модель @JsonSerializable" />
+        <export-ManualSettingsState.copyWith PURPOSE="State copy с explicit clearError для очистки stale UI errors" />
       </interface>
       <depends>M-ENUMS</depends>
       <target>
@@ -656,7 +657,7 @@
       <interface>
         <export-SettingsScreen PURPOSE="Контейнер настроек" />
         <export-TemperatureThresholdSlider PURPOSE="Слайдер порога" />
-        <export-ThemeSelector PURPOSE="Выбор темы" />
+        <export-ThemeSelector PURPOSE="Выбор темы; wrap-safe layout внутри SettingsScreen" />
         <export-PresetsSection PURPOSE="Секция пресетов" />
         <export-ManualSettingsSection PURPOSE="Секция ручных настроек" />
       </interface>
