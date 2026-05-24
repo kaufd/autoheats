@@ -115,8 +115,11 @@ dart run build_runner build --delete-conflicting-outputs
 # Запуск на подключённой голове / эмуляторе Android Automotive
 flutter run
 
-# Сборка APK для установки на head unit
-flutter build apk --release
+# Сборка APK для установки на head unit (только arm64-v8a, ~19 MB)
+# Голова Changan UNI-S / CS55 Plus — arm64 (MediaTek MT8666 family, '_64_car' build).
+# Flutter native libs контролируются ИМЕННО через --target-platform, abiFilters
+# в build.gradle на libflutter.so/libapp.so не действует.
+flutter build apk --release --target-platform android-arm64
 
 # Анализ
 flutter analyze

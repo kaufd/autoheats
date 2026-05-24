@@ -32,11 +32,35 @@ android {
         versionName = flutter.versionName
     }
 
+    lint {
+        // UniquePermission ругается на пару:
+        //   com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION (наш custom, нужен с этим именем)
+        //   ru.kaufd.autoheat.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION (auto-generated AGP для targetSdk≥34)
+        // Имя нашего permission — публичный контракт системного AirConditioner-сервиса Changan,
+        // переименовать нельзя. AGP-имя в другом namespace, конфликта на устройстве нет.
+        disable += "UniquePermission"
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.debug
+
+            // Голова Changan UNI-S/CS55 Plus — arm64-v8a (MediaTek MT8666 family,
+            // platform suffix '_64_car'). Современные AAOS-системы все 64-bit ARM.
+            // Отрезаем armeabi-v7a и x86_64 из release: экономит ~35 MB native libs
+            // (libflutter + libapp дублировались для каждого ABI).
+            ndk {
+                abiFilters "arm64-v8a"
+            }
+        }
+        debug {
+            // На эмуляторе нужен x86_64 (Intel-host / CI) или arm64 (Apple Silicon).
+            // Debug-сборка несёт оба — flutter run сам выберет под целевое устройство.
+            ndk {
+                abiFilters "arm64-v8a", "x86_64"
+            }
         }
     }
 }
