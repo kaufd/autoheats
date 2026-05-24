@@ -99,7 +99,9 @@ class PresetList extends StatelessWidget {
                     if (isActive)
                       TextSpan(
                         text: ' (активен)',
-                        style: TextStyle(color: context.themeColors.primary),
+                        style: TextStyle(
+                          color: context.themeColors.backgroundButtonPrimary,
+                        ),
                       ),
                   ],
                 ),
