@@ -32,7 +32,8 @@
     <application
         android:label="AutoHeat v3"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round">
 
 
         <!-- Создание канала уведомлений -->
