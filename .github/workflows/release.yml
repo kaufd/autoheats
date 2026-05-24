@@ -1,0 +1,93 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build APK and publish GitHub release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          # Pin под текущую локальную версию для воспроизводимости. Бампать
+          # вручную одновременно с пересборкой локально.
+          flutter-version: '3.41.9'
+          cache: true
+
+      - name: Flutter doctor
+        run: flutter --version
+
+      - name: Get dependencies
+        run: |
+          flutter pub get
+          (cd packages/android_automotive_plugin && flutter pub get)
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      - name: Build APK (arm64-v8a)
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Extract version from tag
+        id: ver
+        run: |
+          # v0.1.0 → VERSION=0.1.0, TAG=v0.1.0
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          echo "TAG=$TAG"     >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Extract changelog section for this version
+        id: changelog
+        env:
+          VERSION: ${{ steps.ver.outputs.VERSION }}
+        run: |
+          # Ищем секцию '## [VERSION]' в CHANGELOG.md и берём всё до следующей
+          # '## [...]' секции. Если секция не найдена — fallback на простой текст.
+          awk -v ver="$VERSION" '
+            BEGIN { found=0 }
+            /^## \[/ {
+              if (found) { exit }
+              if (index($0, "[" ver "]") > 0) { found=1; next }
+            }
+            found { print }
+          ' CHANGELOG.md > release_body.md
+          if [ ! -s release_body.md ]; then
+            echo "Release ${VERSION}" > release_body.md
+          fi
+          echo "--- release_body.md ---"
+          cat release_body.md
+          echo "--- end ---"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.ver.outputs.TAG }}
+          tag_name: ${{ steps.ver.outputs.TAG }}
+          body_path: release_body.md
+          files: build/app/outputs/apk/release/AutoHeat-v3.apk
+          fail_on_unmatched_files: true
+          generate_release_notes: false
