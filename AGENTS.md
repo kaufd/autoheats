@@ -4,7 +4,7 @@
 flutter, dart, android-automotive, changan, hvac, seat-heating, head-unit, foreground-service, bloc, cubit
 
 ## Annotation
-Flutter-приложение для автоматического управления подогревом сидений в автомобиле Changan. Работает на головном устройстве под Android Automotive OS, общается с HVAC и датчиками через локальный path-плагин `packages/android_automotive_plugin/` (взят с GitHub `abuharsky/changan_car_flutter_library`, переложен в `packages/` ради удобства локальной модификации), переключает уровни подогрева по датчику температуры салона или по пользовательским режимам/пресетам, продолжает работать в фоне через foreground-service. Проект — переработка `autoheat_old`. См. `docs/requirements.xml`, `docs/technology.xml` и `CLAUDE.md` для расширенного контекста.
+Flutter-приложение для автоматического управления подогревом сидений в автомобиле Changan. Работает на головном устройстве под Android Automotive OS (UNI-S, CS55 Plus, MediaTek MT8666 / arm64), общается с HVAC и датчиками через локальный path-плагин `packages/android_automotive_plugin/` (взят с GitHub `abuharsky/changan_car_flutter_library`, переложен в `packages/` ради удобства локальной модификации), переключает уровни подогрева по датчику температуры салона или по пользовательским режимам/пресетам, продолжает работать в фоне через foreground-service, выключает сиденья по ignition OFF. Проект — переработка `autoheat_old`, текущая версия 1.0.0. Имеет скрытый debug-режим (long-press по индикатору температуры салона) с in-memory логами и инжектором температуры в `AutoHeatService`. Релизы публикуются автоматически по push'у тега `v*` через `.github/workflows/release.yml`. См. `docs/requirements.xml`, `docs/technology.xml`, `CLAUDE.md`, `CHANGELOG.md` и `README.md` для расширенного контекста.
 
 ## Core Principles
 
@@ -183,18 +183,31 @@ lib/
   main.dart                - точка входа (M-MAIN)
   src/
     app_enums.dart         - M-ENUMS
-    cubit/                 - M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS
+    cubit/                 - M-MODE, M-CABIN-TEMPERATURE, M-PRESET, M-SETTINGS
+                            (ManualSettingsCubit удалён в рамках mode-source decoupling)
     di/                    - M-DI, M-BLOC-PROVIDERS
     config/                - темы, цвета, типографика
     constants/             - M-CONSTANTS-TEMPERATURE
-    models/                - Preset, ManualSettings (+ codegen)
-    services/              - M-HVAC, M-AUTO-HEAT, M-BACKGROUND, M-ACCESSIBILITY, ...
-    presentation/          - M-UI-APP, M-UI-HEAT, M-UI-PRESETS, M-UI-SETTINGS, M-THEME
+    models/                - Preset, ManualHeatSettings (+ codegen)
+    services/              - M-HVAC (in-flight initialize guard), M-AUTO-HEAT (plan-key guard),
+                            M-BACKGROUND, M-BACKGROUND-RUNTIME (ignition OFF + retry-backoff),
+                            M-ACCESSIBILITY, M-MODE, M-PRESET, M-SETTINGS
+    utils/                 - M-LOGGER (Logger + LogRingBuffer для debug UI)
+    presentation/          - M-UI-APP, M-UI-HEAT, M-UI-PRESETS, M-UI-SETTINGS, M-UI-DEBUG, M-THEME
+      screens/debug/       - LogsScreen с sidebar-инжектором температуры
 packages/
   android_automotive_plugin/ - M-PLUGIN (path-плагин; исходник с GitHub abuharsky/changan_car_flutter_library)
-test/                       - целевое расположение тестов (на момент grace-init отсутствует)
-ARCHITECTURE.md             - дополнительные диаграммы потоков
-CLAUDE.md                   - расширенный человекочитаемый контекст
+test/
+  unit/                    - модульные тесты сервисов / кубитов / моделей
+  widget/                  - widget-тесты UI
+  scenarios/walkthrough_log_test.dart - log-driven сценарии auto/preset/переключения
+  _helpers/                - FakeHvacService, FakePlugin, LoggerTestSink
+.github/
+  workflows/release.yml    - CI: триггер на push тега v*, build APK, GitHub Release
+CHANGELOG.md               - Keep a Changelog формат; секция [X.Y.Z] = body GitHub Release
+README.md                  - публичное описание проекта (русский)
+ARCHITECTURE.md            - дополнительные диаграммы потоков
+CLAUDE.md                  - расширенный человекочитаемый контекст
 ```
 
 ## Documentation Artifacts - Unique Tag Convention
@@ -232,3 +245,6 @@ In `docs/*.xml`, repeated entities must use their unique ID as the XML tag name 
 7. **Project-specific:** при изменении `setupServiceLocator` всегда обновлять и UI-, и background-onStart-путь — изолят свой DI.
 8. **Project-specific:** при правке HVAC-маппингов температуры или property IDs обновлять `M-PLUGIN`, `M-HVAC`, `M-CONSTANTS-TEMPERATURE` и пересмотреть `V-M-*` сценарии.
 9. **Project-specific:** ключи `SharedPreferences` и `enum.name` (`HeatMode`, `UserType`) — стабильный публичный контракт, переименование требует миграции.
+10. **Project-specific:** `AndroidAutomotivePlugin` инстанцируется только в `HvacService`; второй конструктор перезаписывает `MethodCallHandler` канала. Если нужен plugin instance в другом месте (например, в `accessibility_service`) — брать через `locator<HvacService>().androidAutomotivePlugin`.
+11. **Project-specific:** новые debug-affordances для тестирования (long-press toggles, диагностические инжекторы) должны при выключении сбрасывать свои side-effects, чтобы не влиять на реальную работу — см. `CabinTemperatureDisplay._toggleDebugMode` (`HvacService.getCabinTemperature` восстанавливает реальное значение, `LogRingBuffer.clear()` освобождает память).
+12. **Project-specific:** релиз создаётся автоматически push'ом тега `v*`. Перед `git tag`: бамп `version` в `pubspec.yaml` + новая секция `## [X.Y.Z]` в `CHANGELOG.md` (Keep a Changelog формат). Workflow `.github/workflows/release.yml` вырезает секцию по точному заголовку `## [VERSION]` и кладёт в body Release; APK `AutoHeat-v3.apk` собирается под arm64 и прикрепляется как asset.
