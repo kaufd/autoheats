@@ -3,7 +3,7 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Корневой UI-контейнер с табами Heat/Settings/Presets и применением пресетов.
 //   SCOPE: TabController navigation, themed background, DF-PRESET-APPLY bridge to ModeCubit,
-//          dynamic debug tabs (Температура / Логи) при включённом SettingsCubit.debugMode.
+//          dynamic debug tab (Логи + sidebar-injector) при включённом SettingsCubit.debugMode.
 //   DEPENDS: M-UI-HEAT, M-UI-SETTINGS, M-UI-PRESETS, M-THEME, M-PRESET, M-MODE, M-SETTINGS
 //   LINKS: M-UI-APP, M-UI-PRESETS, M-PRESET, M-MODE, DF-PRESET-APPLY, FA-001, FA-011
 //   ROLE: RUNTIME
@@ -11,7 +11,7 @@
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
-//   AppContent - StatefulWidget с TabController на 3 или 5 вкладок (зависит от debugMode)
+//   AppContent - StatefulWidget с TabController на 3 или 4 вкладки (зависит от debugMode)
 //   initState/dispose - lifecycle TabController, обновление debug-табов через _rebuildTabController
 //   _selectTab - перейти на вкладку
 //   _rebuildTabController - пересоздать TabController при смене debugMode
@@ -33,7 +33,6 @@ import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/presentation/screens/debug/logs_screen.dart';
-import 'package:autoheat/src/presentation/screens/debug/temp_injector_screen.dart';
 import 'package:autoheat/src/presentation/screens/heat/heat_screen.dart';
 import 'package:autoheat/src/presentation/screens/settings/settings_screen.dart';
 import 'package:autoheat/src/presentation/screens/presets/presets_tab.dart';
@@ -74,7 +73,7 @@ class AppContentState extends State<AppContent>
   }
 
   void _rebuildTabController(bool debugMode, {bool initial = false}) {
-    final newLength = debugMode ? 5 : 3;
+    final newLength = debugMode ? 4 : 3;
     final previous = _tabController;
     final restoredIndex =
         (previous?.index ?? 0).clamp(0, newLength - 1);
@@ -128,7 +127,6 @@ class AppContentState extends State<AppContent>
       'Управление',
       'Пресеты',
       'Настройки',
-      if (_debugMode) 'Температура',
       if (_debugMode) 'Логи',
     ];
   }
@@ -142,7 +140,7 @@ class AppContentState extends State<AppContent>
         },
       ),
       const SettingsScreen(),
-      if (_debugMode) const TempInjectorScreen(),
+      // Один debug-таб: «Логи» с sidebar-инжектором температуры.
       if (_debugMode) const LogsScreen(),
     ];
   }

@@ -76,7 +76,7 @@ class CabinTemperatureDisplay extends StatelessWidget {
         duration: const Duration(seconds: 2),
         content: Text(
           enabled
-              ? 'Debug mode ON — появились вкладки «Температура» и «Логи»'
+              ? 'Debug mode ON — появилась вкладка «Логи» с инжектором температуры'
               : 'Debug mode OFF',
           style: TextStyle(color: context.themeColors.textButtonSelected),
         ),
