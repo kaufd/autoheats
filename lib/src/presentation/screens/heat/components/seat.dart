@@ -32,7 +32,7 @@ class SeatBlock extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Image.asset(
-                'assets/images/seat3.png',
+                'assets/images/seat.png',
                 height: 300,
               ),
               const SizedBox(height: 20),
