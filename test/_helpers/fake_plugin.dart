@@ -18,6 +18,10 @@
 //   throwOnMethods - методы, на которых мок бросает PlatformException
 //   emitHvacChangeEvent - инъекция входящего события датчика
 // END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-7: connect/HVAC write failures are awaited and testable]
+// END_CHANGE_SUMMARY
 
 import 'dart:convert';
 
@@ -36,10 +40,9 @@ class AutomotiveMethodChannelMock {
   /// Значение, которое мок возвращает на getHvacIntProperty.
   int hvacIntResponse = 0;
 
-  /// Методы, на которых мок бросает PlatformException. Использовать только для
-  /// методов, которые плагин действительно await-ит (getHvacIntProperty);
-  /// для fire-and-forget методов (connect, setHvacIntProperty) бросок уйдёт
-  /// в unhandled-ошибку зоны.
+  /// Методы, на которых мок бросает PlatformException.
+  /// Phase-4 Slice-7 сделал connect/setHvac*Property awaited, поэтому их
+  /// ошибки теперь доступны HvacService как обычные awaited failures.
   final Set<String> throwOnMethods = {};
 
   List<String> get outgoingMethods =>

@@ -29,7 +29,7 @@
       </api>
     </harness-1>
     <harness-2 name="AutomotiveMethodChannelMock" location="test/_helpers/fake_plugin.dart" status="created">
-      <purpose>Мок const MethodChannel('android_automotive_plugin'): setMockMethodCallHandler перехватывает исходящие invokeMethod (connect/getHvacIntProperty/setHvacIntProperty, запись в outgoingCalls), handlePlatformMessage инжектирует входящее onHvacChangeEvent. Создан в Phase-2 step-5, валидирован прогоном V-M-HVAC (13 тестов зелёные). Подойдёт и для будущего V-M-PLUGIN.</purpose>
+      <purpose>Мок const MethodChannel('android_automotive_plugin'): setMockMethodCallHandler перехватывает исходящие invokeMethod (connect/getHvacIntProperty/setHvacIntProperty, запись в outgoingCalls), handlePlatformMessage инжектирует входящее onHvacChangeEvent. Создан в Phase-2 step-5, валидирован прогоном V-M-HVAC; Phase-4 Slice-7 расширил harness на connect/write error propagation. Подойдёт и для будущего V-M-PLUGIN.</purpose>
     </harness-2>
     <harness-3 name="SharedPreferencesMock" location="setUp: SharedPreferences.setMockInitialValues({...})">
       <purpose>Изоляция Cubit-тестов от файловой системы.</purpose>
@@ -243,14 +243,15 @@
         <scenario-4 kind="failure">Событие areaId=InOutCAR_OUTSIDE НЕ вызывает listener.</scenario-4>
         <scenario-5 kind="failure">Событие с чужим propertyId НЕ вызывает listener.</scenario-5>
         <scenario-6 kind="failure">getCabinTemperature при бросе плагина (getHvacIntProperty) возвращает 20.0 fallback, НЕ rethrow'ит.</scenario-6>
-        <scenario-7 kind="removed">УДАЛЁН. Изначально: "setSeatHeatLevel rethrow при ошибке плагина". Находка step-5: плагин setHvacIntProperty/connect — fire-and-forget (invokeMethod без await/return), ошибки записи не доходят до HvacService. Поведение, которое описывал scenario-7, не существует; см. finding F-1.</scenario-7>
+        <scenario-7 kind="failure">setSeatHeatLevel rethrow'ит PlatformException при ошибке setHvacIntProperty и пишет Logger error marker (FA-007).</scenario-7>
         <scenario-8 kind="invariant">Двойной initialize() → connect() в outgoingMethods ровно один раз.</scenario-8>
         <scenario-9 kind="invariant">Событие с value=null не валит изолят (catch в onHvacChangeEventCallback), listener не вызван.</scenario-9>
         <scenario-10 kind="success">Два CabinTemperatureListener получают inside event; после remove первого второй продолжает получать events; lastCabinTemperature обновляется.</scenario-10>
         <scenario-11 kind="success">getCabinTemperature() обновляет lastCabinTemperature и публикует значение listener'ам.</scenario-11>
+        <scenario-12 kind="failure">initialize rethrow'ит PlatformException при ошибке connect и не выставляет isInitialized=true (FA-007).</scenario-12>
       </scenarios>
       <findings>
-        <F-1>Плагин AndroidAutomotivePlugin.setHvacIntProperty/connect/setHvacFloatProperty — fire-and-forget: вызывают methodChannel.invokeMethod БЕЗ await/return. Ошибки записи и подключения никогда не доходят до вызывающего кода. Следствие: HvacService.setSeatHeatLevel и initialize() имеют catch/rethrow, но для записи/connect это мёртвый код — исключение не возникает. Только read-путь (getHvacIntProperty) реально await-ит канал. UI не узнает о неуспешной записи уровня подогрева. Кандидат на Phase-Deferred: либо await в плагине, либо обёртка в HvacService.</F-1>
+        <F-1 status="resolved-phase-4-slice-7">Local M-PLUGIN patch awaits AndroidAutomotivePlugin.connect/setHvacIntProperty/setHvacFloatProperty. HvacService.initialize and setSeatHeatLevel now receive PlatformException through awaited Futures; V-M-HVAC scenarios 7 and 12 protect this behavior. Divergence from upstream GitHub snapshot is intentional and documented in M-PLUGIN.</F-1>
       </findings>
       <forbidden-markers>
         <forbidden-1>plugin.connect() НЕ должен вызываться больше одного раза за жизненный цикл HvacService.</forbidden-1>
@@ -264,6 +265,7 @@
       <required-trace-assertions>
         <assertion-1>Двойной initialize() не дёргает connect() повторно (_isInitialized гард).</assertion-1>
         <assertion-2>Порядок: initialize() → connect() ДОЛЖЕН произойти ДО первого setSeatHeatLevel call в CarHvacManager.</assertion-2>
+        <assertion-3>AutomotiveMethodChannelMock.throwOnMethods(setHvacIntProperty/connect) приводит к throwsA(PlatformException) на HvacService boundary, без silent success.</assertion-3>
       </required-trace-assertions>
       <wave-follow-up>Интеграция с AutoHeatService через FakeAsync (V-M-AUTO-HEAT scenario-1).</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: подключение, реальный raw датчика, эмпирическая сверка формулы (raw - 84) / 2; при значимом расхождении триггерится deferred-3.</phase-follow-up>
@@ -756,7 +758,7 @@
     <recommended-execution-order>
       <step-1 status="done">Phase-2 step-0: scaffold TestInfrastructure. DONE: dev_deps (fake_async/bloc_test/mocktail) установлены; test/_helpers/fake_hvac_service.dart создан. AutomotiveMethodChannelMock (harness-2) перенесён в step-3 — валидируется реальным тестом, а не только analyze.</step-1>
       <step-2 status="done">Phase-2 steps 1-2: V-M-CONSTANTS-TEMPERATURE, V-M-ENUMS — 36 тестов. DONE.</step-2>
-      <step-3 status="done">Phase-2 steps 3-5: V-M-AUTO-HEAT (10), V-M-MODE (16), V-M-HVAC (13). DONE. fake_plugin.dart создан в step-5. Находка F-1 (fire-and-forget записи плагина).</step-3>
+      <step-3 status="done">Phase-2 steps 3-5: V-M-AUTO-HEAT, V-M-MODE, V-M-HVAC. DONE. fake_plugin.dart создан в step-5. Находка F-1 позже закрыта в Phase-4 Slice-7.</step-3>
       <step-4>Phase-2 step-6: V-M-PRESET, V-M-SETTINGS, V-M-MANUAL-SETTINGS, V-M-THEME — параллельно (независимые JSON round-trip).</step-4>
       <step-5>Phase-3 step-1: V-M-LOGGER (sequential, foundation для последующего sweep).</step-5>
       <step-6>Phase-3 step-2: sweep print → Logger в M-HVAC, M-AUTO-HEAT, M-MODE, M-BACKGROUND, M-PLUGIN. Параллельная волна, каждый воркер активирует TODO(phase-3) marker-assertions в своём модуле.</step-6>
@@ -764,7 +766,7 @@
     </recommended-execution-order>
     <known-gaps>
       <gap-1 module="M-PLUGIN, M-HVAC" status="resolved">HvacService не инжектирует плагин — тестируется через мок MethodChannel. Harness AutomotiveMethodChannelMock создан и валидирован в Phase-2 step-5 (V-M-HVAC зелёный). Подход переносим на будущий V-M-PLUGIN.</gap-1>
-      <gap-4 module="M-HVAC, M-PLUGIN">Находка F-1: плагин setHvacIntProperty/connect — fire-and-forget; ошибки записи/подключения не доходят до HvacService. setSeatHeatLevel "молча успешен" при недоступном HVAC. Кандидат на Phase-Deferred. См. V-M-HVAC/findings.</gap-4>
+      <gap-4 module="M-HVAC, M-PLUGIN" status="resolved-phase-4-slice-7">Находка F-1 закрыта local patch: connect/setHvacIntProperty/setHvacFloatProperty awaited в M-PLUGIN; ошибки доходят до HvacService и покрыты V-M-HVAC scenario-7/scenario-12.</gap-4>
       <gap-2 module="M-BACKGROUND">Полное верификационное покрытие невозможно без головы: flutter_background_service не имеет тестового режима. Принимаем как known-gap; mitigation — конфиг-уровень assert + manual smoke.</gap-2>
       <gap-3 module="ALL" status="resolved">Log-marker assertions активированы в Phase-3 для unit-covered modules через LoggerTestSink; M-BACKGROUND остаётся manual-smoke.</gap-3>
     </known-gaps>

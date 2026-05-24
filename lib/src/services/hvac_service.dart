@@ -7,7 +7,7 @@
 //   SCOPE: ленивый connect(), setSeatHeatLevel, getCabinTemperature,
 //          конверсия (raw - 84) / 2, cached multi-listener события температуры.
 //   DEPENDS: M-PLUGIN, M-ENUMS, M-LOGGER
-//   LINKS: M-HVAC, V-M-HVAC, DF-SET-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP, FA-003
+//   LINKS: M-HVAC, V-M-HVAC, DF-SET-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP, FA-003, FA-007
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -31,8 +31,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-3: multi-listener cabin temperature source]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-3: print() заменён на Logger с marker-anchors]
+//   LAST_CHANGE: [v1.3.0 - Phase-4 Slice-7: connect/write plugin errors now propagate through awaited M-PLUGIN calls]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-3: multi-listener cabin temperature source]
 // END_CHANGE_SUMMARY
 
 import 'package:android_automotive_plugin/android_automotive_plugin.dart';

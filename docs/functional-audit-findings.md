@@ -167,6 +167,7 @@ Resolution:
 
 ### FA-007 — `AndroidAutomotivePlugin.connect/setHvac*Property` fire-and-forget
 
+Status: addressed in Phase-4 Slice-7 by locally patching `M-PLUGIN` to await `connect`, `setHvacIntProperty`, and `setHvacFloatProperty`; existing `V-M-HVAC` MethodChannel tests now assert connect/write error propagation through `HvacService`.
 Priority: high / known finding  
 Modules: `M-PLUGIN`, `M-HVAC`  
 Related: existing `F-1` in `docs/verification-plan.xml`

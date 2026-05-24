@@ -36,12 +36,12 @@
     </M-BLOC-PROVIDERS>
 
     <M-PLUGIN NAME="AndroidAutomotivePlugin" TYPE="INTEGRATION" STATUS="implemented">
-      <purpose>Локальный path-плагин: обёртка над android.car.* (HVAC, sensors, ignition). Единственная точка доступа к авто. Исходник с GitHub abuharsky/changan_car_flutter_library.</purpose>
+      <purpose>Локальный path-плагин: обёртка над android.car.* (HVAC, sensors, ignition). Единственная точка доступа к авто. Исходник с GitHub abuharsky/changan_car_flutter_library; поддерживается как local snapshot/fork.</purpose>
       <path>packages/android_automotive_plugin/</path>
       <depends>none</depends>
       <verification-ref>V-M-PLUGIN</verification-ref>
       <annotations>
-        <class-AndroidAutomotivePlugin PURPOSE="connect, getHvacIntProperty, setHvacIntProperty, onHvacChangeEventCallback, setCallbackHandle" />
+        <class-AndroidAutomotivePlugin PURPOSE="connect, getHvacIntProperty, setHvacIntProperty, onHvacChangeEventCallback, setCallbackHandle; connect/setHvac*Property awaited by local patch" />
         <class-CarHvacManager PURPOSE="setSeatHeatLevel(isDriver, level), getInsideTemperature" />
         <class-CarPropertyValue PURPOSE="DTO события HVAC (propertyId, areaId, value)" />
         <const-CarHvacPropertyIds PURPOSE="ID_HVAC_IN_OUT_TEMP и др." />
@@ -56,7 +56,7 @@
       <depends>M-PLUGIN, M-ENUMS</depends>
       <verification-ref>V-M-HVAC</verification-ref>
       <annotations>
-        <class-HvacService PURPOSE="Singleton-обёртка; ленивая initialize(), setSeatHeatLevel, getCabinTemperature, add/removeCabinTemperatureListener" />
+        <class-HvacService PURPOSE="Singleton-обёртка; ленивая initialize(), setSeatHeatLevel, getCabinTemperature, add/removeCabinTemperatureListener; observes awaited plugin connect/write failures" />
         <type-CabinTemperatureListener PURPOSE="void Function(double celsius) listener для температуры салона" />
         <fn-_convertToCelsius PURPOSE="(value - 84) / 2 → °C" />
       </annotations>

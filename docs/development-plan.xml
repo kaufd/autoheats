@@ -12,7 +12,7 @@
   <Modules>
     <M-PLUGIN NAME="AndroidAutomotivePlugin" TYPE="INTEGRATION" LAYER="0" ORDER="1" STATUS="implemented">
       <contract>
-        <purpose>Локальная Flutter-обёртка над android.car.* (HVAC, sensors, ignition). Единственная точка доступа к авто.</purpose>
+        <purpose>Локальная Flutter-обёртка над android.car.* (HVAC, sensors, ignition). Единственная точка доступа к авто; поддерживается как local snapshot/fork.</purpose>
         <inputs>
           <param name="propertyId" type="int" />
           <param name="areaId" type="int" />
@@ -28,9 +28,9 @@
         </errors>
       </contract>
       <interface>
-        <export-connect PURPOSE="Подключиться к Car API" />
+        <export-connect PURPOSE="Подключиться к Car API; awaited MethodChannel call propagates native errors" />
         <export-getHvacIntProperty PURPOSE="Прочитать целочисленное HVAC-свойство по propertyId/areaId" />
-        <export-setHvacIntProperty PURPOSE="Записать целочисленное HVAC-свойство" />
+        <export-setHvacIntProperty PURPOSE="Записать целочисленное HVAC-свойство; awaited MethodChannel call propagates native errors" />
         <export-onHvacChangeEventCallback PURPOSE="Колбэк изменения HVAC-свойства" />
         <export-setCallbackHandle PURPOSE="Регистрация системного entry-point для пробуждения" />
         <export-CarHvacManager PURPOSE="setSeatHeatLevel(isDriver, level), getInsideTemperature" />
@@ -52,7 +52,7 @@
       </observability>
       <verification-ref>V-M-PLUGIN</verification-ref>
       <notes>
-        <note-1>Локальный path-плагин, исходник с GitHub abuharsky/changan_car_flutter_library. На head unit без системных привилегий connect() ожидаемо падает.</note-1>
+        <note-1>Локальный path-плагин, исходник с GitHub abuharsky/changan_car_flutter_library. Phase-4 Slice-7 intentionally diverges from upstream snapshot by awaiting connect/setHvac*Property so native errors propagate. На head unit без системных привилегий connect() ожидаемо падает.</note-1>
       </notes>
     </M-PLUGIN>
 
@@ -753,7 +753,7 @@
       <step-2 module="M-ENUMS" status="done" verification="V-M-ENUMS">Тесты round-trip enum.name ↔ fromString — 13 тестов</step-2>
       <step-3 module="M-MODE" status="done" verification="V-M-MODE">Тесты ModeService + ModeCubit (FakeHvacService, SharedPreferences mock) — 16 тестов</step-3>
       <step-4 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Тесты расписания через FakeAsync — 10 тестов</step-4>
-      <step-5 module="M-HVAC" status="done" verification="V-M-HVAC">Тесты конверсии и событий через MethodChannel-мок — 13 тестов; находка F-1</step-5>
+      <step-5 module="M-HVAC" status="done" verification="V-M-HVAC">Тесты конверсии и событий через MethodChannel-мок; F-1 later resolved in Phase-4 Slice-7.</step-5>
       <step-6 module="M-HVAC" status="done" verification="V-M-HVAC">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/hvac_service.dart</step-6>
       <step-7 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/auto_heat_service.dart</step-7>
       <step-8 module="M-MODE" status="done" verification="V-M-MODE">Добавить START_MODULE_CONTRACT/MAP в lib/src/services/mode_service.dart и lib/src/cubit/mode_cubit.dart</step-8>
@@ -784,6 +784,7 @@
       <step-7 module="M-AUTO-HEAT" status="done" verification="V-M-AUTO-HEAT">FA-005: effective-plan guard предотвращает restart расписания на repeated same-range/same-settings sensor events.</step-7>
       <step-8 module="M-BACKGROUND" status="done" verification="V-M-BACKGROUND">FA-006: BackgroundRuntimeController управляет stopService, awaited ignition OFF shutdown и bounded restart-backoff.</step-8>
       <step-9 module="M-UI-SETTINGS" status="done" verification="V-M-UI-SETTINGS">FA-009/FA-012: SettingsScreen head-unit smoke, wrap-safe ThemeSelector, PresetsSettings без unbounded vertical Expanded, ManualSettingsState clearError.</step-9>
+      <step-10 module="M-PLUGIN" status="done" verification="V-M-HVAC">FA-007: local plugin patch awaits connect/setHvac*Property; HvacService tests assert connect/write error propagation.</step-10>
     </Phase-4>
 
     <Phase-Deferred name="Deferred architectural changes" status="deferred">
@@ -791,7 +792,7 @@
       <deferred-1 trigger="Появление второго потребителя температуры" status="done-phase-4-slice-3">M-HVAC: переход с single-callback на add/removeCabinTemperatureListener выполнен; AutoHeatService и CabinTemperatureCubit подписываются независимо.</deferred-1>
       <deferred-2 trigger="Запрос на встроенную диагностику без adb/logcat">M-UI-DIAG: read-only inspector состояния плагина и HVAC; потянет M-HVAC multi-listener.</deferred-2>
       <deferred-3 trigger="Эмпирически подтверждённая неточность формулы (raw - 84) / 2 или различие между моделями Changan">Extraction _convertToCelsius из HvacService в отдельный модуль (например, M-TEMPERATURE-CONVERSION или CarProfile). До smoke-теста на голове формула остаётся в HvacService.</deferred-3>
-      <deferred-4 trigger="Решение, что неуспех записи в HVAC должен быть виден UI (находка F-1, Phase-2 step-5)">Плагин setHvacIntProperty/connect — fire-and-forget (invokeMethod без await/return); ошибки записи не доходят до HvacService, setSeatHeatLevel «молча успешен» при недоступном HVAC. Варианты: добавить await/return в плагин (правка снапшота) либо обёртка-проверка в HvacService. Сейчас не блокирует — авто крутится, краш недопустим; но автоподогрев может тихо не примениться.</deferred-4>
+      <deferred-4 trigger="Решение, что неуспех записи в HVAC должен быть виден UI (находка F-1, Phase-2 step-5)" status="done-phase-4-slice-7">M-PLUGIN local snapshot intentionally diverges from upstream by awaiting connect/setHvacIntProperty/setHvacFloatProperty. HvacService now observes connect/write failures; read-back verification remains out of scope.</deferred-4>
     </Phase-Deferred>
   </ImplementationOrder>
 

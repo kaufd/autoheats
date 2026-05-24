@@ -4,23 +4,23 @@
 //   PURPOSE: Unit-тесты HvacService через мок MethodChannel плагина (V-M-HVAC).
 //   SCOPE: исходящие connect/setHvacIntProperty, конверсия температуры из
 //          входящего onHvacChangeEvent, multi-listener fan-out/removal,
-//          fallback getCabinTemperature, идемпотентность initialize.
+//          fallback getCabinTemperature, идемпотентность initialize,
+//          propagation ошибок connect/write из M-PLUGIN.
 //   DEPENDS: M-HVAC, M-PLUGIN, M-ENUMS
-//   LINKS: V-M-HVAC
+//   LINKS: V-M-HVAC, FA-007
 //   ROLE: TEST
 //   MAP_MODE: LOCALS
 // END_MODULE_CONTRACT
 //
-// ПРИМЕЧАНИЕ: V-M-HVAC scenario-7 ("setSeatHeatLevel rethrow при ошибке
-// плагина") здесь не реализован. Плагин setHvacIntProperty/connect —
-// fire-and-forget (invokeMethod без await/return), ошибки записи не доходят
-// до HvacService, поэтому catch/rethrow в setSeatHeatLevel для записи —
-// мёртвый код. Находка зафиксирована в docs/verification-plan.xml.
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-7: restore FA-007 error propagation scenarios]
+// END_CHANGE_SUMMARY
 
 import 'package:android_automotive_plugin/car/hvac_property_ids.dart';
 import 'package:android_automotive_plugin/car/vehicle_area_in_out_car.dart';
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../_helpers/fake_plugin.dart';
@@ -67,6 +67,42 @@ void main() {
     expect(
       logs.lines,
       contains('[HvacService][initialize][BLOCK_INITIALIZE] initialized'),
+    );
+  });
+
+  test('scenario-7: setSeatHeatLevel rethrow при ошибке записи плагина',
+      () async {
+    mock.throwOnMethods.add('setHvacIntProperty');
+
+    await expectLater(
+      hvac.setSeatHeatLevel(UserType.driver, 2),
+      throwsA(isA<PlatformException>()),
+    );
+
+    expect(hvac.isInitialized, isTrue);
+    expect(mock.outgoingMethods, ['connect', 'setHvacIntProperty']);
+    expect(
+      logs.lines,
+      contains(
+          '[HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL] error | level=2, userType=driver, error=PlatformException(TEST_ERROR, mock throw: setHvacIntProperty, null, null)'),
+    );
+  });
+
+  test('scenario-12: initialize rethrow и не выставляет initialized при ошибке',
+      () async {
+    mock.throwOnMethods.add('connect');
+
+    await expectLater(
+      hvac.initialize(),
+      throwsA(isA<PlatformException>()),
+    );
+
+    expect(hvac.isInitialized, isFalse);
+    expect(mock.outgoingMethods, ['connect']);
+    expect(
+      logs.lines,
+      contains(
+          '[HvacService][initialize][BLOCK_INITIALIZE] error | error=PlatformException(TEST_ERROR, mock throw: connect, null, null)'),
     );
   });
   // END_BLOCK_OUTGOING_CALLS

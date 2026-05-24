@@ -1,3 +1,29 @@
+// FILE: packages/android_automotive_plugin/lib/android_automotive_plugin.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Local snapshot/fork Flutter bridge to Android Automotive car APIs.
+//   SCOPE: MethodChannel calls, HVAC/sensor callbacks, accessibility callback handle.
+//   DEPENDS: flutter/services, android_automotive_plugin/car/*
+//   LINKS: M-PLUGIN, V-M-PLUGIN, FA-007
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   AndroidAutomotivePlugin - MethodChannel facade and native callback dispatcher
+//   connect - awaited native connect; propagates channel errors
+//   setHvacIntProperty - awaited HVAC int write; propagates channel errors
+//   getHvacIntProperty - awaited HVAC int read
+//   setHvacFloatProperty - awaited HVAC float write; propagates channel errors
+//   getHvacFloatProperty - awaited HVAC float read
+//   setCallbackHandle - register background callback handle
+//   entrypoint - Android accessibility/background callback entry point
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-7: local patch awaits connect/HVAC writes so errors propagate]
+// END_CHANGE_SUMMARY
+
 import 'dart:convert';
 import 'dart:ui';
 
@@ -90,11 +116,11 @@ class AndroidAutomotivePlugin {
   }
 
   Future<void> connect() async {
-    methodChannel.invokeMethod("connect");
+    await methodChannel.invokeMethod("connect");
   }
 
   Future<void> setHvacIntProperty(int propertyId, int area, int value) async {
-    methodChannel.invokeMethod("setHvacIntProperty", {
+    await methodChannel.invokeMethod("setHvacIntProperty", {
       "propertyId": propertyId,
       "area": area,
       "value": value,
@@ -112,7 +138,7 @@ class AndroidAutomotivePlugin {
 
   Future<void> setHvacFloatProperty(
       int propertyId, int area, double value) async {
-    methodChannel.invokeMethod("setHvacFloatProperty", {
+    await methodChannel.invokeMethod("setHvacFloatProperty", {
       "propertyId": propertyId,
       "area": area,
       "value": value,
