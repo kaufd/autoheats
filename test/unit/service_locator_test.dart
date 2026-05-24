@@ -15,7 +15,6 @@
 // END_MODULE_MAP
 
 import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
-import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
@@ -24,7 +23,6 @@ import 'package:autoheat/src/presentation/themes/theme_configurator.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_service.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
-import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/preset_service.dart';
 import 'package:autoheat/src/services/settings_service.dart';
@@ -54,7 +52,6 @@ void main() {
     expect(locator.isRegistered<HvacService>(), isTrue);
     expect(locator.isRegistered<ThemeService>(), isTrue);
     expect(locator.isRegistered<SettingsService>(), isTrue);
-    expect(locator.isRegistered<ManualSettingsService>(), isTrue);
     expect(locator.isRegistered<PresetService>(), isTrue);
     expect(locator.isRegistered<ModeService>(), isTrue);
     expect(locator.isRegistered<ThemeConfigurator>(), isTrue);
@@ -62,7 +59,6 @@ void main() {
     expect(locator.isRegistered<ModeCubit>(), isTrue);
     expect(locator.isRegistered<CabinTemperatureCubit>(), isTrue);
     expect(locator.isRegistered<SettingsCubit>(), isTrue);
-    expect(locator.isRegistered<ManualSettingsCubit>(), isTrue);
     expect(locator.isRegistered<PresetCubit>(), isTrue);
   });
 

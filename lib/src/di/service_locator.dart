@@ -26,14 +26,12 @@
 import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
-import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_configurator.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_service.dart';
 import 'package:autoheat/src/services/mode_service.dart';
 import 'package:autoheat/src/services/settings_service.dart';
-import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/preset_service.dart';
 import 'package:autoheat/src/services/hvac_service.dart';
 import 'package:get_it/get_it.dart';
@@ -52,9 +50,6 @@ Future<void> setupServiceLocator() async {
 
   _registerSingletonIfAbsent<SettingsService>(
       () => SettingsService(locator<SharedPreferences>()));
-
-  _registerSingletonIfAbsent<ManualSettingsService>(
-      () => ManualSettingsService(locator<SharedPreferences>()));
 
   _registerSingletonIfAbsent<PresetService>(
       () => PresetService(locator<SharedPreferences>()));
@@ -82,9 +77,6 @@ Future<void> setupServiceLocator() async {
 
   _registerSingletonIfAbsent<SettingsCubit>(
       () => SettingsCubit(locator<SettingsService>()));
-
-  _registerSingletonIfAbsent<ManualSettingsCubit>(
-      () => ManualSettingsCubit(locator<ManualSettingsService>()));
 
   _registerSingletonIfAbsent<PresetCubit>(
       () => PresetCubit(locator<PresetService>()));

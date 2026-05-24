@@ -21,7 +21,6 @@
 import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
-import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/di/service_locator.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
@@ -36,8 +35,6 @@ class BlockProviders {
         ),
         BlocProvider<SettingsCubit>(
             create: (context) => locator<SettingsCubit>()),
-        BlocProvider<ManualSettingsCubit>(
-            create: (context) => locator<ManualSettingsCubit>()),
         BlocProvider<PresetCubit>(create: (context) => locator<PresetCubit>()),
       ];
 }

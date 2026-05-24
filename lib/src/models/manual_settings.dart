@@ -1,10 +1,10 @@
 // FILE: lib/src/models/manual_settings.dart
 // VERSION: 1.0.0
 // START_MODULE_CONTRACT
-//   PURPOSE: Модель ручных настроек/параметров пресета для driver/passenger.
-//   SCOPE: ManualHeatSettings, AutoHeatLevel, ManualSettingsState, JSON contract.
+//   PURPOSE: JSON-модели настроек авторежима: ManualHeatSettings + AutoHeatLevel.
+//   SCOPE: ManualHeatSettings (durations+threshold), AutoHeatLevel, JSON contract.
 //   DEPENDS: M-ENUMS, M-CONSTANTS-TEMPERATURE
-//   LINKS: M-MANUAL-SETTINGS, V-M-MANUAL-SETTINGS, M-PRESET, FA-001
+//   LINKS: M-MANUAL-SETTINGS, M-PRESET, V-M-PRESET
 //   ROLE: TYPES
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
@@ -13,13 +13,11 @@
 //   ManualHeatSettings - durations уровней и temperatureThreshold
 //   ManualHeatSettings.defaultFor - дефолтные настройки UserType
 //   AutoHeatLevel - duration + level
-//   ManualSettingsState - Cubit state для driver/passenger settings
-//   ManualSettingsState.copyWith - explicit clearError для transient UI errors
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-6: ManualSettingsState.copyWith supports clearError]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: explicitToJson для вложенных пресетов]
+//   LAST_CHANGE: [v1.3.0 - Mode-source decoupling: ManualSettingsState класс удалён вместе с ManualSettingsCubit]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-6: ManualSettingsState.copyWith supports clearError]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -96,42 +94,5 @@ class AutoHeatLevel extends Equatable {
   List<Object?> get props => [
         duration,
         level,
-      ];
-}
-
-class ManualSettingsState extends Equatable {
-  final ManualHeatSettings driverSettings;
-  final ManualHeatSettings passengerSettings;
-  final bool isLoading;
-  final String? error;
-
-  const ManualSettingsState({
-    required this.driverSettings,
-    required this.passengerSettings,
-    this.isLoading = false,
-    this.error,
-  });
-
-  ManualSettingsState copyWith({
-    ManualHeatSettings? driverSettings,
-    ManualHeatSettings? passengerSettings,
-    bool? isLoading,
-    String? error,
-    bool clearError = false,
-  }) {
-    return ManualSettingsState(
-      driverSettings: driverSettings ?? this.driverSettings,
-      passengerSettings: passengerSettings ?? this.passengerSettings,
-      isLoading: isLoading ?? this.isLoading,
-      error: clearError ? null : (error ?? this.error),
-    );
-  }
-
-  @override
-  List<Object?> get props => [
-        driverSettings,
-        passengerSettings,
-        isLoading,
-        error,
       ];
 }

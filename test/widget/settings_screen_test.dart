@@ -3,7 +3,7 @@
 // START_MODULE_CONTRACT
 //   PURPOSE: Widget smoke тест SettingsScreen на head-unit-like constraints.
 //   SCOPE: build/layout без RenderFlex unbounded-height ошибок.
-//   DEPENDS: M-UI-SETTINGS, M-MANUAL-SETTINGS, M-SETTINGS, M-THEME
+//   DEPENDS: M-UI-SETTINGS, M-SETTINGS, M-THEME
 //   LINKS: V-M-UI-SETTINGS, FA-009
 //   ROLE: TEST
 //   MAP_MODE: LOCALS
@@ -14,13 +14,11 @@
 // END_MODULE_MAP
 
 import 'package:autoheat/src/config/app_theme.dart';
-import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/presentation/screens/settings/settings_screen.dart';
 import 'package:autoheat/src/presentation/themes/theme_configurator.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_service.dart';
-import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:autoheat/src/services/settings_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -41,18 +39,14 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     final settingsCubit = SettingsCubit(SettingsService(prefs));
-    final manualSettingsCubit =
-        ManualSettingsCubit(ManualSettingsService(prefs));
     final themeCubit = ThemeCubit(ThemeService(prefs), ThemeConfigurator());
     addTearDown(settingsCubit.close);
-    addTearDown(manualSettingsCubit.close);
     addTearDown(themeCubit.close);
 
     await tester.pumpWidget(
       MultiBlocProvider(
         providers: [
           BlocProvider<SettingsCubit>.value(value: settingsCubit),
-          BlocProvider<ManualSettingsCubit>.value(value: manualSettingsCubit),
           BlocProvider<ThemeCubit>.value(value: themeCubit),
         ],
         child: Builder(

@@ -32,7 +32,6 @@
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
-import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
@@ -64,7 +63,6 @@ class _PresetsTabState extends State<PresetsTab> {
   @override
   void initState() {
     super.initState();
-    context.read<ManualSettingsCubit>().initialize();
     context.read<PresetCubit>().loadAllPresets();
   }
 
