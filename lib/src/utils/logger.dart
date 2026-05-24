@@ -13,21 +13,69 @@
 // START_MODULE_MAP
 //   LogLevel - уровни debug/info/warn/error
 //   LogSink - синхронный sink строки лога
+//   LogRingBuffer - in-memory ring buffer последних N строк для debug UI
 //   Logger - статический фасад логирования
 //   Logger.defaultSink - production sink через print()
 //   Logger.installTestSink - временно подменить sink на List.add и вернуть restore callback
 //   Logger.debug/info/warn/error - запись структурированной строки
-//   _write - сборка строки + защитный catch вокруг sink
+//   _write - сборка строки + защитный catch вокруг sink + копия в LogRingBuffer
 //   _formatPrefix/_formatFields/_safeSegment/_redactFieldValue - детали форматирования
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.0.0 - Phase-3 step-1: создан M-LOGGER с redaction и test sink]
+//   LAST_CHANGE: [v1.1.0 - Add LogRingBuffer: multiplex copy of every line into in-memory buffer for debug LogsScreen]
+//   PREVIOUS_CHANGE: [v1.0.0 - Phase-3 step-1: создан M-LOGGER с redaction и test sink]
 // END_CHANGE_SUMMARY
 
 enum LogLevel { debug, info, warn, error }
 
 typedef LogSink = void Function(String message);
+
+/// In-memory кольцевой буфер последних N логов. Используется debug-страницей
+/// «Логи»: подписывается через ChangeNotifier и перерисовывается при добавлении.
+/// Хранится синглтоном и заполняется параллельно с print-выводом.
+class LogRingBuffer {
+  static const int capacity = 500;
+  static final LogRingBuffer instance = LogRingBuffer._();
+  LogRingBuffer._();
+
+  final List<String> _lines = [];
+  final List<void Function()> _listeners = [];
+
+  List<String> get lines => List.unmodifiable(_lines);
+
+  void addListener(void Function() listener) {
+    _listeners.add(listener);
+  }
+
+  void removeListener(void Function() listener) {
+    _listeners.remove(listener);
+  }
+
+  void add(String line) {
+    if (_lines.length >= capacity) {
+      _lines.removeAt(0);
+    }
+    _lines.add(line);
+    _notifyListeners();
+  }
+
+  void clear() {
+    if (_lines.isEmpty) return;
+    _lines.clear();
+    _notifyListeners();
+  }
+
+  void _notifyListeners() {
+    for (final listener in List<void Function()>.of(_listeners)) {
+      try {
+        listener();
+      } catch (_) {
+        // Логирование не должно ломать runtime-поток автомобиля.
+      }
+    }
+  }
+}
 
 class Logger {
   static void defaultSink(String message) {
@@ -141,6 +189,13 @@ class Logger {
       _sink(line);
     } catch (_) {
       // Логирование не должно ломать runtime-поток автомобиля или тестовый изолят.
+    }
+    // Параллельно копим в ring buffer для debug-страницы «Логи». Изоляция
+    // ошибок listener'ов LogRingBuffer внутри — не пробрасываются сюда.
+    try {
+      LogRingBuffer.instance.add(line);
+    } catch (_) {
+      // см. выше — диагностика не должна валить хост.
     }
   }
   // END_BLOCK_WRITE

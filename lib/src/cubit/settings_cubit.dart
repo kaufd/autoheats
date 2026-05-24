@@ -4,21 +4,25 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 class SettingsState extends Equatable {
   final bool showCabinTemperature;
+  final bool debugMode;
 
   const SettingsState({
     this.showCabinTemperature = true,
+    this.debugMode = false,
   });
 
   SettingsState copyWith({
     bool? showCabinTemperature,
+    bool? debugMode,
   }) {
     return SettingsState(
       showCabinTemperature: showCabinTemperature ?? this.showCabinTemperature,
+      debugMode: debugMode ?? this.debugMode,
     );
   }
 
   @override
-  List<Object?> get props => [showCabinTemperature];
+  List<Object?> get props => [showCabinTemperature, debugMode];
 }
 
 class SettingsCubit extends Cubit<SettingsState> {
@@ -27,8 +31,10 @@ class SettingsCubit extends Cubit<SettingsState> {
   SettingsCubit(this._settingsService) : super(const SettingsState());
 
   Future<void> initialize() async {
-    final showCabinTemperature = _settingsService.getShowCabinTemperature();
-    emit(state.copyWith(showCabinTemperature: showCabinTemperature));
+    emit(state.copyWith(
+      showCabinTemperature: _settingsService.getShowCabinTemperature(),
+      debugMode: _settingsService.getDebugMode(),
+    ));
   }
 
   Future<void> toggleCabinTemperatureVisibility() async {
@@ -41,5 +47,11 @@ class SettingsCubit extends Cubit<SettingsState> {
     if (state.showCabinTemperature == show) return;
     emit(state.copyWith(showCabinTemperature: show));
     await _settingsService.setShowCabinTemperature(show);
+  }
+
+  Future<void> toggleDebugMode() async {
+    final newValue = !state.debugMode;
+    emit(state.copyWith(debugMode: newValue));
+    await _settingsService.setDebugMode(newValue);
   }
 }

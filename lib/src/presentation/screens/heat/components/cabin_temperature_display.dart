@@ -18,7 +18,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.0.0 - Phase-4 Slice-3: UI читает CabinTemperatureCubit]
+//   LAST_CHANGE: [v1.1.0 - LongPress toggles debug mode (SettingsCubit.toggleDebugMode + SnackBar)]
+//   PREVIOUS_CHANGE: [v1.0.0 - Phase-4 Slice-3: UI читает CabinTemperatureCubit]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/config/color_constants.dart';
@@ -38,18 +39,49 @@ class CabinTemperatureDisplay extends StatelessWidget {
         if (settingsState.showCabinTemperature) {
           return BlocBuilder<CabinTemperatureCubit, CabinTemperatureState>(
             builder: (context, temperatureState) {
-              return _buildTemperatureContainer(
-                context,
-                temperatureState.celsius,
+              return GestureDetector(
+                // Долгий тап — скрытый переключатель debugMode. См. SettingsCubit.toggleDebugMode.
+                onLongPress: () => _toggleDebugMode(context),
+                behavior: HitTestBehavior.opaque,
+                child: _buildTemperatureContainer(
+                  context,
+                  temperatureState.celsius,
+                ),
               );
             },
           );
         }
-        return Container(
-          margin: const EdgeInsets.only(bottom: 20),
-          height: 56,
+        // Когда индикатор скрыт, всё равно держим невидимую длинно-тап-зону —
+        // иначе из-за settings.showCabinTemperature=false пользователь не
+        // сможет выйти из debug-режима тем же жестом.
+        return GestureDetector(
+          onLongPress: () => _toggleDebugMode(context),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            height: 56,
+          ),
         );
       },
+    );
+  }
+
+  Future<void> _toggleDebugMode(BuildContext context) async {
+    final cubit = context.read<SettingsCubit>();
+    await cubit.toggleDebugMode();
+    if (!context.mounted) return;
+    final enabled = cubit.state.debugMode;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 2),
+        content: Text(
+          enabled
+              ? 'Debug mode ON — появились вкладки «Температура» и «Логи»'
+              : 'Debug mode OFF',
+          style: TextStyle(color: context.themeColors.textButtonSelected),
+        ),
+        backgroundColor: context.themeColors.primary,
+      ),
     );
   }
 

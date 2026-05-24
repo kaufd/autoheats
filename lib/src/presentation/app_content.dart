@@ -1,33 +1,39 @@
 // FILE: lib/src/presentation/app_content.dart
-// VERSION: 1.0.0
+// VERSION: 1.4.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Корневой UI-контейнер с табами Heat/Settings/Presets и применением пресетов.
-//   SCOPE: TabController navigation, themed background, DF-PRESET-APPLY bridge to ModeCubit.
-//   DEPENDS: M-UI-HEAT, M-UI-SETTINGS, M-UI-PRESETS, M-THEME, M-PRESET, M-MODE
+//   SCOPE: TabController navigation, themed background, DF-PRESET-APPLY bridge to ModeCubit,
+//          dynamic debug tabs (Температура / Логи) при включённом SettingsCubit.debugMode.
+//   DEPENDS: M-UI-HEAT, M-UI-SETTINGS, M-UI-PRESETS, M-THEME, M-PRESET, M-MODE, M-SETTINGS
 //   LINKS: M-UI-APP, M-UI-PRESETS, M-PRESET, M-MODE, DF-PRESET-APPLY, FA-001, FA-011
 //   ROLE: RUNTIME
 //   MAP_MODE: EXPORTS
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
-//   AppContent - StatefulWidget с TabController на 3 вкладки
-//   initState/dispose - lifecycle TabController
+//   AppContent - StatefulWidget с TabController на 3 или 5 вкладок (зависит от debugMode)
+//   initState/dispose - lifecycle TabController, обновление debug-табов через _rebuildTabController
 //   _selectTab - перейти на вкладку
-//   build - Scaffold/AppBar/TabBarView с themed background
+//   _rebuildTabController - пересоздать TabController при смене debugMode
+//   _tabs / _tabLabels - формируют контент и подписи в зависимости от debugMode
+//   build - Scaffold/AppBar/TabBarView с themed background; BlocListener реагирует на debugMode
 //   _buildTabButton - nav button для вкладки
 //   _applyPreset - применить Preset через ModeCubit и PresetCubit
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.3.0 - Mode-source decoupling: onPresetsSegmentTapped routes to apply or tab navigation]
-//   PREVIOUS_CHANGE: [v1.2.0 - Settings/Presets UX redesign: tab order Управление→Пресеты→Настройки, merged PresetsTab]
+//   LAST_CHANGE: [v1.4.0 - Dynamic debug tabs (Температура/Логи) под SettingsCubit.debugMode]
+//   PREVIOUS_CHANGE: [v1.3.0 - Mode-source decoupling: onPresetsSegmentTapped routes to apply or tab navigation]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/mode_cubit.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';
+import 'package:autoheat/src/cubit/settings_cubit.dart';
 import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/models/preset.dart';
+import 'package:autoheat/src/presentation/screens/debug/logs_screen.dart';
+import 'package:autoheat/src/presentation/screens/debug/temp_injector_screen.dart';
 import 'package:autoheat/src/presentation/screens/heat/heat_screen.dart';
 import 'package:autoheat/src/presentation/screens/settings/settings_screen.dart';
 import 'package:autoheat/src/presentation/screens/presets/presets_tab.dart';
@@ -43,22 +49,16 @@ class AppContent extends StatefulWidget {
 }
 
 class AppContentState extends State<AppContent>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+    with TickerProviderStateMixin {
+  TabController? _tabController;
   int _selectedIndex = 0;
+  bool _debugMode = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-
-    _tabController.addListener(() {
-      if (_tabController.index != _selectedIndex) {
-        setState(() {
-          _selectedIndex = _tabController.index;
-        });
-      }
-    });
+    _debugMode = context.read<SettingsCubit>().state.debugMode;
+    _rebuildTabController(_debugMode, initial: true);
 
     // Прогреваем PresetCubit до первого взаимодействия с ModeToggler:
     // _onPresetsSegmentTapped читает state.selectedPresets, и без этой загрузки
@@ -69,15 +69,47 @@ class AppContentState extends State<AppContent>
 
   @override
   void dispose() {
-    _tabController.dispose();
+    _tabController?.dispose();
     super.dispose();
   }
 
+  void _rebuildTabController(bool debugMode, {bool initial = false}) {
+    final newLength = debugMode ? 5 : 3;
+    final previous = _tabController;
+    final restoredIndex =
+        (previous?.index ?? 0).clamp(0, newLength - 1);
+    final controller = TabController(
+      length: newLength,
+      vsync: this,
+      initialIndex: restoredIndex,
+    );
+    controller.addListener(() {
+      if (controller.index != _selectedIndex) {
+        setState(() {
+          _selectedIndex = controller.index;
+        });
+      }
+    });
+    if (initial) {
+      _tabController = controller;
+      _selectedIndex = restoredIndex;
+    } else {
+      setState(() {
+        _tabController = controller;
+        _selectedIndex = restoredIndex;
+        _debugMode = debugMode;
+      });
+    }
+    previous?.dispose();
+  }
+
   void _selectTab(int index) {
+    final controller = _tabController;
+    if (controller == null) return;
     setState(() {
       _selectedIndex = index;
     });
-    _tabController.animateTo(index);
+    controller.animateTo(index);
   }
 
   void _onPresetsSegmentTapped(UserType user) {
@@ -91,56 +123,81 @@ class AppContentState extends State<AppContent>
     _applyPreset(activePreset);
   }
 
+  List<String> get _tabLabels {
+    return [
+      'Управление',
+      'Пресеты',
+      'Настройки',
+      if (_debugMode) 'Температура',
+      if (_debugMode) 'Логи',
+    ];
+  }
+
+  List<Widget> _tabs() {
+    return [
+      HeatScreen(onPresetsSegmentTapped: _onPresetsSegmentTapped),
+      PresetsTab(
+        onPresetApplied: (preset) {
+          _applyPreset(preset);
+        },
+      ),
+      const SettingsScreen(),
+      if (_debugMode) const TempInjectorScreen(),
+      if (_debugMode) const LogsScreen(),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final String themeName = context.read<ThemeCubit>().state.key;
+    final controller = _tabController;
+    final labels = _tabLabels;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 32),
-              child: Text(
-                'Подогрев сидений',
-                style: context.textStyle.textNavActive
-                    .copyWith(color: context.themeColors.textButtonPrimary),
+    return BlocListener<SettingsCubit, SettingsState>(
+      listenWhen: (prev, curr) => prev.debugMode != curr.debugMode,
+      listener: (context, state) {
+        _rebuildTabController(state.debugMode);
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: Row(
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(left: 32),
+                child: Text(
+                  'Подогрев сидений',
+                  style: context.textStyle.textNavActive
+                      .copyWith(color: context.themeColors.textButtonPrimary),
+                ),
+              ),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 24),
+                height: 28,
+                width: 1,
+                color: Colors.white,
+              ),
+              for (int i = 0; i < labels.length; i++)
+                _buildTabButton(labels[i], i, _selectTab),
+              const Expanded(child: SizedBox.shrink()),
+            ],
+          ),
+        ),
+        body: SafeArea(
+          child: Container(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/background_$themeName.png'),
+                fit: BoxFit.cover,
               ),
             ),
-            Container(
-              margin: EdgeInsets.symmetric(horizontal: 24),
-              height: 28,
-              width: 1,
-              color: Colors.white,
-            ),
-            _buildTabButton('Управление', 0, _selectTab),
-            _buildTabButton('Пресеты', 1, _selectTab),
-            _buildTabButton('Настройки', 2, _selectTab),
-            Expanded(child: SizedBox.shrink()),
-          ],
-        ),
-      ),
-      body: SafeArea(
-        child: Container(
-          decoration: BoxDecoration(
-            image: DecorationImage(
-              image: AssetImage('assets/images/background_$themeName.png'),
-              fit: BoxFit.cover,
-            ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(32, 46, 32, 32),
-            child: TabBarView(
-              controller: _tabController,
-              children: [
-                HeatScreen(onPresetsSegmentTapped: _onPresetsSegmentTapped),
-                PresetsTab(
-                  onPresetApplied: (preset) {
-                    _applyPreset(preset);
-                  },
-                ),
-                SettingsScreen(),
-              ],
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(32, 46, 32, 32),
+              child: controller == null
+                  ? const SizedBox.shrink()
+                  : TabBarView(
+                      controller: controller,
+                      children: _tabs(),
+                    ),
             ),
           ),
         ),
