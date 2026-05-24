@@ -15,33 +15,8 @@ import 'package:autoheat/src/models/preset.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  ManualHeatSettings settings() =>
-      ManualHeatSettings.defaultFor(UserType.driver);
-
-  // START_BLOCK_PRESET_RUNTIME_FIELDS
-  test('scenario-runtime-fields: Preset JSON сохраняет heatMode и heatLevel',
-      () {
-    final preset = Preset(
-      id: 'p1',
-      name: 'Зима',
-      userType: UserType.driver,
-      settings: settings(),
-      heatMode: HeatMode.presets,
-      heatLevel: 2,
-      createdAt: DateTime.parse('2026-01-02T03:04:05.000'),
-    );
-
-    final json = preset.toJson();
-    expect(json['heatMode'], 'presets');
-    expect(json['heatLevel'], 2);
-
-    final restored = Preset.fromJson(json);
-    expect(restored.heatMode, HeatMode.presets);
-    expect(restored.heatLevel, 2);
-  });
-
-  test(
-      'scenario-legacy-defaults: старый JSON без heatMode/heatLevel грузится безопасно',
+  // START_BLOCK_PRESET_NO_SNAPSHOT_FIELDS
+  test('scenario-legacy-defaults: старый JSON без heatMode/heatLevel грузится безопасно',
       () {
     final legacyJson = <String, dynamic>{
       'id': 'legacy',
@@ -54,8 +29,6 @@ void main() {
 
     final restored = Preset.fromJson(legacyJson);
     expect(restored.userType, UserType.passenger);
-    expect(restored.heatMode, HeatMode.presets);
-    expect(restored.heatLevel, 0);
   });
-  // END_BLOCK_PRESET_RUNTIME_FIELDS
+  // END_BLOCK_PRESET_NO_SNAPSHOT_FIELDS
 }

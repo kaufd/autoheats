@@ -36,8 +36,6 @@ void main() {
       name: 'Preset $id',
       userType: userType,
       settings: ManualHeatSettings.defaultFor(userType),
-      heatMode: HeatMode.presets,
-      heatLevel: 2,
       createdAt: DateTime.parse('2026-01-02T03:04:05.000'),
     );
   }

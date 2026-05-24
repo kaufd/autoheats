@@ -27,11 +27,11 @@ void main() {
   }
 
   // START_BLOCK_CREATE_PRESET_RUNTIME_FIELDS
-  test('createPresetFromCurrentSettings сохраняет heatMode и heatLevel',
+  test('createPresetFromCurrentSettings сохраняет пресет с настройками',
       () async {
     final service = await buildService();
 
-    final preset = await service.createPresetFromCurrentSettings(
+    await service.createPresetFromCurrentSettings(
       name: 'Трасса',
       userType: UserType.driver,
       settings: ManualHeatSettings.defaultFor(UserType.driver),
@@ -39,12 +39,8 @@ void main() {
       heatLevel: 2,
     );
 
-    expect(preset.heatMode, HeatMode.presets);
-    expect(preset.heatLevel, 2);
-
     final loaded = await service.getPresets(UserType.driver);
-    expect(loaded.single.heatMode, HeatMode.presets);
-    expect(loaded.single.heatLevel, 2);
+    expect(loaded.single.name, 'Трасса');
   });
   // END_BLOCK_CREATE_PRESET_RUNTIME_FIELDS
 
