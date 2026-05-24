@@ -66,8 +66,13 @@ class PresetEditor extends StatelessWidget {
             onAutoHeatLevelChanged: onAutoHeatLevelChanged,
             onTemperatureThresholdChanged: onTemperatureThresholdChanged,
           ),
-          const SizedBox(height: 16),
-          _buildSaveButton(context),
+          // Spacer прижимает Save к низу колонки — расстояние от низа совпадает
+          // с «Новый пресет» в PresetList (оба внутри Padding(all:16)).
+          const Spacer(),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _buildSaveButton(context),
+          ),
         ],
       ),
     );

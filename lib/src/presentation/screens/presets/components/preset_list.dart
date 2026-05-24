@@ -48,7 +48,10 @@ class PresetList extends StatelessWidget {
                   ),
           ),
           const SizedBox(height: 12),
-          _buildNewPresetButton(context),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _buildNewPresetButton(context),
+          ),
         ],
       ),
     );
@@ -102,14 +105,14 @@ class PresetList extends StatelessWidget {
             ),
             IconButton(
               onPressed: () => onEdit(preset),
-              icon: const Icon(Icons.edit),
+              icon: Icon(Icons.edit, color: context.themeColors.primary),
               tooltip: 'Редактировать',
               iconSize: 22,
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
             ),
             IconButton(
               onPressed: () => onApply(preset),
-              icon: const Icon(Icons.play_arrow),
+              icon: Icon(Icons.play_arrow, color: context.themeColors.primary),
               tooltip: 'Применить',
               iconSize: 24,
               constraints: const BoxConstraints(minWidth: 44, minHeight: 44),

@@ -101,19 +101,20 @@ class _PresetsTabState extends State<PresetsTab> {
                     message: 'Ошибка загрузки пресетов');
               }
 
-              return IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: _buildEditor(context, presetState)),
-                    Container(
-                      width: 2,
-                      color:
-                          context.themeColors.primary.withValues(alpha: 0.27),
-                    ),
-                    Expanded(child: _buildList(context, presetState)),
-                  ],
-                ),
+              // Внешний Expanded даёт bounded height; Row(crossAxisAlignment: stretch)
+              // делит её поровну между колонками. IntrinsicHeight здесь не нужен и
+              // ломал бы Spacer внутри редактора (intrinsic height колонки со Spacer = 0).
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _buildEditor(context, presetState)),
+                  Container(
+                    width: 2,
+                    color:
+                        context.themeColors.primary.withValues(alpha: 0.27),
+                  ),
+                  Expanded(child: _buildList(context, presetState)),
+                ],
               );
             },
           ),
@@ -148,9 +149,15 @@ class _PresetsTabState extends State<PresetsTab> {
         editingPreset == null &&
         activePreset != null;
 
+    // Save имеет цель только когда:
+    //  - new-preset draft с непустым именем, или
+    //  - редактируется существующий пресет (editingPresetId).
+    // В idle (нет ни активного редактирования, ни нового draft'а) Save заблокирован,
+    // т.к. сохранять некуда — slider-handlers сами поднимут draft-target при первом
+    // изменении и тогда Save станет активен.
     final isSaveEnabled = _isNewPresetDraft
         ? (_nameController?.text.trim().isNotEmpty ?? false)
-        : true;
+        : _editingPresetId != null;
 
     return PresetEditor(
       userType: _selectedUser,
@@ -285,8 +292,9 @@ class _PresetsTabState extends State<PresetsTab> {
 
   void _onAutoHeatLevelChanged(AutoHeatLevel autoHeatLevel, int duration) {
     setState(() {
-      final source = _draftSettings ??
-          _currentEditorSettings(context.read<PresetCubit>().state);
+      final state = context.read<PresetCubit>().state;
+      _ensureDraftTarget(state);
+      final source = _draftSettings ?? _currentEditorSettings(state);
       _draftSettings = source.copyWith(
         autoHeatLevels: source.autoHeatLevels
             .map((level) => level == autoHeatLevel
@@ -299,10 +307,27 @@ class _PresetsTabState extends State<PresetsTab> {
 
   void _onTemperatureThresholdChanged(double threshold) {
     setState(() {
-      final source = _draftSettings ??
-          _currentEditorSettings(context.read<PresetCubit>().state);
+      final state = context.read<PresetCubit>().state;
+      _ensureDraftTarget(state);
+      final source = _draftSettings ?? _currentEditorSettings(state);
       _draftSettings = source.copyWith(temperatureThreshold: threshold);
     });
+  }
+
+  // Первое изменение slider'а из idle должно зафиксировать «цель сохранения»:
+  // если есть активный пресет — переходим в его edit-режим; если нет — в new-preset
+  // draft с пустым именем. Без этого Save не знал бы, куда писать (см. fix idle-save).
+  void _ensureDraftTarget(PresetState state) {
+    if (_isNewPresetDraft || _editingPresetId != null) return;
+    final active = state.selectedPresets[_selectedUser];
+    if (active != null) {
+      _editingPresetId = active.id;
+      return;
+    }
+    _isNewPresetDraft = true;
+    _nameController?.dispose();
+    _nameController = TextEditingController()
+      ..addListener(() => setState(() {}));
   }
 
   ManualHeatSettings _currentEditorSettings(PresetState presetState) {
