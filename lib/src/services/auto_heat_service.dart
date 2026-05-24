@@ -64,6 +64,11 @@ class AutoHeatService {
   /// Температура салона на момент вызова startAutoHeat (для cold-start detection).
   final Map<UserType, double> _startTemperatures = {};
 
+  /// Для каких пользователей callback(0) уже был отправлен при off-состоянии.
+  /// Сбрасывается при первом старте — чтобы избежать дублирования callback(0)
+  /// при повторных событиях датчика в off-диапазоне.
+  final Set<UserType> _offCallbackSent = {};
+
   void initialize(HvacService hvacService) {
     final previousHvacService = _hvacService;
     final previousListener = _temperatureListener;
@@ -121,6 +126,7 @@ class AutoHeatService {
     }
     _activeLevels.remove(userType);
     _startTemperatures.remove(userType);
+    _offCallbackSent.remove(userType);
     _updateAutoHeatForUser(userType);
   }
 
@@ -139,6 +145,7 @@ class AutoHeatService {
     _manualSettingsByUser.remove(userType);
     _activeLevels.remove(userType);
     _startTemperatures.remove(userType);
+    _offCallbackSent.remove(userType);
     Logger.info(
       'AutoHeatService',
       'stopAutoHeat',
@@ -180,10 +187,10 @@ class AutoHeatService {
     // Выше порога авторежима — выключить
     if (sequence == null) {
       _heatTimers[userType]?.cancel();
-      final sentOffBefore = _activeLevels[userType] == 0;
-      _activeLevels[userType] = 0;
+      _activeLevels.remove(userType);
       _startTemperatures.remove(userType);
-      if (!sentOffBefore) {
+      if (!_offCallbackSent.contains(userType)) {
+        _offCallbackSent.add(userType);
         callback(0);
       }
       return;
@@ -193,6 +200,7 @@ class AutoHeatService {
 
     // Первый старт, перезапуск после stop, или re-entry из off-состояния
     if (activeLevel == null || activeLevel == 0) {
+      _offCallbackSent.remove(userType);
       _startTemperatures[userType] = _currentTemperature!;
       _stepDownLevel(userType, 3, sequence, callback);
       return;
@@ -407,6 +415,7 @@ class AutoHeatService {
     _manualSettingsByUser.clear();
     _activeLevels.clear();
     _startTemperatures.clear();
+    _offCallbackSent.clear();
     _hvacService = null;
     _temperatureListener = null;
     _currentTemperature = null;
