@@ -1,0 +1,334 @@
+// FILE: lib/src/presentation/screens/presets/presets_tab.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Merged Presets tab — Driver/Passenger toggle + editor + list + new-preset flow.
+//   SCOPE: local state (selectedUser, editingPresetId, draftSettings, nameController),
+//          wires PresetEditor + PresetList + UserSegmentToggle, delegates apply to parent.
+//   DEPENDS: M-UI-PRESETS, M-PRESET, M-MANUAL-SETTINGS, M-MODE, M-ENUMS, M-THEME
+//   LINKS: M-UI-PRESETS, V-M-UI-PRESETS, DF-PRESET-APPLY, FA-001, FA-011
+//   ROLE: RUNTIME
+//   MAP_MODE: EXPORTS
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   PresetsTab - StatefulWidget с onPresetApplied callback
+//   _PresetsTabState.initState - load PresetCubit + ManualSettingsCubit
+//   _PresetsTabState._buildEditor - resolve draft/active/default settings, wire PresetEditor
+//   _PresetsTabState._buildList - filter by user, wire PresetList callbacks
+//   _PresetsTabState._onUserChanged - reset editor/draft when toggling user
+//   _PresetsTabState._onEdit - clone preset settings into draft, set editingPresetId
+//   _PresetsTabState._onApply - save dirty edits if same preset, then onPresetApplied (E1)
+//   _PresetsTabState._onDelete - delete preset, clear draft if was editing it
+//   _PresetsTabState._onNewPreset - open empty/default draft with name field
+//   _PresetsTabState._onSave - upsert preset via PresetCubit.updatePresetSettings or savePreset
+//   _PresetsTabState._handleActivePresetJump - case 3-α silent jump on selected preset change
+// END_MODULE_MAP
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.0.0 - Initial merged Presets tab]
+// END_CHANGE_SUMMARY
+
+import 'package:autoheat/src/app_enums.dart';
+import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
+import 'package:autoheat/src/cubit/mode_cubit.dart';
+import 'package:autoheat/src/cubit/preset_cubit.dart';
+import 'package:autoheat/src/extensions/context_extensions.dart';
+import 'package:autoheat/src/models/manual_settings.dart';
+import 'package:autoheat/src/models/preset.dart';
+import 'package:autoheat/src/presentation/screens/presets/components/preset_editor.dart';
+import 'package:autoheat/src/presentation/screens/presets/components/preset_list.dart';
+import 'package:autoheat/src/presentation/screens/presets/components/user_segment_toggle.dart';
+import 'package:autoheat/src/presentation/ui/error_block.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
+class PresetsTab extends StatefulWidget {
+  final void Function(Preset preset) onPresetApplied;
+
+  const PresetsTab({super.key, required this.onPresetApplied});
+
+  @override
+  State<PresetsTab> createState() => _PresetsTabState();
+}
+
+class _PresetsTabState extends State<PresetsTab> {
+  UserType _selectedUser = UserType.driver;
+  String? _editingPresetId;
+  ManualHeatSettings? _draftSettings;
+  bool _isNewPresetDraft = false;
+  TextEditingController? _nameController;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<ManualSettingsCubit>().initialize();
+    context.read<PresetCubit>().loadAllPresets();
+  }
+
+  @override
+  void dispose() {
+    _nameController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 16),
+          child: Center(
+            child: UserSegmentToggle(
+              selectedUser: _selectedUser,
+              onChanged: _onUserChanged,
+            ),
+          ),
+        ),
+        Expanded(
+          child: BlocConsumer<PresetCubit, PresetState>(
+            listener: _handleActivePresetJump,
+            builder: (context, presetState) {
+              if (presetState.isLoading) {
+                return Center(
+                  child: CircularProgressIndicator(
+                    color: context.themeColors.primary,
+                  ),
+                );
+              }
+
+              if (presetState.error != null) {
+                return const ErrorBlock(
+                    message: 'Ошибка загрузки пресетов');
+              }
+
+              return IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: _buildEditor(context, presetState)),
+                    Container(
+                      width: 2,
+                      color:
+                          context.themeColors.primary.withValues(alpha: 0.27),
+                    ),
+                    Expanded(child: _buildList(context, presetState)),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEditor(BuildContext context, PresetState presetState) {
+    final activePreset = presetState.selectedPresets[_selectedUser];
+    Preset? editingPreset;
+    if (_editingPresetId != null) {
+      for (final p in presetState.presets) {
+        if (p.id == _editingPresetId) {
+          editingPreset = p;
+          break;
+        }
+      }
+    }
+
+    final fallbackSettings = editingPreset?.settings ??
+        activePreset?.settings ??
+        ManualHeatSettings.defaultFor(_selectedUser);
+
+    final displayedSettings = _draftSettings ?? fallbackSettings;
+
+    final displayedName = _isNewPresetDraft
+        ? null
+        : (editingPreset?.name ?? activePreset?.name);
+
+    final isActiveShown = !_isNewPresetDraft &&
+        editingPreset == null &&
+        activePreset != null;
+
+    final isSaveEnabled = _isNewPresetDraft
+        ? (_nameController?.text.trim().isNotEmpty ?? false)
+        : true;
+
+    return PresetEditor(
+      userType: _selectedUser,
+      settings: displayedSettings,
+      presetName: displayedName,
+      isActive: isActiveShown,
+      isNewPresetDraft: _isNewPresetDraft,
+      nameController: _nameController,
+      isSaveEnabled: isSaveEnabled,
+      onAutoHeatLevelChanged: _onAutoHeatLevelChanged,
+      onTemperatureThresholdChanged: _onTemperatureThresholdChanged,
+      onSave: () => _onSave(presetState),
+    );
+  }
+
+  Widget _buildList(BuildContext context, PresetState presetState) {
+    final activePresetId = presetState.selectedPresets[_selectedUser]?.id;
+    return PresetList(
+      presets: presetState.presets,
+      selectedUser: _selectedUser,
+      activePresetId: activePresetId,
+      editingPresetId: _editingPresetId,
+      onEdit: _onEdit,
+      onApply: _onApply,
+      onDelete: _onDelete,
+      onNewPreset: _onNewPreset,
+    );
+  }
+
+  void _onUserChanged(UserType user) {
+    setState(() {
+      _selectedUser = user;
+      _editingPresetId = null;
+      _draftSettings = null;
+      _isNewPresetDraft = false;
+      _nameController?.dispose();
+      _nameController = null;
+    });
+  }
+
+  void _onEdit(Preset preset) {
+    setState(() {
+      _editingPresetId = preset.id;
+      _draftSettings = preset.settings;
+      _isNewPresetDraft = false;
+      _nameController?.dispose();
+      _nameController = null;
+    });
+  }
+
+  Future<void> _onApply(Preset preset) async {
+    if (_editingPresetId == preset.id && _draftSettings != null) {
+      await context
+          .read<PresetCubit>()
+          .updatePresetSettings(preset, _draftSettings!);
+    }
+    widget.onPresetApplied(preset);
+  }
+
+  Future<void> _onDelete(Preset preset) async {
+    await context.read<PresetCubit>().deletePreset(preset.id, preset.userType);
+    if (!mounted) return;
+    if (_editingPresetId == preset.id) {
+      setState(() {
+        _editingPresetId = null;
+        _draftSettings = null;
+      });
+    }
+  }
+
+  void _onNewPreset() {
+    setState(() {
+      _editingPresetId = null;
+      _draftSettings = ManualHeatSettings.defaultFor(_selectedUser);
+      _isNewPresetDraft = true;
+      _nameController?.dispose();
+      _nameController = TextEditingController()
+        ..addListener(() => setState(() {})); // re-evaluate save-enabled
+    });
+  }
+
+  Future<void> _onSave(PresetState presetState) async {
+    final draft = _draftSettings;
+    if (draft == null) return;
+
+    if (_isNewPresetDraft) {
+      final name = _nameController?.text.trim() ?? '';
+      if (name.isEmpty) return;
+
+      final modeCubit = context.read<ModeCubit>();
+      final heatMode = HeatModeExtension.fromString(
+          modeCubit.getModeByUser(_selectedUser));
+      final heatLevel = modeCubit.getHeatLevelByUser(_selectedUser);
+
+      await context.read<PresetCubit>().savePreset(
+            name: name,
+            userType: _selectedUser,
+            settings: draft,
+            heatMode: heatMode,
+            heatLevel: heatLevel,
+          );
+
+      if (!mounted) return;
+      setState(() {
+        _isNewPresetDraft = false;
+        _nameController?.dispose();
+        _nameController = null;
+        _draftSettings = null;
+        _editingPresetId = null;
+      });
+      return;
+    }
+
+    final id = _editingPresetId;
+    if (id == null) return;
+    Preset? preset;
+    for (final p in presetState.presets) {
+      if (p.id == id) {
+        preset = p;
+        break;
+      }
+    }
+    preset ??= presetState.selectedPresets[_selectedUser];
+    if (preset == null) return;
+
+    await context.read<PresetCubit>().updatePresetSettings(preset, draft);
+    if (!mounted) return;
+    setState(() {
+      _draftSettings = null;
+    });
+  }
+
+  void _onAutoHeatLevelChanged(AutoHeatLevel autoHeatLevel, int duration) {
+    setState(() {
+      final source = _draftSettings ??
+          _currentEditorSettings(context.read<PresetCubit>().state);
+      _draftSettings = source.copyWith(
+        autoHeatLevels: source.autoHeatLevels
+            .map((level) => level == autoHeatLevel
+                ? level.copyWith(duration: duration)
+                : level)
+            .toList(),
+      );
+    });
+  }
+
+  void _onTemperatureThresholdChanged(double threshold) {
+    setState(() {
+      final source = _draftSettings ??
+          _currentEditorSettings(context.read<PresetCubit>().state);
+      _draftSettings = source.copyWith(temperatureThreshold: threshold);
+    });
+  }
+
+  ManualHeatSettings _currentEditorSettings(PresetState presetState) {
+    if (_editingPresetId != null) {
+      for (final p in presetState.presets) {
+        if (p.id == _editingPresetId) {
+          return p.settings;
+        }
+      }
+    }
+    final active = presetState.selectedPresets[_selectedUser];
+    return active?.settings ?? ManualHeatSettings.defaultFor(_selectedUser);
+  }
+
+  void _handleActivePresetJump(BuildContext context, PresetState state) {
+    final newActive = state.selectedPresets[_selectedUser];
+    if (newActive == null) return;
+
+    if (_isNewPresetDraft) return; // user is mid-create, don't blow it away
+
+    if (_editingPresetId != null && _editingPresetId != newActive.id) {
+      // case 3-α: silent jump
+      setState(() {
+        _editingPresetId = null;
+        _draftSettings = null;
+      });
+    }
+  }
+}

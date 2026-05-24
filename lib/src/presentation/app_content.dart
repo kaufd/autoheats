@@ -19,7 +19,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-1: preset apply delegates to ModeCubit.applyPreset]
+//   LAST_CHANGE: [v1.2.0 - Settings/Presets UX redesign: tab order Управление→Пресеты→Настройки, merged PresetsTab]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: preset apply delegates to ModeCubit.applyPreset]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -30,7 +31,7 @@ import 'package:autoheat/src/extensions/context_extensions.dart';
 import 'package:autoheat/src/models/preset.dart';
 import 'package:autoheat/src/presentation/screens/heat/heat_screen.dart';
 import 'package:autoheat/src/presentation/screens/settings/settings_screen.dart';
-import 'package:autoheat/src/presentation/screens/presets/presets_list_screen.dart';
+import 'package:autoheat/src/presentation/screens/presets/presets_tab.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -97,8 +98,8 @@ class AppContentState extends State<AppContent>
               color: Colors.white,
             ),
             _buildTabButton('Управление', 0, _selectTab),
-            _buildTabButton('Настройки', 1, _selectTab),
-            _buildTabButton('Пресеты', 2, _selectTab),
+            _buildTabButton('Пресеты', 1, _selectTab),
+            _buildTabButton('Настройки', 2, _selectTab),
             Expanded(child: SizedBox.shrink()),
           ],
         ),
@@ -117,12 +118,12 @@ class AppContentState extends State<AppContent>
               controller: _tabController,
               children: [
                 HeatScreen(),
-                SettingsScreen(),
-                PresetsListScreen(
+                PresetsTab(
                   onPresetApplied: (preset) {
                     _applyPreset(preset);
                   },
                 ),
+                SettingsScreen(),
               ],
             ),
           ),

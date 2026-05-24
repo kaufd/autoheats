@@ -1,10 +1,10 @@
 // FILE: test/widget/white_theme_button_contrast_test.dart
-// VERSION: 1.0.0
+// VERSION: 1.1.0
 // START_MODULE_CONTRACT
 //   PURPOSE: Widget regression тесты читаемости primary-кнопок в белой теме.
-//   SCOPE: CustomAlertDialog confirm, PresetsSettings save, ThemeSelector selected button.
-//   DEPENDS: M-UI-SETTINGS, M-THEME
-//   LINKS: V-M-UI-SETTINGS, V-M-THEME, FA-009
+//   SCOPE: CustomAlertDialog confirm, PresetEditor save, ThemeSelector selected button.
+//   DEPENDS: M-UI-PRESETS, M-UI-SETTINGS, M-THEME
+//   LINKS: V-M-UI-PRESETS, V-M-UI-SETTINGS, V-M-THEME, FA-009
 //   ROLE: TEST
 //   MAP_MODE: LOCALS
 // END_MODULE_CONTRACT
@@ -16,16 +16,14 @@
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/config/app_theme.dart';
 import 'package:autoheat/src/config/color_constants.dart';
-import 'package:autoheat/src/cubit/manual_settings_cubit.dart';
 import 'package:autoheat/src/models/manual_settings.dart';
-import 'package:autoheat/src/presentation/screens/settings/components/presets_settings.dart';
+import 'package:autoheat/src/presentation/screens/presets/components/preset_editor.dart';
 import 'package:autoheat/src/presentation/screens/settings/components/theme_selector.dart';
 import 'package:autoheat/src/presentation/themes/theme_configurator.dart';
 import 'package:autoheat/src/presentation/themes/theme_cubit.dart';
 import 'package:autoheat/src/presentation/themes/theme_name.dart';
 import 'package:autoheat/src/presentation/themes/theme_service.dart';
 import 'package:autoheat/src/presentation/ui/custom_alert_dialog.dart';
-import 'package:autoheat/src/services/manual_settings_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -54,31 +52,24 @@ void main() {
     expect(_foregroundColor(button), ColorConstants.systemBlack);
   });
 
-  testWidgets('scenario-4: preset save button is readable in white theme',
+  testWidgets('scenario-4: preset editor save button is readable in white theme',
       (tester) async {
-    SharedPreferences.setMockInitialValues({});
-    final prefs = await SharedPreferences.getInstance();
-    final manualSettingsCubit =
-        ManualSettingsCubit(ManualSettingsService(prefs));
-    addTearDown(manualSettingsCubit.close);
-
-    final settingsState = ManualSettingsState(
-      driverSettings: ManualHeatSettings.defaultFor(UserType.driver),
-      passengerSettings: ManualHeatSettings.defaultFor(UserType.passenger),
-    );
-
     await tester.pumpWidget(
-      BlocProvider<ManualSettingsCubit>.value(
-        value: manualSettingsCubit,
-        child: Builder(
-          builder: (context) => MaterialApp(
-            theme: AppTheme.white(context),
-            home: Scaffold(
-              body: PresetsSettings(
-                settingsState: settingsState,
-                onAutoHeatLevelChanged: (_, __, ___) {},
-                onTemperatureThresholdChanged: (_, __) {},
-              ),
+      Builder(
+        builder: (context) => MaterialApp(
+          theme: AppTheme.white(context),
+          home: Scaffold(
+            body: PresetEditor(
+              userType: UserType.driver,
+              settings: ManualHeatSettings.defaultFor(UserType.driver),
+              presetName: 'Тестовый пресет',
+              isActive: false,
+              isNewPresetDraft: false,
+              nameController: null,
+              isSaveEnabled: true,
+              onAutoHeatLevelChanged: (_, __) {},
+              onTemperatureThresholdChanged: (_) {},
+              onSave: () {},
             ),
           ),
         ),

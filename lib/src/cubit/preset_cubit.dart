@@ -15,6 +15,7 @@
 //   loadPresets(UserType) - загрузить пресеты одного сиденья
 //   loadAllPresets - загрузить driver + passenger
 //   savePreset - сохранить settings + runtime mode/level snapshot
+//   updatePresetSettings - upsert settings on an existing Preset by id; reload list
 //   deletePreset - удалить, очистить selection при совпадении и перезагрузить список
 //   applyPreset - обновить lastUsed и selectedPreset metadata/persistence
 //   clearError - очистить error state
@@ -22,8 +23,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Phase-4 Slice-9: selected preset persists per user]
-//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-1: savePreset принимает heatMode/heatLevel]
+//   LAST_CHANGE: [v1.3.0 - Add updatePresetSettings for in-place editing of saved presets]
+//   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-9: selected preset persists per user]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -113,6 +114,28 @@ class PresetCubit extends Cubit<PresetState> {
       emit(state.copyWith(error: e.toString()));
     }
     // END_BLOCK_SAVE_PRESET
+  }
+
+  // START_CONTRACT: updatePresetSettings
+  //   PURPOSE: Persist new settings into an existing preset by id (keeps name/createdAt/heatMode/heatLevel).
+  //   INPUTS: { preset: Preset, settings: ManualHeatSettings }
+  //   OUTPUTS: { Future<void> }
+  //   SIDE_EFFECTS: SharedPreferences write через PresetService.savePreset upsert, reload list.
+  //   LINKS: M-PRESET, V-M-PRESET, FA-011
+  // END_CONTRACT: updatePresetSettings
+  Future<void> updatePresetSettings(
+    Preset preset,
+    ManualHeatSettings settings,
+  ) async {
+    // START_BLOCK_UPDATE_PRESET_SETTINGS
+    try {
+      final updated = preset.copyWith(settings: settings);
+      await _presetService.savePreset(updated);
+      await loadAllPresets();
+    } catch (e) {
+      emit(state.copyWith(error: e.toString()));
+    }
+    // END_BLOCK_UPDATE_PRESET_SETTINGS
   }
 
   Future<void> deletePreset(String presetId, UserType userType) async {
