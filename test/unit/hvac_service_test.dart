@@ -4,6 +4,7 @@
 //   PURPOSE: Unit-тесты HvacService через мок MethodChannel плагина (V-M-HVAC).
 //   SCOPE: исходящие connect/setHvacIntProperty, конверсия температуры из
 //          входящего onHvacChangeEvent, multi-listener fan-out/removal,
+//          native String/int raw values, invalid raw sentinel filtering,
 //          fallback getCabinTemperature, идемпотентность initialize,
 //          propagation ошибок connect/write из M-PLUGIN.
 //   DEPENDS: M-HVAC, M-PLUGIN, M-ENUMS
@@ -13,7 +14,8 @@
 // END_MODULE_CONTRACT
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-7: restore FA-007 error propagation scenarios]
+//   LAST_CHANGE: [v1.2.0 - Cover native string HVAC event values and raw -1 filtering]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-7: restore FA-007 error propagation scenarios]
 // END_CHANGE_SUMMARY
 
 import 'package:android_automotive_plugin/car/hvac_property_ids.dart';
@@ -120,8 +122,32 @@ void main() {
     expect(
       logs.lines,
       contains(
-          '[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] cabin temperature changed | celsius=20.0'),
+          '[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] cabin temperature changed | rawTemperature=124, celsius=20.0'),
     );
+  });
+
+  test('scenario-13: native string event value -> cabin listener(20.0)',
+      () async {
+    final captured = <double>[];
+    hvac.addCabinTemperatureListener(captured.add);
+    await mock.emitHvacChangeEvent(
+      propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
+      areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
+      value: '124',
+    );
+    expect(captured, [20.0]);
+  });
+
+  test('scenario-14: raw -1 event is ignored as native sentinel', () async {
+    final captured = <double>[];
+    hvac.addCabinTemperatureListener(captured.add);
+    await mock.emitHvacChangeEvent(
+      propertyId: CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP,
+      areaId: VehicleAreaInOutCAR.InOutCAR_INSIDE,
+      value: '-1',
+    );
+    expect(captured, isEmpty);
+    expect(hvac.lastCabinTemperature, isNull);
   });
 
   group('scenario-3: конверсия (raw - 84) / 2', () {
@@ -236,6 +262,23 @@ void main() {
     mock.hvacIntResponse = 124; // (124 - 84) / 2 = 20.0
     final temp = await hvac.getCabinTemperature();
     expect(temp, 20.0);
+  });
+
+  test('scenario-15: getCabinTemperature raw -1 не публикует -42.5', () async {
+    final captured = <double>[];
+    hvac.addCabinTemperatureListener(captured.add);
+    mock.hvacIntResponse = -1;
+
+    final temp = await hvac.getCabinTemperature();
+
+    expect(temp, 20.0);
+    expect(captured, isEmpty);
+    expect(hvac.lastCabinTemperature, isNull);
+    expect(
+      logs.lines,
+      contains(
+          '[HvacService][getCabinTemperature][BLOCK_GET_CABIN_TEMPERATURE] ignored invalid raw read | rawTemperature=-1, fallbackCelsius=20.0'),
+    );
   });
   // END_BLOCK_READ_FALLBACK
 }

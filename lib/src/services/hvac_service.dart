@@ -26,14 +26,16 @@
 //   addCabinTemperatureListener - подписать потребителя температуры, optional emitCurrent
 //   removeCabinTemperatureListener - отписать потребителя температуры
 //   _publishCabinTemperature - cache + fan-out listeners + listener error isolation
-//   Logger markers - BLOCK_INITIALIZE, BLOCK_SET_SEAT_HEAT_LEVEL, BLOCK_HANDLE_TEMPERATURE_EVENT
+//   Logger markers - BLOCK_INITIALIZE, BLOCK_SET_SEAT_HEAT_LEVEL, BLOCK_HANDLE_TEMPERATURE_EVENT, BLOCK_PLUGIN_LOG
+//   _parseRawTemperature - принимает native HVAC event value как String/int/double
+//   _isInvalidRawTemperature - отсекает sentinel raw<0 вместо публикации -42.5°C
 //   _convertToCelsius - (raw - 84) / 2 -> °C
 //   dispose - сброс _isInitialized и снятие onHvacChangeEventCallback/listeners
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.4.0 - initialize() in-flight guard: одновременные вызовы делят один connect()]
-//   PREVIOUS_CHANGE: [v1.3.0 - Phase-4 Slice-7: connect/write plugin errors now propagate through awaited M-PLUGIN calls]
+//   LAST_CHANGE: [v1.5.0 - Parse native HVAC event values as String/int/double and ignore raw -1 sentinel]
+//   PREVIOUS_CHANGE: [v1.4.0 - initialize() in-flight guard: одновременные вызовы делят один connect()]
 // END_CHANGE_SUMMARY
 
 import 'package:android_automotive_plugin/android_automotive_plugin.dart';
@@ -58,24 +60,62 @@ class HvacService {
     _androidAutomotivePlugin = AndroidAutomotivePlugin();
     _hvacManager = CarHvacManager(_androidAutomotivePlugin);
 
+    _androidAutomotivePlugin.onLogCallback = (String message) {
+      Logger.debug(
+        'AndroidAutomotivePlugin',
+        'onLogEvent',
+        'BLOCK_PLUGIN_LOG',
+        message,
+      );
+    };
+
     _androidAutomotivePlugin.onHvacChangeEventCallback =
         (CarPropertyValue carPropertyValue) {
       // START_BLOCK_HANDLE_TEMPERATURE_EVENT
       try {
         if (carPropertyValue.propertyId ==
-            CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP) {
-          final temperature = _convertToCelsius(carPropertyValue.value as int);
-
-          if (carPropertyValue.areaId == VehicleAreaInOutCAR.InOutCAR_INSIDE) {
-            Logger.info(
+                CarHvacPropertyIds.ID_HVAC_IN_OUT_TEMP &&
+            carPropertyValue.areaId == VehicleAreaInOutCAR.InOutCAR_INSIDE) {
+          final rawTemperature = _parseRawTemperature(carPropertyValue.value);
+          if (rawTemperature == null) {
+            Logger.warn(
               'HvacService',
               'onHvacChangeEvent',
               'BLOCK_HANDLE_TEMPERATURE_EVENT',
-              'cabin temperature changed',
-              {'celsius': temperature},
+              'ignored malformed HVAC temperature event',
+              {
+                'areaId': carPropertyValue.areaId,
+                'status': carPropertyValue.status,
+                'rawCarPropertyValue': carPropertyValue.value,
+              },
             );
-            _publishCabinTemperature(temperature);
+            return;
           }
+
+          if (_isInvalidRawTemperature(rawTemperature)) {
+            Logger.warn(
+              'HvacService',
+              'onHvacChangeEvent',
+              'BLOCK_HANDLE_TEMPERATURE_EVENT',
+              'ignored invalid HVAC temperature event',
+              {
+                'areaId': carPropertyValue.areaId,
+                'status': carPropertyValue.status,
+                'rawTemperature': rawTemperature,
+              },
+            );
+            return;
+          }
+
+          final temperature = _convertToCelsius(rawTemperature);
+          Logger.info(
+            'HvacService',
+            'onHvacChangeEvent',
+            'BLOCK_HANDLE_TEMPERATURE_EVENT',
+            'cabin temperature changed',
+            {'rawTemperature': rawTemperature, 'celsius': temperature},
+          );
+          _publishCabinTemperature(temperature);
         }
       } catch (e) {
         Logger.warn(
@@ -184,13 +224,25 @@ class HvacService {
       }
 
       final temperature = await _hvacManager.getInsideTemperature();
+      if (_isInvalidRawTemperature(temperature)) {
+        const fallbackCelsius = 20.0;
+        Logger.warn(
+          'HvacService',
+          'getCabinTemperature',
+          'BLOCK_GET_CABIN_TEMPERATURE',
+          'ignored invalid raw read',
+          {'rawTemperature': temperature, 'fallbackCelsius': fallbackCelsius},
+        );
+        return _lastCabinTemperature ?? fallbackCelsius;
+      }
+
       final celsius = _convertToCelsius(temperature);
       Logger.info(
         'HvacService',
         'getCabinTemperature',
         'BLOCK_GET_CABIN_TEMPERATURE',
         'read',
-        {'celsius': celsius},
+        {'rawTemperature': temperature, 'celsius': celsius},
       );
       _publishCabinTemperature(celsius);
       return celsius;
@@ -258,7 +310,15 @@ class HvacService {
     }
   }
 
-  double _convertToCelsius(int temperature) {
+  num? _parseRawTemperature(Object? value) {
+    if (value is num) return value;
+    if (value is String) return num.tryParse(value);
+    return null;
+  }
+
+  bool _isInvalidRawTemperature(num temperature) => temperature < 0;
+
+  double _convertToCelsius(num temperature) {
     return (temperature - 84) / 2;
   }
 
@@ -267,6 +327,7 @@ class HvacService {
     _initInFlight = null;
     _lastCabinTemperature = null;
     _cabinTemperatureListeners.clear();
+    _androidAutomotivePlugin.onLogCallback = null;
     _androidAutomotivePlugin.onHvacChangeEventCallback = null;
   }
 }

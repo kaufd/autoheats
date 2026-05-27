@@ -11,17 +11,18 @@
 //
 // START_MODULE_MAP
 //   AndroidAutomotivePlugin - MethodChannel facade and native callback dispatcher
-//   connect - awaited native connect; propagates channel errors
-//   setHvacIntProperty - awaited HVAC int write; propagates channel errors
+//   connect - awaited native connect + CarHvacManager readiness; propagates channel errors
+//   setHvacIntProperty - awaited HVAC int write; propagates native channel errors
 //   getHvacIntProperty - awaited HVAC int read
-//   setHvacFloatProperty - awaited HVAC float write; propagates channel errors
+//   setHvacFloatProperty - awaited HVAC float write; propagates native channel errors
 //   getHvacFloatProperty - awaited HVAC float read
 //   setCallbackHandle - register background callback handle
 //   entrypoint - Android accessibility/background callback entry point
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.1.0 - Phase-4 Slice-7: local patch awaits connect/HVAC writes so errors propagate]
+//   LAST_CHANGE: [v1.2.0 - Native connect waits for CarHvacManager readiness and HVAC failures propagate]
+//   PREVIOUS_CHANGE: [v1.1.0 - Phase-4 Slice-7: local patch awaits connect/HVAC writes so errors propagate]
 // END_CHANGE_SUMMARY
 
 import 'dart:convert';

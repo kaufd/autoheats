@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FILE: android/app/src/main/res/xml/accessibilityservice.xml
+  VERSION: 1.0.0
+  START_MODULE_CONTRACT
+    PURPOSE: AccessibilityService metadata matching the original Changan AirConditioner app so the head unit exposes the service in system accessibility settings.
+    SCOPE: Android accessibility-service XML only.
+    DEPENDS: M-ACCESSIBILITY, M-PLUGIN
+    LINKS: M-ACCESSIBILITY, M-PLUGIN, V-M-ACCESSIBILITY
+    ROLE: CONFIG
+    MAP_MODE: NONE
+  END_MODULE_CONTRACT
+
+  START_CHANGE_SUMMARY
+    LAST_CHANGE: [v1.0.0 - add accessibility metadata required by CustomAccessibilityService]
+  END_CHANGE_SUMMARY
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowsChanged|typeWindowStateChanged|typeWindowContentChanged"
+    android:accessibilityFeedbackType="feedbackVisual"
+    android:notificationTimeout="300"
+    android:accessibilityFlags="flagDefault|flagIncludeNotImportantViews|flagRequestTouchExplorationMode|flagRequestEnhancedWebAccessibility|flagReportViewIds|flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true" />

@@ -7,6 +7,8 @@ import android.car.hardware.CarSensorEvent;
 import android.car.hardware.hvac.CarHvacManager;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.Surface;
 import android.view.SurfaceControl;
 import android.view.SurfaceHolder;
@@ -36,6 +38,22 @@ import io.flutter.view.TextureRegistry;
 
 /** AndroidAutomotivePlugin */
 public class AndroidAutomotivePlugin implements FlutterPlugin, MethodCallHandler {
+  // START_MODULE_CONTRACT
+  //   PURPOSE: Flutter MethodChannel entry point for the Android Automotive plugin.
+  //   SCOPE: channel lifecycle, connect readiness, HVAC read/write dispatch, native callbacks.
+  //   DEPENDS: CarAvcManagerUtils, MethodChannel
+  //   LINKS: M-PLUGIN, V-M-PLUGIN, M-HVAC
+  //   ROLE: RUNTIME
+  //   MAP_MODE: EXPORTS
+  // END_MODULE_CONTRACT
+  //
+  // START_CHANGE_SUMMARY
+  //   LAST_CHANGE: [v1.1.0 - connect waits for CarHvacManager readiness and HVAC failures surface as PlatformException]
+  // END_CHANGE_SUMMARY
+
+  private static final int CONNECT_READY_TIMEOUT_MS = 5000;
+  private static final int CONNECT_READY_POLL_MS = 50;
+
   /// The MethodChannel that will the communication between Flutter and native Android
   ///
   /// This local reference serves to register the plugin with the Flutter Engine and unregister it
@@ -47,6 +65,37 @@ public class AndroidAutomotivePlugin implements FlutterPlugin, MethodCallHandler
   private  CurrentMetadataManagerService currentMetadataManagerService;
 
   private Config config;
+
+  private void completeConnectWhenHvacReady(@NonNull Result result, long deadlineMs) {
+    Handler handler = new Handler(Looper.getMainLooper());
+    final boolean[] completed = {false};
+    final Runnable[] poll = new Runnable[1];
+
+    poll[0] = () -> {
+      if (completed[0]) {
+        return;
+      }
+
+      if (carAvcManagerUtils != null && carAvcManagerUtils.isHvacReady()) {
+        completed[0] = true;
+        result.success(null);
+        return;
+      }
+
+      if (System.currentTimeMillis() >= deadlineMs) {
+        completed[0] = true;
+        result.error(
+            "CAR_HVAC_NOT_READY",
+            "CarHvacManager was not ready after " + CONNECT_READY_TIMEOUT_MS + "ms",
+            null);
+        return;
+      }
+
+      handler.postDelayed(poll[0], CONNECT_READY_POLL_MS);
+    };
+
+    handler.post(poll[0]);
+  }
 
   public AndroidAutomotivePlugin() {
 
@@ -162,7 +211,8 @@ public class AndroidAutomotivePlugin implements FlutterPlugin, MethodCallHandler
   @Override
   public void onMethodCall(@NonNull MethodCall call, @NonNull Result result) {
     if (call.method.equals("connect")) {
-      carAvcManagerUtils = new CarAvcManagerUtils(flutterPluginBinding.getApplicationContext(), new CarAvcManagerListener() {
+      try {
+        carAvcManagerUtils = new CarAvcManagerUtils(flutterPluginBinding.getApplicationContext(), new CarAvcManagerListener() {
         @Override
         public void onHvacChangeEvent(CarPropertyValue carPropertyValue) {
           channel.invokeMethod("onHvacChangeEvent", carPropertyToJsonString(carPropertyValue));
@@ -203,7 +253,10 @@ public class AndroidAutomotivePlugin implements FlutterPlugin, MethodCallHandler
           channel.invokeMethod("onLogEvent", logEvent);
         }
       });
-      result.success(null);
+        completeConnectWhenHvacReady(result, System.currentTimeMillis() + CONNECT_READY_TIMEOUT_MS);
+      } catch (Exception e) {
+        result.error("CAR_CONNECT_FAILED", e.toString(), null);
+      }
     }
     //
     else if (call.method.equals("setHvacIntProperty")) {
@@ -211,16 +264,24 @@ public class AndroidAutomotivePlugin implements FlutterPlugin, MethodCallHandler
       int area = call.argument("area");
       int value = call.argument("value");
 
-      carAvcManagerUtils.setHvacIntProperty(propertyId, area, value);
-      result.success(null);
+      try {
+        carAvcManagerUtils.setHvacIntProperty(propertyId, area, value);
+        result.success(null);
+      } catch (Exception e) {
+        result.error("HVAC_INT_WRITE_FAILED", e.toString(), null);
+      }
     }
     //
     else if (call.method.equals("getHvacIntProperty")) {
       int propertyId = call.argument("propertyId");
       int area = call.argument("area");
 
-      int value = carAvcManagerUtils.getHvacIntProperty(propertyId, area);
-      result.success(value);
+      try {
+        int value = carAvcManagerUtils.getHvacIntProperty(propertyId, area);
+        result.success(value);
+      } catch (Exception e) {
+        result.error("HVAC_INT_READ_FAILED", e.toString(), null);
+      }
     }
     //
     else if (call.method.equals("setHvacFloatProperty")) {
@@ -228,16 +289,24 @@ public class AndroidAutomotivePlugin implements FlutterPlugin, MethodCallHandler
       int area = call.argument("area");
       float value = ((Double) call.argument("value")).floatValue();
 
-      carAvcManagerUtils.setHvacFloatProperty(propertyId, area, value);
-      result.success(null);
+      try {
+        carAvcManagerUtils.setHvacFloatProperty(propertyId, area, value);
+        result.success(null);
+      } catch (Exception e) {
+        result.error("HVAC_FLOAT_WRITE_FAILED", e.toString(), null);
+      }
     }
     //
     else if (call.method.equals("getHvacFloatProperty")) {
       int propertyId = call.argument("propertyId");
       int area = call.argument("area");
 
-      float value = carAvcManagerUtils.getHvacFloatProperty(propertyId, area);
-      result.success(value);
+      try {
+        float value = carAvcManagerUtils.getHvacFloatProperty(propertyId, area);
+        result.success(value);
+      } catch (Exception e) {
+        result.error("HVAC_FLOAT_READ_FAILED", e.toString(), null);
+      }
     }
     //
     else if (call.method.equals("getLatestSensorEvent")) {

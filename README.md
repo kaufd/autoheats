@@ -37,10 +37,19 @@ Flutter-приложение для автоматического управл�
 
 - Головное устройство **Changan UNI-S** или **CS55 Plus** на MediaTek MT8666
   (AAOS-build с суффиксом `_64_car`). Архитектура — `arm64-v8a`.
-- Минимальная Android API — 23 (по конфигу), целевая `android.car.*` подсистема —
+- Минимальная Android API — 24 (по текущему Flutter Gradle config), целевая `android.car.*` подсистема —
   AAOS любой современной версии.
-- Подпись APK — debug-keystore. Платформенный ключ не нужен: всё работает за
-  счёт `android.car.permission.*` в манифесте — так же, как `autoheat_old`.
+- Подпись APK — обычный Android release/debug keystore. Платформенный ключ не
+  нужен: всё работает за счёт `android.car.permission.*` в манифесте — так же,
+  как `autoheat_old`. GitHub Releases должны собираться только со стабильным
+  release-keystore, иначе обновление поверх предыдущего APK ломается по подписи.
+- Vendor permission `com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
+  только запрашивается, но не объявляется: его владелец — оригинальный пакет
+  `com.wt.airconditioner`, который обычно уже стоит на голове.
+- Manifest intentionally keeps the original app's broad permission envelope
+  (location/storage/phone, overlay, write-settings, extended `android.car.*`) and
+  accessibility service declaration because these grants are part of the working
+  head-unit setup.
 
 Поддержка обычных Android-устройств (телефонов, планшетов) **не предусмотрена** —
 UI рассчитан только под фиксированное альбомное разрешение головного устройства.
@@ -152,7 +161,7 @@ flutter build apk --release --target-platform android-arm64
 при push'е тега `v*`:
 
 ```bash
-# 1. Бамп версии в pubspec.yaml
+# 1. Бамп версии в pubspec.yaml, включая build number: X.Y.Z+NNN
 # 2. Добавить секцию '## [X.Y.Z] - YYYY-MM-DD' в CHANGELOG.md
 git commit -am "Release X.Y.Z"
 git tag vX.Y.Z
@@ -160,8 +169,10 @@ git push origin vX.Y.Z
 ```
 
 GitHub Actions workflow [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-прогонит `flutter analyze` + `flutter test`, соберёт `AutoHeat-v3.apk` под arm64,
-вырежет нужную секцию из `CHANGELOG.md` и создаст релиз.
+прогонит `flutter analyze` + `flutter test`, соберёт подписанный
+`AutoHeat-v3.apk` под arm64, вырежет нужную секцию из `CHANGELOG.md` и создаст
+релиз. Для workflow обязательны secrets `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
 
 ## Документация
 

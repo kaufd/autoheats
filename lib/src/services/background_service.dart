@@ -21,7 +21,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.3.0 - Use HvacService.initialize() (in-flight guarded) вместо прямого plugin.connect(), удалён dead-code seat-shutdown в UI-изоляте]
+//   LAST_CHANGE: [v1.4.0 - Declare location/dataSync foreground service types to match restored Android manifest permissions]
+//   PREVIOUS_CHANGE: [v1.3.0 - Use HvacService.initialize() (in-flight guarded) вместо прямого plugin.connect(), удалён dead-code seat-shutdown в UI-изоляте]
 //   PREVIOUS_CHANGE: [v1.2.0 - Phase-4 Slice-5: lifecycle вынесен в BackgroundRuntimeController]
 // END_CHANGE_SUMMARY
 
@@ -53,6 +54,10 @@ Future<void> initializeBackgroundService() async {
         initialNotificationTitle: 'AutoHeat Service',
         initialNotificationContent: 'Сервис подогрева сидений активен',
         foregroundServiceNotificationId: 888,
+        foregroundServiceTypes: [
+          AndroidForegroundType.location,
+          AndroidForegroundType.dataSync,
+        ],
       ),
     );
 

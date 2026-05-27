@@ -111,6 +111,8 @@
         <scenario-1 kind="success">getHvacIntProperty возвращает int для корректных propertyId/areaId через MethodChannel-фейк.</scenario-1>
         <scenario-2 kind="success">onHvacChangeEventCallback вызывается при поступлении CarPropertyValue через EventChannel-фейк.</scenario-2>
         <scenario-3 kind="failure">connect() rethrow'ит исключение из нативного слоя.</scenario-3>
+        <scenario-4 kind="head-unit-regression">Native connect MethodChannel result.success вызывается только после готовности CarHvacManager; до готовности MethodChannel Future не должен завершаться успешным результатом.</scenario-4>
+        <scenario-5 kind="head-unit-regression">Native getHvacIntProperty/setHvacIntProperty/setHvacFloatProperty/getHvacFloatProperty не глотают ошибки CarHvacManager; MethodChannel возвращает PlatformException вместо raw -1 или ложного success.</scenario-5>
       </scenarios>
       <required-log-markers>
         <marker-1>[AndroidAutomotivePlugin][connect][BLOCK_CONNECT]</marker-1>
@@ -119,7 +121,7 @@
       <required-trace-assertions>
         <assertion-1>Отсутствие connect() ⇒ getHvacIntProperty не должен вызвать нативный канал.</assertion-1>
       </required-trace-assertions>
-      <wave-follow-up>Smoke на физической голове: connect() успешен, температура читается.</wave-follow-up>
+      <wave-follow-up>Smoke на физической голове: connect() успешен только после логов `carHvacManager init ok`; ручной уровень 1 даёт либо физическое включение, либо PlatformException/HVAC_*_FAILED в debug-логе.</wave-follow-up>
       <phase-follow-up>Регрессия после обновления android.car.* API на новой прошивке Changan.</phase-follow-up>
     </V-M-PLUGIN>
 
@@ -249,9 +251,13 @@
         <scenario-10 kind="success">Два CabinTemperatureListener получают inside event; после remove первого второй продолжает получать events; lastCabinTemperature обновляется.</scenario-10>
         <scenario-11 kind="success">getCabinTemperature() обновляет lastCabinTemperature и публикует значение listener'ам.</scenario-11>
         <scenario-12 kind="failure">initialize rethrow'ит PlatformException при ошибке connect и не выставляет isInitialized=true (FA-007).</scenario-12>
+        <scenario-13 kind="success">Native-format onHvacChangeEvent(value='124' as String) → CabinTemperatureListener получает 20.0; защищает совместимость с AndroidAutomotivePlugin.carPropertyToJsonString.</scenario-13>
+        <scenario-14 kind="failure">Native sentinel raw=-1 в onHvacChangeEvent игнорируется и НЕ публикуется как -42.5°C.</scenario-14>
+        <scenario-15 kind="failure">getCabinTemperature raw=-1 возвращает fallback 20.0 вызывающему коду, но НЕ обновляет lastCabinTemperature/listener'ов невалидным значением.</scenario-15>
       </scenarios>
       <findings>
         <F-1 status="resolved-phase-4-slice-7">Local M-PLUGIN patch awaits AndroidAutomotivePlugin.connect/setHvacIntProperty/setHvacFloatProperty. HvacService.initialize and setSeatHeatLevel now receive PlatformException through awaited Futures; V-M-HVAC scenarios 7 and 12 protect this behavior. Divergence from upstream GitHub snapshot is intentional and documented in M-PLUGIN.</F-1>
+        <F-2 status="resolved-head-unit-smoke-2026-05-27">Оригинальное приложение получает HVAC event value как String из native JSON; HvacService теперь парсит String/int/double и фильтрует raw -1 sentinel, который раньше отображался как -42.5°C.</F-2>
       </findings>
       <forbidden-markers>
         <forbidden-1>plugin.connect() НЕ должен вызываться больше одного раза за жизненный цикл HvacService.</forbidden-1>
@@ -260,7 +266,8 @@
       <required-log-markers>
         <marker-1>[HvacService][initialize][BLOCK_INITIALIZE] initialized</marker-1>
         <marker-2>[HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL] applied | level=$level, userType=$userType</marker-2>
-        <marker-3>[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] cabin temperature changed | celsius=$celsius</marker-3>
+        <marker-3>[HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT] cabin temperature changed | rawTemperature=$rawTemperature, celsius=$celsius</marker-3>
+        <marker-4>[AndroidAutomotivePlugin][onLogEvent][BLOCK_PLUGIN_LOG]</marker-4>
       </required-log-markers>
       <required-trace-assertions>
         <assertion-1>Двойной initialize() не дёргает connect() повторно (_isInitialized гард).</assertion-1>
@@ -591,6 +598,9 @@
       <scenarios>
         <scenario-1 kind="success">runApp(AutoheatApp) монтируется и рендерит AppContent.</scenario-1>
         <scenario-2 kind="regression">AutoheatApp отключает MaterialApp theme animation, чтобы при смене темы не мелькала старая палитра.</scenario-2>
+        <scenario-3 kind="release-regression">GitHub release APK должен собираться со стабильным Android keystore из secrets; debug-signed CI APK считается дефектом обновления на голове.</scenario-3>
+        <scenario-4 kind="install-regression">Manifest не должен объявлять `com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, чтобы APK устанавливался рядом с оригинальным пакетом `com.wt.airconditioner`; разрешён только `uses-permission`.</scenario-4>
+        <scenario-5 kind="head-unit-regression">Manifest должен сохранять permission envelope оригинального `com.wt.airconditioner` и объявлять `CustomAccessibilityService` с `@xml/accessibilityservice`, иначе голова не выдаёт нужные системные доступы и background/accessibility wake не работает.</scenario-5>
       </scenarios>
       <required-log-markers />
       <required-trace-assertions>
@@ -599,6 +609,7 @@
       </required-trace-assertions>
       <wave-follow-up>При добавлении новой инициализационной функции в main — обновить assertion-1.</wave-follow-up>
       <phase-follow-up>Ручной smoke на голове: cold start приложения, проверка времени до появления AppContent.</phase-follow-up>
+      <release-follow-up>Перед следующим тегом v*: проверить наличие secrets ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD; после публикации сверить `apksigner verify --print-certs` с предыдущим stable release.</release-follow-up>
     </V-M-MAIN>
 
     <V-M-UI-APP MODULE="M-UI-APP" PRIORITY="low">

@@ -1,8 +1,41 @@
+// FILE: android/app/build.gradle
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Android application build config for AutoHeat APK packaging, SDK bounds, ABI filtering, version metadata, and signing.
+//   SCOPE: Gradle android/application settings only; runtime behavior lives under lib/ and packages/.
+//   DEPENDS: Flutter Gradle plugin, Android Gradle Plugin, M-PLUGIN
+//   LINKS: M-MAIN, M-PLUGIN, V-M-MAIN
+//   ROLE: CONFIG
+//   MAP_MODE: NONE
+// END_MODULE_CONTRACT
+//
+// START_CHANGE_SUMMARY
+//   LAST_CHANGE: [v1.0.0 - release signing can use stable AUTOHEAT_* keystore env vars; local builds fall back to debug signing]
+// END_CHANGE_SUMMARY
+
 plugins {
     id "com.android.application"
     id "kotlin-android"
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id "dev.flutter.flutter-gradle-plugin"
+}
+
+def releaseSigning = [
+    storeFilePath: System.getenv("AUTOHEAT_KEYSTORE_PATH"),
+    storePassword: System.getenv("AUTOHEAT_KEYSTORE_PASSWORD"),
+    keyAlias: System.getenv("AUTOHEAT_KEY_ALIAS"),
+    keyPassword: System.getenv("AUTOHEAT_KEY_PASSWORD"),
+]
+def releaseSigningValues = releaseSigning.values()
+def hasAnyReleaseSigningEnv = releaseSigningValues.any { it != null && !it.isBlank() }
+def hasFullReleaseSigningEnv = releaseSigningValues.every { it != null && !it.isBlank() }
+
+if (hasAnyReleaseSigningEnv && !hasFullReleaseSigningEnv) {
+    throw new GradleException("Incomplete release signing env: set AUTOHEAT_KEYSTORE_PATH, AUTOHEAT_KEYSTORE_PASSWORD, AUTOHEAT_KEY_ALIAS, and AUTOHEAT_KEY_PASSWORD.")
+}
+
+if (System.getenv("GITHUB_ACTIONS") == "true" && !hasFullReleaseSigningEnv) {
+    throw new GradleException("GitHub release builds must use stable signing. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD secrets.")
 }
 
 android {
@@ -32,26 +65,28 @@ android {
         versionName = flutter.versionName
     }
 
-    lint {
-        // UniquePermission ругается на пару:
-        //   com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION (наш custom, нужен с этим именем)
-        //   ru.kaufd.autoheat.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION (auto-generated AGP для targetSdk≥34)
-        // Имя нашего permission — публичный контракт системного AirConditioner-сервиса Changan,
-        // переименовать нельзя. AGP-имя в другом namespace, конфликта на устройстве нет.
-        disable += "UniquePermission"
-    }
-
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             output.outputFileName = "AutoHeat-v3.apk"
         }
     }
 
+    signingConfigs {
+        if (hasFullReleaseSigningEnv) {
+            release {
+                storeFile = file(releaseSigning.storeFilePath)
+                storePassword = releaseSigning.storePassword
+                keyAlias = releaseSigning.keyAlias
+                keyPassword = releaseSigning.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.debug
+            // CI must use a stable release key. Local release builds may keep using
+            // debug signing for fast sideload smoke checks.
+            signingConfig = hasFullReleaseSigningEnv ? signingConfigs.release : signingConfigs.debug
 
             ndk {
                 abiFilters "arm64-v8a"

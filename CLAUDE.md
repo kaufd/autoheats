@@ -2,7 +2,7 @@
 
 Flutter-приложение для автоматического управления подогревом сидений в автомобиле Changan через головное устройство на Android Automotive OS.
 
-Текущая версия: **1.0.0** (см. `pubspec.yaml`, `CHANGELOG.md`).
+Текущая версия: **1.0.0+100** (см. `pubspec.yaml`, `CHANGELOG.md`).
 
 ## Контекст и назначение
 
@@ -16,16 +16,17 @@ Flutter-приложение для автоматического управл�
 
 ## Аппаратные и платформенные требования
 
-- **OS**: Android Automotive (через `android.car.*` API), `minSdk = 23`. Архитектура — `arm64-v8a` (64-bit ARM, все современные AAOS-головы).
+- **OS**: Android Automotive (через `android.car.*` API), фактический `minSdk = 24` из текущего Flutter Gradle config. Архитектура — `arm64-v8a` (64-bit ARM, все современные AAOS-головы).
 - **Экран**: фиксированное альбомное разрешение головного устройства. UI рассчитан на горизонтальную ориентацию и не должен «плыть» в произвольных размерах — при правках компонентов учитывать `MediaQuery` и проверять на разрешении head unit. Не закладывать поддержку телефонов/планшетов.
-- **Подпись APK**: на голове Changan **достаточно debug-keystore** — так же, как делал `autoheat_old`, и так же сейчас (см. `android/app/build.gradle`, `release { signingConfig = signingConfigs.debug }`). Платформенная подпись не требуется. Контракт работы с `android.car.*` определяется набором permissions в `AndroidManifest.xml`.
+- **Подпись APK**: на голове Changan **не требуется платформенная подпись**; контракт работы с `android.car.*` определяется набором permissions в `AndroidManifest.xml`. Для GitHub Releases обязателен стабильный Android release-keystore через secrets, потому что ephemeral debug-keystore GitHub runner'а делает следующий APK несовместимым для обновления. Локальные release-сборки без `AUTOHEAT_*` env остаются debug-signed для sideload smoke.
 - **Permissions** (`android/app/src/main/AndroidManifest.xml`):
-  - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`, `WAKE_LOCK` — фоновый сервис.
+  - Permission envelope intentionally mirrors original `com.wt.airconditioner`: location/storage/phone, overlay, write-settings, extended `android.car.*`, foreground-service and wake permissions. Do not trim this set without a head-unit smoke test.
+  - `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_LOCATION`, `FOREGROUND_SERVICE_DATA_SYNC`, `POST_NOTIFICATIONS`, `WAKE_LOCK` — фоновый сервис.
   - `RECEIVE_BOOT_COMPLETED` — `autoStartOnBoot` у `flutter_background_service`.
-  - `android.car.permission.CONTROL_CAR_CLIMATE`, `CAR_POWER`, `CAR_POWERTRAIN`, `CAR_VENDOR_EXTENSION`, `CAR_INFO` — обязательные для HVAC / ignition / vendor-extension через `AndroidAutomotivePlugin`.
+  - `android.car.permission.CONTROL_CAR_CLIMATE`, `CAR_POWER`, `CAR_POWERTRAIN`, `CAR_VENDOR_EXTENSION`, `READ_CAR_STEERING`, `CAR_SPEED`, `PERMISSION_READ_DISPLAY_UNITS`, `CAR_INFO`, `CAR_INSTRUMENT_CLUSTER_CONTROL`, `BIND_INSTRUMENT_CLUSTER_RENDERER_SERVICE` — обязательные/совместимые с оригинальным AirConditioner-набором для HVAC / ignition / vendor-extension через `AndroidAutomotivePlugin`.
   - `coagent.permission.SEND_PROTOCOL` — vendor-bridge Changan/CoAgent.
-  - `com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` — объявлена и `uses-permission`: на Android 13+ нужна для динамических BroadcastReceiver'ов от системного AirConditioner-сервиса.
-  - `lint { disable += "UniquePermission" }` — false-positive по совпадению суффикса permission с AGP-генерируемым namespace'ом приложения.
+  - `com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` — только `uses-permission`. Permission объявляет владелец `com.wt.airconditioner`; redeclare в AutoHeat v3 ломает установку рядом с оригинальным приложением через `INSTALL_FAILED_DUPLICATE_PERMISSION`.
+  - `CustomAccessibilityService` объявлен в manifest с `@xml/accessibilityservice`, чтобы AutoHeat v3 появлялся в настройках спец. возможностей как оригинальное приложение.
 - **applicationId / namespace**: `ru.kaufd.autoheat`. **applicationLabel / `MaterialApp.title`**: `AutoHeat v3`.
 
 ## Технологический стек
@@ -129,12 +130,13 @@ ARCHITECTURE.md                — диаграммы потоков
 `.github/workflows/release.yml` — Actions workflow, триггер на push тега `v*`:
 1. Checkout с `fetch-depth: 0`, JDK 17 (Temurin), Flutter 3.41.9 stable.
 2. `flutter pub get` (root + plugin), `flutter analyze`, `flutter test`.
-3. `flutter build apk --release --target-platform android-arm64` → `build/app/outputs/apk/release/AutoHeat-v3.apk`.
-4. AWK-парсер вырезает секцию `## [VERSION]` из `CHANGELOG.md` в `release_body.md` (fallback: `Release VERSION`).
-5. `softprops/action-gh-release@v2` создаёт GitHub Release с APK как asset и `release_body.md` как описание. `fail_on_unmatched_files: true` — отсутствие APK завалит workflow.
+3. Проверяет secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`, декодирует keystore в `android/app/signing/release.keystore`.
+4. `flutter build apk --release --target-platform android-arm64 --build-name VERSION --build-number GITHUB_RUN_NUMBER` → `build/app/outputs/apk/release/AutoHeat-v3.apk`.
+5. AWK-парсер вырезает секцию `## [VERSION]` из `CHANGELOG.md` в `release_body.md` (fallback: `Release VERSION`).
+6. `softprops/action-gh-release@v2` создаёт GitHub Release с APK как asset и `release_body.md` как описание. `fail_on_unmatched_files: true` — отсутствие APK завалит workflow.
 
 **Перед каждым релизом**:
-1. Бампнуть `version` в `pubspec.yaml` (например, `1.1.0`).
+1. Бампнуть `version` в `pubspec.yaml`, включая build number (например, `1.1.0+110`).
 2. Добавить секцию `## [1.1.0] - YYYY-MM-DD` в `CHANGELOG.md` под `## [Unreleased]`.
 3. `git tag v1.1.0 && git push origin v1.1.0`.
 

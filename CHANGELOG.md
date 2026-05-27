@@ -6,6 +6,24 @@
 
 ## [Unreleased]
 
+- Исправлена release-подпись: GitHub Actions теперь требует стабильный Android
+  keystore из secrets вместо ephemeral debug-keystore runner'а.
+- Исправлена установка рядом с оригинальным `com.wt.airconditioner`: AutoHeat v3
+  больше не redeclare'ит принадлежащий ему
+  `com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`.
+- Восстановлен permission envelope оригинального приложения (location/storage/phone,
+  overlay, write-settings, расширенные `android.car.*`) и declaration
+  `CustomAccessibilityService`, чтобы системные настройки головы выдавали те же
+  доступы, что и рабочему AirConditioner.
+- Исправлена обработка HVAC-событий на реальном ГУ: native value теперь
+  парсится как `String/int/double`, а sentinel raw `-1` больше не показывается
+  как `-42.5 °C`; нативные логи плагина выводятся в debug-лог приложения.
+- Исправлена граница подключения плагина: native `connect()` теперь ждёт
+  готовности `CarHvacManager`, а HVAC read/write ошибки пробрасываются как
+  `PlatformException` вместо `raw=-1` или ложного `success`.
+- Версия приложения теперь содержит Android build number (`1.0.0+100`), чтобы
+  будущие APK имели возрастающий `versionCode`.
+
 ## [1.0.0] - 2026-05-25
 
 Первый стабильный релиз.

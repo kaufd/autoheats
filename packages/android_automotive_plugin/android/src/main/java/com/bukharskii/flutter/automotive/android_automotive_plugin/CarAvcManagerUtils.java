@@ -22,6 +22,18 @@ import java.io.StringWriter;
 import java.io.PrintWriter;
 
 public class CarAvcManagerUtils {
+    // START_MODULE_CONTRACT
+    //   PURPOSE: Native Android Automotive Car API bridge used by MethodChannel calls.
+    //   SCOPE: connect lifecycle, HVAC/sensor manager initialization, HVAC property read/write.
+    //   DEPENDS: android.car.Car, CarHvacManager, CarSensorManager
+    //   LINKS: M-PLUGIN, V-M-PLUGIN, M-HVAC
+    //   ROLE: RUNTIME
+    //   MAP_MODE: EXPORTS
+    // END_MODULE_CONTRACT
+    //
+    // START_CHANGE_SUMMARY
+    //   LAST_CHANGE: [v1.1.0 - Expose HVAC readiness and rethrow native HVAC read/write failures]
+    // END_CHANGE_SUMMARY
 
     Context context;
 
@@ -263,46 +275,60 @@ public class CarAvcManagerUtils {
         return true;
     }
 
+    public final boolean isHvacReady() {
+        return car != null && car.isConnected() && this.carHvacManager != null;
+    }
+
+    private void ensureHvacReady(String operation) {
+        if (!isHvacReady()) {
+            throw new IllegalStateException("CarHvacManager is not ready for " + operation);
+        }
+    }
 
     public int getHvacIntProperty(int propertyId, int area) {
         try {
+            ensureHvacReady("getHvacIntProperty");
             return carHvacManager.getIntProperty(propertyId, area);
         } catch (Exception e2) {
             e2.printStackTrace();
             carAvcManagerListener.onLogEvent("CarAvcManagerUtils.getHvacIntProperty: proId=" + VehiclePropertyIds.toString(propertyId) + ", area=" + area + ". " + e2.toString());
-            return -1;
+            throw new RuntimeException(e2);
         }
     }
 
     public void setHvacIntProperty(int propertyId, int area, int value) {
         try {
+            ensureHvacReady("setHvacIntProperty");
             this.carHvacManager.setIntProperty(propertyId, area, value);
+            carAvcManagerListener.onLogEvent("CarAvcManagerUtils.setIntProperty success! value = "+ value);
         } catch (Exception e) {
             e.printStackTrace();
             carAvcManagerListener.onLogEvent("CarAvcManagerUtils.setHvacIntProperty error Other: proId=" + VehiclePropertyIds.toString(propertyId) + ", area=" + area + ", value=" + value + ". " + e.toString());
+            throw new RuntimeException(e);
         }
-        carAvcManagerListener.onLogEvent("CarAvcManagerUtils.setIntProperty success! value = "+ value);
     }
 
     public void setHvacFloatProperty(int propertyId, int area, float value) {
         try {
+            ensureHvacReady("setHvacFloatProperty");
             carHvacManager.setFloatProperty(propertyId, area, value);
+            carAvcManagerListener.onLogEvent("CarAvcManagerUtils.setFloatProperty success! value = "+ value);
         } catch (Exception e) {
             e.printStackTrace();
-            carAvcManagerListener.onLogEvent("CarAvcManagerUtils.setHvacIntProperty error Other: proId=" + VehiclePropertyIds.toString(propertyId) + ", area=" + area + ", value=" + value + ". " + e.toString());
+            carAvcManagerListener.onLogEvent("CarAvcManagerUtils.setHvacFloatProperty error Other: proId=" + VehiclePropertyIds.toString(propertyId) + ", area=" + area + ", value=" + value + ". " + e.toString());
+            throw new RuntimeException(e);
         }
-        carAvcManagerListener.onLogEvent("CarAvcManagerUtils.setIntProperty success! value = "+ value);
     }
 
     public float getHvacFloatProperty(int propertyId, int area) {
         try {
+            ensureHvacReady("getHvacFloatProperty");
             return carHvacManager.getFloatProperty(propertyId, area);
         } catch (Exception e) {
             e.printStackTrace();
-            carAvcManagerListener.onLogEvent("CarAvcManagerUtils.getHvacFloatProperty error Other: proId=" + VehiclePropertyIds.toString(propertyId) + ", area=" + area);
+            carAvcManagerListener.onLogEvent("CarAvcManagerUtils.getHvacFloatProperty error Other: proId=" + VehiclePropertyIds.toString(propertyId) + ", area=" + area + ". " + e.toString());
+            throw new RuntimeException(e);
         }
-
-        return -1;
     }
 
     public CarSensorEvent getLatestSensorEvent(int sensorType) {
@@ -346,5 +372,3 @@ public class CarAvcManagerUtils {
     }
 
 }
-
-

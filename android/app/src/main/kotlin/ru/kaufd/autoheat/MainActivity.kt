@@ -14,12 +14,14 @@ class MainActivity: FlutterActivity() {
 
     companion object {
         private const val NOTIFICATION_PERMISSION_REQUEST_CODE = 1001
+        private const val CAR_RUNTIME_PERMISSION_REQUEST_CODE = 1002
     }
 
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
         super.onCreate(savedInstanceState)
         createNotificationChannel()
         requestNotificationPermission()
+        requestCarRuntimePermissions()
     }
 
     private fun createNotificationChannel() {
@@ -60,6 +62,37 @@ class MainActivity: FlutterActivity() {
         }
     }
 
+    private fun requestCarRuntimePermissions() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            return
+        }
+
+        val permissionsToRequest = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.READ_PHONE_STATE,
+        )
+
+        @Suppress("DEPRECATION")
+        permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE)
+
+        @Suppress("DEPRECATION")
+        permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+
+        val missingPermissions = permissionsToRequest
+            .filter {
+                ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+            }
+            .toTypedArray()
+
+        if (missingPermissions.isNotEmpty()) {
+            ActivityCompat.requestPermissions(
+                this,
+                missingPermissions,
+                CAR_RUNTIME_PERMISSION_REQUEST_CODE
+            )
+        }
+    }
+
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -76,6 +109,9 @@ class MainActivity: FlutterActivity() {
                     // Разрешение не получено
                     println("Разрешение на уведомления не получено")
                 }
+            }
+            CAR_RUNTIME_PERMISSION_REQUEST_CODE -> {
+                println("Автомобильные runtime-разрешения обработаны")
             }
         }
     }
