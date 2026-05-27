@@ -1,9 +1,10 @@
 // FILE: lib/src/presentation/screens/presets/presets_tab.dart
-// VERSION: 1.1.0
+// VERSION: 1.1.1
 // START_MODULE_CONTRACT
 //   PURPOSE: Merged Presets tab — Driver/Passenger toggle + editor + list + new-preset flow.
 //   SCOPE: local state (selectedUser, editingPresetId, draftSettings, isNewPresetDraft),
-//          wires PresetEditor + PresetList + UserSegmentToggle, delegates apply to parent,
+//          wires PresetEditor + PresetList + UserSegmentToggle, accepts selectedUser from parent,
+//          delegates apply to parent,
 //          name запрашивается через SavePresetDialog после нажатия Сохранить.
 //   DEPENDS: M-UI-PRESETS, M-PRESET, M-MODE, M-ENUMS, M-THEME
 //   LINKS: M-UI-PRESETS, V-M-UI-PRESETS, DF-PRESET-APPLY, FA-001, FA-011
@@ -12,8 +13,9 @@
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
-//   PresetsTab - StatefulWidget с onPresetApplied callback
+//   PresetsTab - StatefulWidget с parent-controlled selectedUser и onPresetApplied callback
 //   _PresetsTabState.initState - load PresetCubit + ManualSettingsCubit
+//   _PresetsTabState.didUpdateWidget - синхронизировать локальный selectedUser при parent redirect
 //   _PresetsTabState._buildEditor - resolve draft/active/default settings, wire PresetEditor
 //   _PresetsTabState._buildList - filter by user, wire PresetList callbacks
 //   _PresetsTabState._onUserChanged - reset editor/draft when toggling user
@@ -27,8 +29,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.2.0 - Mode-source decoupling: delete-active-preset fallback to manual+0, drop ManualSettingsCubit import]
-//   PREVIOUS_CHANGE: [v1.1.0 - Имя нового пресета через SavePresetDialog после Save (вместо inline TextField)]
+//   LAST_CHANGE: [v1.2.1 - Parent redirect may switch selected driver/passenger segment]
+//   PREVIOUS_CHANGE: [v1.2.0 - Mode-source decoupling: delete-active-preset fallback to manual+0, drop ManualSettingsCubit import]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -46,16 +48,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class PresetsTab extends StatefulWidget {
+  final UserType selectedUser;
   final void Function(Preset preset) onPresetApplied;
 
-  const PresetsTab({super.key, required this.onPresetApplied});
+  const PresetsTab({
+    super.key,
+    required this.selectedUser,
+    required this.onPresetApplied,
+  });
 
   @override
   State<PresetsTab> createState() => _PresetsTabState();
 }
 
 class _PresetsTabState extends State<PresetsTab> {
-  UserType _selectedUser = UserType.driver;
+  late UserType _selectedUser;
   String? _editingPresetId;
   ManualHeatSettings? _draftSettings;
   bool _isNewPresetDraft = false;
@@ -63,7 +70,18 @@ class _PresetsTabState extends State<PresetsTab> {
   @override
   void initState() {
     super.initState();
+    _selectedUser = widget.selectedUser;
     context.read<PresetCubit>().loadAllPresets();
+  }
+
+  @override
+  void didUpdateWidget(covariant PresetsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedUser == widget.selectedUser) return;
+    _selectedUser = widget.selectedUser;
+    _editingPresetId = null;
+    _draftSettings = null;
+    _isNewPresetDraft = false;
   }
 
   @override
@@ -92,8 +110,7 @@ class _PresetsTabState extends State<PresetsTab> {
               }
 
               if (presetState.error != null) {
-                return const ErrorBlock(
-                    message: 'Ошибка загрузки пресетов');
+                return const ErrorBlock(message: 'Ошибка загрузки пресетов');
               }
 
               // Внешний Expanded даёт bounded height; Row(crossAxisAlignment: stretch)
@@ -105,8 +122,7 @@ class _PresetsTabState extends State<PresetsTab> {
                   Expanded(child: _buildEditor(context, presetState)),
                   Container(
                     width: 2,
-                    color:
-                        context.themeColors.primary.withValues(alpha: 0.27),
+                    color: context.themeColors.primary.withValues(alpha: 0.27),
                   ),
                   Expanded(child: _buildList(context, presetState)),
                 ],
@@ -146,9 +162,8 @@ class _PresetsTabState extends State<PresetsTab> {
     // Маркер «(активен)» отражает «показанный в редакторе пресет == активный».
     // Поэтому он остаётся при edit-режиме активного пресета, но скрывается, если
     // мы редактируем НЕактивный пресет или создаём новый.
-    final shownPresetId = _isNewPresetDraft
-        ? null
-        : (editingPreset?.id ?? activePreset?.id);
+    final shownPresetId =
+        _isNewPresetDraft ? null : (editingPreset?.id ?? activePreset?.id);
     final isActiveShown =
         activePreset != null && shownPresetId == activePreset.id;
 

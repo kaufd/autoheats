@@ -1,9 +1,10 @@
 // FILE: lib/src/presentation/app_content.dart
-// VERSION: 1.4.0
+// VERSION: 1.4.1
 // START_MODULE_CONTRACT
 //   PURPOSE: Корневой UI-контейнер с табами Heat/Settings/Presets и применением пресетов.
 //   SCOPE: TabController navigation, themed background, DF-PRESET-APPLY bridge to ModeCubit,
-//          dynamic debug tab (Логи + sidebar-injector) при включённом SettingsCubit.debugMode.
+//          dynamic debug tab (Логи + sidebar-injector) при включённом SettingsCubit.debugMode,
+//          user-aware redirect в PresetsTab из presets-сегмента HeatScreen.
 //   DEPENDS: M-UI-HEAT, M-UI-SETTINGS, M-UI-PRESETS, M-THEME, M-PRESET, M-MODE, M-SETTINGS
 //   LINKS: M-UI-APP, M-UI-PRESETS, M-PRESET, M-MODE, DF-PRESET-APPLY, FA-001, FA-011
 //   ROLE: RUNTIME
@@ -14,6 +15,7 @@
 //   AppContent - StatefulWidget с TabController на 3 или 4 вкладки (зависит от debugMode)
 //   initState/dispose - lifecycle TabController, обновление debug-табов через _rebuildTabController
 //   _selectTab - перейти на вкладку
+//   _openPresetsTab - открыть вкладку пресетов с выбранным driver/passenger сегментом
 //   _rebuildTabController - пересоздать TabController при смене debugMode
 //   _tabs / _tabLabels - формируют контент и подписи в зависимости от debugMode
 //   build - Scaffold/AppBar/TabBarView с themed background; BlocListener реагирует на debugMode
@@ -22,8 +24,8 @@
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
-//   LAST_CHANGE: [v1.4.0 - Dynamic debug tabs (Температура/Логи) под SettingsCubit.debugMode]
-//   PREVIOUS_CHANGE: [v1.3.0 - Mode-source decoupling: onPresetsSegmentTapped routes to apply or tab navigation]
+//   LAST_CHANGE: [v1.4.1 - Presets redirect now opens PresetsTab for the triggering user]
+//   PREVIOUS_CHANGE: [v1.4.0 - Dynamic debug tabs (Температура/Логи) под SettingsCubit.debugMode]
 // END_CHANGE_SUMMARY
 
 import 'package:autoheat/src/app_enums.dart';
@@ -47,11 +49,11 @@ class AppContent extends StatefulWidget {
   AppContentState createState() => AppContentState();
 }
 
-class AppContentState extends State<AppContent>
-    with TickerProviderStateMixin {
+class AppContentState extends State<AppContent> with TickerProviderStateMixin {
   TabController? _tabController;
   int _selectedIndex = 0;
   bool _debugMode = false;
+  UserType _presetsTabUser = UserType.driver;
 
   @override
   void initState() {
@@ -75,8 +77,7 @@ class AppContentState extends State<AppContent>
   void _rebuildTabController(bool debugMode, {bool initial = false}) {
     final newLength = debugMode ? 4 : 3;
     final previous = _tabController;
-    final restoredIndex =
-        (previous?.index ?? 0).clamp(0, newLength - 1);
+    final restoredIndex = (previous?.index ?? 0).clamp(0, newLength - 1);
     final controller = TabController(
       length: newLength,
       vsync: this,
@@ -111,11 +112,21 @@ class AppContentState extends State<AppContent>
     controller.animateTo(index);
   }
 
+  void _openPresetsTab(UserType user) {
+    setState(() {
+      _presetsTabUser = user;
+    });
+    _selectTab(1);
+  }
+
   void _onPresetsSegmentTapped(UserType user) {
     final presetCubit = context.read<PresetCubit>();
+    final hasPresetsForUser = presetCubit.state.presets.any(
+      (preset) => preset.userType == user,
+    );
     final activePreset = presetCubit.state.selectedPresets[user];
-    if (activePreset == null) {
-      _selectTab(1); // tab «Пресеты»
+    if (!hasPresetsForUser || activePreset == null) {
+      _openPresetsTab(user);
       return;
     }
     // С активным пресетом — обычный apply flow (тот же, что у ▶ apply в списке).
@@ -135,6 +146,7 @@ class AppContentState extends State<AppContent>
     return [
       HeatScreen(onPresetsSegmentTapped: _onPresetsSegmentTapped),
       PresetsTab(
+        selectedUser: _presetsTabUser,
         onPresetApplied: (preset) {
           _applyPreset(preset);
         },
