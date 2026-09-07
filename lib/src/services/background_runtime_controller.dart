@@ -6,8 +6,7 @@
 //          bounded restart-backoff, adapters for ServiceInstance and ModeCubit.
 //   DEPENDS: M-BACKGROUND, M-MODE, M-ENUMS, M-LOGGER
 //   LINKS: M-BACKGROUND, V-M-BACKGROUND, DF-BACKGROUND, FA-006
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

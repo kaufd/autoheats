@@ -5,8 +5,7 @@
 //   SCOPE: cabin temperature display, mode togglers, manual level selectors, seat blocks.
 //   DEPENDS: M-UI-HEAT, M-MODE, M-CABIN-TEMPERATURE, M-THEME
 //   LINKS: M-UI-HEAT, V-M-UI-HEAT, DF-SET-HEAT
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

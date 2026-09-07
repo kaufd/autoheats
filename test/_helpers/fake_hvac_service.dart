@@ -6,8 +6,7 @@
 //          multi-listener инжекция события температуры через emitTemperature.
 //   DEPENDS: M-HVAC, M-ENUMS, M-CABIN-TEMPERATURE
 //   LINKS: V-M-HVAC, V-M-AUTO-HEAT, V-M-MODE, V-M-CABIN-TEMPERATURE
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

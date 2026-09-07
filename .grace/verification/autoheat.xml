@@ -1,0 +1,198 @@
+<GraceVerificationDocument graceVersion="4.0">
+  <VD-AUTOHEAT>
+    <Project>autoheat</Project>
+    <MigrationSource>docs/verification-plan.xml</MigrationSource>
+    <Policy>Deterministic unit checks first; trace/log assertions protect event order; physical head-unit smoke remains required for native and lifecycle behavior.</Policy>
+
+    <V-M-PLUGIN>
+      <Priority>high</Priority>
+      <Command>cd packages/android_automotive_plugin &amp;&amp; flutter analyze</Command>
+      <Scenario>getHvacIntProperty and event callbacks preserve the MethodChannel/EventChannel contract.</Scenario>
+      <Scenario>connect, get, and set native failures propagate as platform errors instead of false success.</Scenario>
+      <TraceAssertion>Manual head-unit smoke must confirm HVAC permission, connection, read/write, and callback behavior. Native plugin evidence is collected through MethodChannel/EventChannel callbacks; it does not emit the app Logger marker format.</TraceAssertion>
+      <HistoricalPlannedTest>packages/android_automotive_plugin/test/android_automotive_plugin_test.dart</HistoricalPlannedTest>
+    </V-M-PLUGIN>
+
+    <V-M-ENUMS>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/app_enums_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/app_enums_test.dart</Command>
+      <Scenario>Every HeatMode and UserType name round-trips through its fromString extension.</Scenario>
+      <Scenario>Unknown and case-mismatched strings use the documented safe fallback.</Scenario>
+      <Scenario>Snapshot names remain manual, presets, auto and driver, passenger.</Scenario>
+      <TraceAssertion>Changing enum names requires a SharedPreferences migration before merge.</TraceAssertion>
+    </V-M-ENUMS>
+
+    <V-M-LOGGER>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/logger_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/logger_test.dart</Command>
+      <Command>flutter analyze lib/src/utils/logger.dart</Command>
+      <Scenario>All four log levels emit deterministic [Module][function][BLOCK] lines and preserve field order.</Scenario>
+      <Scenario>rawCarPropertyValue is redacted outside debug level and test sinks restore the default sink.</Scenario>
+      <TraceAssertion>Logger must not introduce package:logger, package:logging, or debugPrint dependencies.</TraceAssertion>
+    </V-M-LOGGER>
+
+    <V-M-CONSTANTS-TEMPERATURE>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/temperature_constants_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/temperature_constants_test.dart</Command>
+      <Scenario>Temperature boundaries map to off, warm, cool, cold, freezing, and extreme exactly as documented.</Scenario>
+      <Scenario>HeatSequence returns null for off and the expected durations for warm through extreme ranges.</Scenario>
+      <TraceAssertion>Duration sums remain aligned with AutoHeatService timer trajectories.</TraceAssertion>
+    </V-M-CONSTANTS-TEMPERATURE>
+
+    <V-M-HVAC>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/hvac_service_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/hvac_service_test.dart</Command>
+      <Scenario>Seat writes connect once, preserve outgoing call order, and propagate write failures.</Scenario>
+      <Scenario>Inside temperature events convert raw 84/74/124 to 0/-5/20 Celsius and ignore wrong property or area.</Scenario>
+      <Scenario>Multiple listeners, initial reads, string values, null events, and raw -1 sentinels follow the cached-value contract.</Scenario>
+      <TraceAssertion>Logger output must preserve [HvacService][initialize][BLOCK_INITIALIZE], [HvacService][setSeatHeatLevel][BLOCK_SET_SEAT_HEAT_LEVEL], [HvacService][onHvacChangeEvent][BLOCK_HANDLE_TEMPERATURE_EVENT], and [HvacService][getCabinTemperature][BLOCK_GET_CABIN_TEMPERATURE]; test/unit/hvac_service_test.dart asserts the assembled lines.</TraceAssertion>
+    </V-M-HVAC>
+
+    <V-M-AUTO-HEAT>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/auto_heat_service_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/auto_heat_service_test.dart</Command>
+      <Scenario>FakeAsync verifies cold, warm, and extreme sequences as callback levels 3, 2, 1, 0.</Scenario>
+      <Scenario>Temperature changes cancel or retain timers according to effective plan identity and do not spam repeated levels.</Scenario>
+      <Scenario>Driver and passenger timers remain independent; stopAutoHeat prevents later callbacks.</Scenario>
+      <Scenario>ManualHeatSettings thresholds and durations override fallback constants without changing mode semantics.</Scenario>
+      <TraceAssertion>startAutoHeat must initialize the sequence, while Logger output must preserve [AutoHeatService][stepDownLevel][BLOCK_STEP_DOWN] and [AutoHeatService][scheduleMaxTimer][BLOCK_SCHEDULE_MAX_TIMER]. Every timer transition must match the HeatSequence from M-CONSTANTS-TEMPERATURE; test/unit/auto_heat_service_test.dart asserts the assembled lines.</TraceAssertion>
+    </V-M-AUTO-HEAT>
+
+    <V-M-MODE>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/mode_cubit_test.dart</File><File>test/unit/mode_service_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/mode_cubit_test.dart test/unit/mode_service_test.dart</Command>
+      <Scenario>Cold start defaults both users to manual level zero without HVAC writes.</Scenario>
+      <Scenario>setMode, setHeatLevel, applyPreset, toggleHeatLevel, and automatic callbacks synchronize persistence, HVAC, and state.</Scenario>
+      <Scenario>Automatic and presets modes remain decoupled; selected preset settings are restored safely on cold start.</Scenario>
+      <TraceAssertion>Logger output must preserve [ModeCubit][setMode][BLOCK_SET_MODE], [ModeCubit][setHeatLevel][BLOCK_SET_HEAT_LEVEL], and [ModeCubit][applyPreset][BLOCK_APPLY_PRESET]. Manual transition stops automatic scheduling before applying the new level; tests assert the assembled lines.</TraceAssertion>
+    </V-M-MODE>
+
+    <V-M-CABIN-TEMPERATURE>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/cabin_temperature_cubit_test.dart</File><File>test/widget/cabin_temperature_display_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/cabin_temperature_cubit_test.dart</Command>
+      <Command>flutter test test/widget/cabin_temperature_display_test.dart</Command>
+      <Scenario>Initial and cached temperature reads populate state without an unnecessary second native read.</Scenario>
+      <Scenario>HVAC events update state and closing the Cubit removes its listener.</Scenario>
+      <Scenario>CabinTemperatureDisplay renders initial and updated Celsius values.</Scenario>
+      <TraceAssertion>Temperature-only updates never change a seat-heating level.</TraceAssertion>
+    </V-M-CABIN-TEMPERATURE>
+
+    <V-M-PRESET>
+      <Priority>medium</Priority>
+      <TestFiles><File>test/unit/preset_model_test.dart</File><File>test/unit/preset_service_test.dart</File><File>test/unit/preset_cubit_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/preset_model_test.dart test/unit/preset_service_test.dart test/unit/preset_cubit_test.dart</Command>
+      <Command>flutter test test/unit/mode_cubit_test.dart</Command>
+      <Scenario>Preset save, load, delete, malformed JSON fallback, and legacy JSON compatibility are deterministic.</Scenario>
+      <Scenario>Selected preset IDs persist independently for driver and passenger and clear on deletion.</Scenario>
+      <Scenario>Applying a preset updates runtime mode and HVAC through ModeCubit.</Scenario>
+      <TraceAssertion>Preset persistence must not overwrite the other user's selected preset.</TraceAssertion>
+    </V-M-PRESET>
+
+    <V-M-SETTINGS>
+      <Priority>medium</Priority>
+      <TestFiles><File>test/widget/settings_screen_test.dart</File></TestFiles>
+      <Command>flutter test test/widget/settings_screen_test.dart</Command>
+      <Scenario>Default threshold and persistence behavior remain stable; the settings UI exposes the expected controls.</Scenario>
+      <TraceAssertion>The test block START_BLOCK_HEAD_UNIT_SMOKE in test/widget/settings_screen_test.dart verifies the SettingsScreen head-unit layout. Missing legacy settings_service_test is retained as a planned coverage gap rather than a fabricated test file.</TraceAssertion>
+      <HistoricalPlannedTest>test/unit/settings_service_test.dart</HistoricalPlannedTest>
+    </V-M-SETTINGS>
+
+    <V-M-THEME>
+      <Priority>low</Priority>
+      <TestFiles><File>test/unit/theme_colors_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/theme_colors_test.dart</Command>
+      <Scenario>Theme colors interpolate field-wise without base or green fallback.</Scenario>
+      <Scenario>Persisted theme initialization and selection are covered by the UI path when the dedicated Cubit test is added.</Scenario>
+      <TraceAssertion>The test block START_BLOCK_THEME_COLOR_LERP in test/unit/theme_colors_test.dart verifies field-wise lerp behavior; this is a test semantic block, not a runtime log marker.</TraceAssertion>
+      <HistoricalPlannedTest>test/unit/theme_cubit_test.dart</HistoricalPlannedTest>
+    </V-M-THEME>
+
+    <V-M-DI>
+      <Priority>medium</Priority>
+      <TestFiles><File>test/unit/service_locator_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/service_locator_test.dart</Command>
+      <Scenario>setupServiceLocator registers all required singletons and Cubits.</Scenario>
+      <Scenario>Repeated setup is idempotent and preserves existing singleton instances.</Scenario>
+      <TraceAssertion>UI and background onStart bootstrap paths must remain synchronized per isolate.</TraceAssertion>
+    </V-M-DI>
+
+    <V-M-BLOC-PROVIDERS>
+      <Priority>low</Priority>
+      <TestFiles><File>test/widget/app_content_test.dart</File></TestFiles>
+      <Command>flutter test test/widget/app_content_test.dart</Command>
+      <Scenario>Root provider composition exposes all Cubits required by AppContent and its child screens.</Scenario>
+      <TraceAssertion>Dedicated app_bloc_providers_test remains a planned gap; current AppContent coverage is the available executable evidence.</TraceAssertion>
+      <HistoricalPlannedTest>test/widget/app_bloc_providers_test.dart</HistoricalPlannedTest>
+    </V-M-BLOC-PROVIDERS>
+
+    <V-M-BACKGROUND>
+      <Priority>high</Priority>
+      <TestFiles><File>test/unit/background_runtime_controller_test.dart</File></TestFiles>
+      <Command>flutter test test/unit/background_runtime_controller_test.dart</Command>
+      <Command>Manual head-unit smoke: foreground notification, ignition ON/OFF, stopService, and restart backoff.</Command>
+      <Scenario>BackgroundRuntimeController awaits both seat shutdowns before stopSelf on command or ignition OFF.</Scenario>
+      <Scenario>Malformed ignition and startup failures are logged; bounded backoff stops at max attempts.</Scenario>
+      <TraceAssertion>Logger output must preserve [BackgroundService][onStart][BLOCK_ON_START], [BackgroundService][onStart][BLOCK_RESTART_BACKOFF], and [BackgroundService][handleIgnition][BLOCK_HANDLE_IGNITION]. The linked runtime uses the structured Logger API and the test asserts the assembled lines; restart backoff is owned by handleStartFailure.</TraceAssertion>
+      <HistoricalPlannedTest>test/integration/background_service_test.dart</HistoricalPlannedTest>
+    </V-M-BACKGROUND>
+
+    <V-M-ACCESSIBILITY>
+      <Priority>medium</Priority>
+      <Command>Manual head-unit smoke: accessibility callback wakes the foreground service.</Command>
+      <Scenario>setCallbackHandle registers a valid entry point and system wake-up starts the service when needed.</Scenario>
+      <TraceAssertion>Accessibility wake must use the HvacService-owned plugin instance and must not create a second plugin handler.</TraceAssertion>
+    </V-M-ACCESSIBILITY>
+
+    <V-M-MAIN>
+      <Priority>medium</Priority>
+      <TestFiles><File>test/widget/app_smoke_test.dart</File></TestFiles>
+      <Command>flutter test test/widget/app_smoke_test.dart</Command>
+      <Scenario>AutoheatApp mounts AppContent and disables theme transition animation.</Scenario>
+      <Scenario>Release manifest preserves the package permission envelope and accessibility service declaration.</Scenario>
+      <TraceAssertion>The test block START_BLOCK_AUTOHEAT_APP_THEME_TRANSITION in test/widget/app_smoke_test.dart verifies AutoheatApp theme transition behavior. Cold-start and release APK behavior require final validation on the target head unit and CI workflow.</TraceAssertion>
+    </V-M-MAIN>
+
+    <V-M-UI-APP>
+      <Priority>low</Priority>
+      <TestFiles><File>test/widget/app_content_test.dart</File></TestFiles>
+      <Command>flutter test test/widget/app_content_test.dart</Command>
+      <Scenario>Navigation between Heat, Presets, and Settings tabs preserves the intended shell order.</Scenario>
+      <TraceAssertion>Applying a preset from the app shell delegates runtime application to ModeCubit.</TraceAssertion>
+    </V-M-UI-APP>
+
+    <V-M-UI-HEAT>
+      <Priority>medium</Priority>
+      <TestFiles><File>test/widget/cabin_temperature_display_test.dart</File></TestFiles>
+      <Command>flutter test test/widget/cabin_temperature_display_test.dart</Command>
+      <Scenario>Seat-level interaction routes to ModeCubit and cabin-temperature display follows the Cubit listener.</Scenario>
+      <TraceAssertion>Heat screen smoke must cover driver/passenger, manual/auto/presets, and levels 0 through 3.</TraceAssertion>
+      <HistoricalPlannedTest>test/widget/heat_screen_test.dart</HistoricalPlannedTest>
+    </V-M-UI-HEAT>
+
+    <V-M-UI-PRESETS>
+      <Priority>low</Priority>
+      <TestFiles><File>test/widget/white_theme_button_contrast_test.dart</File></TestFiles>
+      <Command>flutter test test/widget/white_theme_button_contrast_test.dart</Command>
+      <Scenario>PresetsTab composes the user selector, editor, and list; apply/edit/delete semantics are preserved.</Scenario>
+      <Scenario>Dirty draft application, silent active-preset switch, empty state, and white-theme contrast follow the UX contract.</Scenario>
+      <TraceAssertion>Dedicated presets_tab_test remains a planned gap; current contrast and app-shell tests are retained as executable evidence.</TraceAssertion>
+      <HistoricalPlannedTest>test/widget/presets_tab_test.dart</HistoricalPlannedTest>
+    </V-M-UI-PRESETS>
+
+    <V-M-UI-SETTINGS>
+      <Priority>low</Priority>
+      <TestFiles><File>test/widget/settings_screen_test.dart</File><File>test/widget/white_theme_button_contrast_test.dart</File></TestFiles>
+      <Command>flutter test test/widget/settings_screen_test.dart</Command>
+      <Command>flutter test test/widget/white_theme_button_contrast_test.dart</Command>
+      <Scenario>Theme selection, cabin-temperature visibility, bounded layout, and white-theme foreground contrast remain correct.</Scenario>
+      <TraceAssertion>The test block START_BLOCK_HEAD_UNIT_SMOKE in test/widget/settings_screen_test.dart verifies the SettingsScreen layout. Settings controls must remain visible above the fold on the target 1920x720 head-unit viewport.</TraceAssertion>
+    </V-M-UI-SETTINGS>
+  </VD-AUTOHEAT>
+</GraceVerificationDocument>

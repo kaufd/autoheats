@@ -5,8 +5,7 @@
 //   SCOPE: read-only props + onChange callbacks, no Bloc access, parent owns state.
 //   DEPENDS: M-UI-PRESETS, M-MANUAL-SETTINGS, M-ENUMS, M-THEME
 //   LINKS: M-UI-PRESETS, DF-PRESET-APPLY, FA-001
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

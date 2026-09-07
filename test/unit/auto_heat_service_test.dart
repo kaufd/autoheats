@@ -7,9 +7,12 @@
 //          UserType, idempotency restart, custom settings, initial seed, холодный старт.
 //   DEPENDS: M-AUTO-HEAT, M-HVAC, M-CONSTANTS-TEMPERATURE, M-ENUMS
 //   LINKS: V-M-AUTO-HEAT
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - FakeAsync coverage for automatic heat sequences, cancellation, and isolation
+// END_MODULE_MAP
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/models/manual_settings.dart';

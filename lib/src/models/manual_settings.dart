@@ -5,8 +5,7 @@
 //   SCOPE: ManualHeatSettings (durations+threshold), AutoHeatLevel, JSON contract.
 //   DEPENDS: M-ENUMS, M-CONSTANTS-TEMPERATURE
 //   LINKS: M-MANUAL-SETTINGS, M-PRESET, V-M-PRESET
-//   ROLE: TYPES
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

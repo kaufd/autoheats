@@ -6,8 +6,7 @@
 //          test-sink harness и redaction rawCarPropertyValue для non-debug.
 //   DEPENDS: none
 //   LINKS: M-LOGGER, V-M-LOGGER
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

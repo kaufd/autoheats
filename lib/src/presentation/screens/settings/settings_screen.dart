@@ -6,8 +6,7 @@
 //          переехали в PresetsTab; этот экран теперь slim и не использует ManualSettingsCubit.
 //   DEPENDS: M-UI-SETTINGS, M-SETTINGS, M-THEME
 //   LINKS: M-UI-SETTINGS, V-M-UI-SETTINGS, FA-009
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

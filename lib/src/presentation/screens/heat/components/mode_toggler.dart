@@ -7,14 +7,13 @@
 //          пресет.
 //   DEPENDS: M-UI-HEAT, M-MODE, M-ENUMS
 //   LINKS: M-UI-HEAT, V-M-UI-HEAT
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
 //   ModeToggler - StatelessWidget c ValueChanged-like callback на presets-сегмент
 //   _handleSelection - dispatches к ModeCubit.setMode для manual/auto;
-//                       вызывает onPresetsSegmentTapped для presets
+//                       вызывает - onPresetsSegmentTapped для presets
 // END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY

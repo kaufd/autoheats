@@ -7,8 +7,7 @@
 //          для stopService, ignition ON/OFF, restart-backoff, остановка сервиса.
 //   DEPENDS: M-PLUGIN, M-MODE, M-HVAC, M-DI, M-LOGGER
 //   LINKS: M-BACKGROUND, V-M-BACKGROUND, DF-BACKGROUND, FA-006
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

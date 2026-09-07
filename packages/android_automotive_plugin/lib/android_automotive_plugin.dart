@@ -5,8 +5,7 @@
 //   SCOPE: MethodChannel calls, HVAC/sensor callbacks, accessibility callback handle.
 //   DEPENDS: flutter/services, android_automotive_plugin/car/*
 //   LINKS: M-PLUGIN, V-M-PLUGIN, FA-007
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

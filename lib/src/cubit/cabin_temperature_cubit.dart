@@ -6,8 +6,7 @@
 //          initial read, cached emitCurrent, cleanup on close.
 //   DEPENDS: M-HVAC, M-LOGGER
 //   LINKS: M-CABIN-TEMPERATURE, V-M-CABIN-TEMPERATURE, DF-INIT-TEMP, FA-003
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

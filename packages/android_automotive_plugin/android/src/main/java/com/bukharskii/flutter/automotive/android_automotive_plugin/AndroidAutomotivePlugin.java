@@ -47,6 +47,12 @@ public class AndroidAutomotivePlugin implements FlutterPlugin, MethodCallHandler
   //   MAP_MODE: EXPORTS
   // END_MODULE_CONTRACT
   //
+  // START_MODULE_MAP
+  //   onAttachedToEngine - create the MethodChannel and native manager bridge
+  //   onDetachedFromEngine - release the channel binding
+  //   onMethodCall - dispatch connect, HVAC, sensor, and callback-handle calls
+  // END_MODULE_MAP
+  //
   // START_CHANGE_SUMMARY
   //   LAST_CHANGE: [v1.1.0 - connect waits for CarHvacManager readiness and HVAC failures surface as PlatformException]
   // END_CHANGE_SUMMARY

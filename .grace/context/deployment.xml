@@ -1,0 +1,34 @@
+<GraceDeployment graceVersion="4.0">
+  <Applicability>applicable</Applicability>
+  <Migration>
+    <Sources>docs/requirements.xml; docs/technology.xml; docs/development-plan.xml</Sources>
+    <Purpose>Deployment and runtime topology derived from the Android Automotive requirements and existing build/release configuration.</Purpose>
+  </Migration>
+  <Target>
+    <Platform>Android Automotive OS on Changan UNI-S/CS55 Plus head units.</Platform>
+    <Architecture>arm64 Android application running Flutter UI plus a foreground-service background isolate.</Architecture>
+    <VehicleInterface>android.car HVAC, cabin-temperature, and ignition properties through the local AndroidAutomotivePlugin.</VehicleInterface>
+    <MinimumSdk>23</MinimumSdk>
+  </Target>
+  <RuntimeTopology>
+    <UiIsolate>Bootstraps GetIt, accessibility, theme, blocs, and the foreground service before rendering the app shell.</UiIsolate>
+    <BackgroundIsolate>Runs the service-specific bootstrap, listens for ignition and HVAC events, and controls heating independently from the UI isolate.</BackgroundIsolate>
+    <NativePlugin>Provides awaited connect/read/write calls and event callbacks; native failures propagate to Dart.</NativePlugin>
+  </RuntimeTopology>
+  <Lifecycle>
+    <Startup>App launch, boot, or accessibility wake initializes the service and registers HVAC listeners.</Startup>
+    <IgnitionOff>Await stopService and turn both seats off; bounded restart-backoff handles transient runtime failures.</IgnitionOff>
+    <Background>Foreground notification keeps automatic behavior available while the app is not visible.</Background>
+  </Lifecycle>
+  <BuildAndRelease>
+    <Workflow>.github/workflows/release.yml builds an arm64 APK on push of a v* tag.</Workflow>
+    <Artifact>AutoHeat-v3.apk</Artifact>
+    <ReleaseNotes>CHANGELOG.md section matching the release version becomes the GitHub Release body.</ReleaseNotes>
+    <ManualSmoke>Validate real HVAC connection, seat levels, automatic mode, foreground lifecycle, ignition OFF, and raw-to-Celsius behavior on the target head unit.</ManualSmoke>
+  </BuildAndRelease>
+  <OperationalRisks>
+    <Risk-1>Native permissions and head-unit availability can make connect fail outside the vehicle.</Risk-1>
+    <Risk-2>Cold-boot notification timing may need a delayed initialization workaround.</Risk-2>
+    <Risk-3>Different vehicle models may expose different temperature encodings.</Risk-3>
+  </OperationalRisks>
+</GraceDeployment>

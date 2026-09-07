@@ -1,3 +1,18 @@
+// FILE: lib/src/cubit/settings_cubit.dart
+// VERSION: 1.0.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Expose persisted global settings as reactive Cubit state.
+//   SCOPE: initialize, cabin-temperature visibility, and debug-mode toggles.
+//   DEPENDS: M-SETTINGS
+//   LINKS: M-SETTINGS, M-UI-SETTINGS, V-M-SETTINGS
+//   MAP_MODE: SUMMARY
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   SettingsState - showCabinTemperature and debugMode state
+//   SettingsCubit - initialize and persistence-backed setting transitions
+// END_MODULE_MAP
+
 import 'package:autoheat/src/services/settings_service.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';

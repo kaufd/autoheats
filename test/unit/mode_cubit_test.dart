@@ -7,9 +7,12 @@
 //          initial temperature seed для auto mode.
 //   DEPENDS: M-MODE, M-HVAC, M-AUTO-HEAT, M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: V-M-MODE
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - persistence, HVAC synchronization, mode transitions, and preset decoupling
+// END_MODULE_MAP
 
 import 'dart:convert';
 

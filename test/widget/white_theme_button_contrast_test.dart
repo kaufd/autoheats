@@ -5,8 +5,7 @@
 //   SCOPE: CustomAlertDialog confirm, PresetEditor save, ThemeSelector selected button.
 //   DEPENDS: M-UI-PRESETS, M-UI-SETTINGS, M-THEME
 //   LINKS: V-M-UI-PRESETS, V-M-UI-SETTINGS, V-M-THEME, FA-009
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

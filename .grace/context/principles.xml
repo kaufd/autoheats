@@ -1,0 +1,18 @@
+<GracePrinciples graceVersion="4.0">
+  <Migration>
+    <Sources>AGENTS.md; docs/development-plan.xml; docs/operational-packets.xml</Sources>
+    <Purpose>Durable engineering and execution rules carried from the legacy GRACE documentation into the mandatory GRACE 4 principles context.</Purpose>
+  </Migration>
+  <ContractFirst>Every governed module is preceded by a MODULE_CONTRACT with PURPOSE, SCOPE, DEPENDS, LINKS, ROLE, and MAP_MODE; implementation follows the contract.</ContractFirst>
+  <SemanticMarkup>START_MODULE_CONTRACT, START_MODULE_MAP, START_CONTRACT, START_BLOCK, and START_CHANGE_SUMMARY markers are navigation and verification anchors. Anchors stay unique, paired, and small enough for deterministic navigation.</SemanticMarkup>
+  <TopDownSynthesis>RequirementsAnalysis, TechnologyStack, DevelopmentPlan, VerificationPlan, then code and tests define the allowed change space.</TopDownSynthesis>
+  <GraphCurrent>Any module, export, dependency, data-flow, or verification change updates the corresponding GRACE 4 graph and verification projection.</GraphCurrent>
+  <VerificationFirst>Deterministic unit assertions precede integration and head-unit smoke checks; critical event ordering is protected by trace or log assertions.</VerificationFirst>
+  <GovernedAutonomy>Execution packets must declare write scope, assumptions, graph delta, verification delta, evidence, checkpoint fields, and stop conditions. No retroactive C-* bundles are created during migration.</GovernedAutonomy>
+  <IsolationInvariant>Any setupServiceLocator change updates both the UI bootstrap and background onStart bootstrap because isolates do not share registrations.</IsolationInvariant>
+  <VehicleBoundaryInvariant>AndroidAutomotivePlugin is instantiated only by HvacService; other consumers resolve HvacService from the locator.</VehicleBoundaryInvariant>
+  <StablePersistenceContract>SharedPreferences keys and HeatMode/UserType enum names are migration-sensitive public contracts and cannot be renamed without an explicit migration.</StablePersistenceContract>
+  <DebugSafety>Debug affordances must clear injected values and in-memory logs when disabled so diagnostics cannot affect real vehicle behavior.</DebugSafety>
+  <ReleaseDiscipline>Release tags are v*; version and CHANGELOG entries precede tagging, and the release workflow builds the arm64 APK and publishes the changelog section.</ReleaseDiscipline>
+  <FailureHandoff>When validation or cleanup fails, preserve legacy artifacts and report the exact failure and first divergent block; do not retry destructive cleanup automatically.</FailureHandoff>
+</GracePrinciples>

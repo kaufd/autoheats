@@ -6,8 +6,7 @@
 //   SCOPE: чтение/запись режима и уровня по стабильным ключам, засев дефолтов.
 //   DEPENDS: M-ENUMS, M-LOGGER
 //   LINKS: M-MODE, V-M-MODE
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

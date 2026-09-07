@@ -5,9 +5,12 @@
 //   SCOPE: initial read, cached emitCurrent, listener updates, unsubscribe on close.
 //   DEPENDS: M-CABIN-TEMPERATURE, M-HVAC
 //   LINKS: V-M-CABIN-TEMPERATURE, FA-003
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - initial read, cached emit, listener update, and close assertions
+// END_MODULE_MAP
 
 import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
 import 'package:flutter_test/flutter_test.dart';

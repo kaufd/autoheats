@@ -1,0 +1,36 @@
+<GraceGraphIndex graceVersion="4.0">
+  <Project>autoheat</Project>
+  <MigrationSource>docs/knowledge-graph.xml; docs/development-plan.xml</MigrationSource>
+  <GraphDocuments>
+    <GD-AUTOHEAT>
+      <Path>graph/autoheat.xml</Path>
+      <Owns>
+        <M-MAIN />
+        <M-DI />
+        <M-BLOC-PROVIDERS />
+        <M-PLUGIN />
+        <M-HVAC />
+        <M-AUTO-HEAT />
+        <M-MODE />
+        <M-CABIN-TEMPERATURE />
+        <M-PRESET />
+        <M-SETTINGS />
+        <M-THEME />
+        <M-BACKGROUND />
+        <M-ACCESSIBILITY />
+        <M-LOGGER />
+        <M-CONSTANTS-TEMPERATURE />
+        <M-ENUMS />
+        <M-UI-APP />
+        <M-UI-HEAT />
+        <M-UI-PRESETS />
+        <M-UI-SETTINGS />
+        <DF-SET-HEAT />
+        <DF-AUTO-HEAT />
+        <DF-INIT-TEMP />
+        <DF-BACKGROUND />
+        <DF-PRESET-APPLY />
+      </Owns>
+    </GD-AUTOHEAT>
+  </GraphDocuments>
+</GraceGraphIndex>

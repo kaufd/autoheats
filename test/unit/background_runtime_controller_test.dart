@@ -6,9 +6,12 @@
 //          restart backoff retry/fail-stop.
 //   DEPENDS: M-BACKGROUND, M-ENUMS
 //   LINKS: V-M-BACKGROUND, FA-006
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - fake service ports and lifecycle/retry assertions
+// END_MODULE_MAP
 
 import 'dart:async';
 

@@ -6,9 +6,12 @@
 //          getHeatLevel, дефолты на отсутствующих ключах, устойчивость к мусору.
 //   DEPENDS: M-MODE, M-ENUMS
 //   LINKS: V-M-MODE
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - SharedPreferences defaults and mode/heat-level round-trip tests
+// END_MODULE_MAP
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/services/mode_service.dart';

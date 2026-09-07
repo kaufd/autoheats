@@ -9,8 +9,7 @@
 //          startAutoHeat/stopAutoHeat, optional ManualHeatSettings runtime sequence.
 //   DEPENDS: M-HVAC, M-ENUMS, M-CONSTANTS-TEMPERATURE
 //   LINKS: M-AUTO-HEAT, V-M-AUTO-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

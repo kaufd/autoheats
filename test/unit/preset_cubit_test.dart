@@ -6,9 +6,12 @@
 //          синхронизируют PresetService и PresetState.
 //   DEPENDS: M-PRESET, M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: V-M-PRESET, FA-011, DF-PRESET-APPLY
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - selected-preset load, apply, delete, and per-user state assertions
+// END_MODULE_MAP
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:autoheat/src/cubit/preset_cubit.dart';

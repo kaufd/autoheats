@@ -8,8 +8,7 @@
 //          name запрашивается через SavePresetDialog после нажатия Сохранить.
 //   DEPENDS: M-UI-PRESETS, M-PRESET, M-MODE, M-ENUMS, M-THEME
 //   LINKS: M-UI-PRESETS, V-M-UI-PRESETS, DF-PRESET-APPLY, FA-001, FA-011
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

@@ -6,14 +6,13 @@
 //   SCOPE: setupServiceLocator (async), глобальный locator.
 //   DEPENDS: M-HVAC, M-MODE, M-PRESET, M-SETTINGS, M-MANUAL-SETTINGS, M-THEME, M-AUTO-HEAT, M-CABIN-TEMPERATURE
 //   LINKS: M-DI, V-M-DI, DF-BACKGROUND, DF-INIT-TEMP, FA-008
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
 //   locator - GetIt.instance, глобальный контейнер зависимостей
 //   setupServiceLocator - регистрирует SharedPreferences, сервисы и кубиты;
-//                         идемпотентен в рамках isolate; вызывается И в UI-, И в background-изоляте
+//                         идемпотентен - в рамках isolate; вызывается И в UI-, И в background-изоляте
 //   _registerSingletonIfAbsent - lazy guard вокруг GetIt.registerSingleton
 //   _registerValueIfAbsent - guard для уже созданного async SharedPreferences
 // END_MODULE_MAP

@@ -6,8 +6,7 @@
 //          инъекция входящего onHvacChangeEvent через handlePlatformMessage.
 //   DEPENDS: M-PLUGIN
 //   LINKS: V-M-HVAC, V-M-PLUGIN
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

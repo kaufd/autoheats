@@ -8,8 +8,7 @@
 //          конверсия (raw - 84) / 2, cached multi-listener события температуры.
 //   DEPENDS: M-PLUGIN, M-ENUMS, M-LOGGER
 //   LINKS: M-HVAC, V-M-HVAC, DF-SET-HEAT, DF-AUTO-HEAT, DF-INIT-TEMP, FA-003, FA-007
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

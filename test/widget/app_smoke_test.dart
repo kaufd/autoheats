@@ -5,8 +5,7 @@
 //   SCOPE: MaterialApp shell, theme transition policy.
 //   DEPENDS: M-MAIN, M-DI, M-THEME
 //   LINKS: V-M-MAIN, M-MAIN
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

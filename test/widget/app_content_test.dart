@@ -5,8 +5,7 @@
 //   SCOPE: Выбор вкладок, redirect из presets-сегмента HeatScreen в PresetsTab с корректным UserType.
 //   DEPENDS: M-UI-APP, M-UI-HEAT, M-UI-PRESETS, M-DI, M-PRESET
 //   LINKS: V-M-UI-APP, M-UI-APP, M-UI-PRESETS, FA-011
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

@@ -5,9 +5,12 @@
 //   SCOPE: initial rendered temperature, update after HVAC event, SettingsCubit visibility gate.
 //   DEPENDS: M-UI-HEAT, M-CABIN-TEMPERATURE, M-SETTINGS, M-HVAC
 //   LINKS: V-M-UI-HEAT, V-M-CABIN-TEMPERATURE, FA-003
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - widget rendering and HVAC-driven temperature update assertions
+// END_MODULE_MAP
 
 import 'package:autoheat/src/cubit/cabin_temperature_cubit.dart';
 import 'package:autoheat/src/cubit/settings_cubit.dart';

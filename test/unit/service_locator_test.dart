@@ -5,8 +5,7 @@
 //   SCOPE: complete registration set and idempotent repeated setupServiceLocator calls.
 //   DEPENDS: M-DI, M-HVAC, M-MODE, M-CABIN-TEMPERATURE, M-SETTINGS, M-MANUAL-SETTINGS, M-PRESET, M-THEME
 //   LINKS: V-M-DI, FA-008
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

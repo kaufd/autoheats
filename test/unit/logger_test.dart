@@ -6,8 +6,7 @@
 //   SCOPE: 8 сценариев V-M-LOGGER + forbidden sink-throw safety.
 //   DEPENDS: M-LOGGER
 //   LINKS: V-M-LOGGER
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

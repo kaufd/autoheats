@@ -9,9 +9,12 @@
 //          propagation ошибок connect/write из M-PLUGIN.
 //   DEPENDS: M-HVAC, M-PLUGIN, M-ENUMS
 //   LINKS: V-M-HVAC, FA-007
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - MethodChannel HVAC writes, temperature events, listener fan-out, and fallbacks
+// END_MODULE_MAP
 //
 // START_CHANGE_SUMMARY
 //   LAST_CHANGE: [v1.2.0 - Cover native string HVAC event values and raw -1 filtering]

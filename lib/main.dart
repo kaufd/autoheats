@@ -5,8 +5,7 @@
 //   SCOPE: setupServiceLocator, initial cubit/bootstrap services, AutoheatApp MaterialApp.
 //   DEPENDS: M-DI, M-BLOC-PROVIDERS, M-THEME, M-SETTINGS, M-ACCESSIBILITY, M-BACKGROUND, M-UI-APP
 //   LINKS: M-MAIN, V-M-MAIN, DF-BACKGROUND
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

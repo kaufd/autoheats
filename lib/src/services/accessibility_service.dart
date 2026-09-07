@@ -1,5 +1,18 @@
 // FILE: lib/src/services/accessibility_service.dart
 // VERSION: 1.1.0
+// START_MODULE_CONTRACT
+//   PURPOSE: Register the accessibility callback through the HvacService-owned automotive plugin.
+//   SCOPE: initializeAccessibilityService and the entry-point callback that wakes the foreground service.
+//   DEPENDS: M-HVAC, M-PLUGIN, M-BACKGROUND
+//   LINKS: M-ACCESSIBILITY, V-M-ACCESSIBILITY
+//   MAP_MODE: SUMMARY
+// END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   initializeAccessibilityService - register the system callback handle
+//   _accessibilityServiceCallback - start the foreground service when it is stopped
+// END_MODULE_MAP
+//
 // START_CHANGE_SUMMARY
 //   LAST_CHANGE: [v1.1.0 - Reuse HvacService.androidAutomotivePlugin instead of new instance
 //                так MethodCallHandler не перезаписывает зарегистрированный HvacService handler]

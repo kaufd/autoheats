@@ -5,8 +5,7 @@
 //   SCOPE: levels 1/2/3/off, visibility только в HeatMode.manual (но layout space всегда зарезервирован), ModeCubit.setHeatLevel.
 //   DEPENDS: M-UI-HEAT, M-MODE, M-ENUMS, M-THEME
 //   LINKS: M-UI-HEAT, M-MODE, DF-SET-HEAT
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

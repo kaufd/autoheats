@@ -7,8 +7,7 @@
 //          pure-функции getTemperatureRange и getHeatSequence.
 //   DEPENDS: none
 //   LINKS: M-CONSTANTS-TEMPERATURE, V-M-CONSTANTS-TEMPERATURE
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

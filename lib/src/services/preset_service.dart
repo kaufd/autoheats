@@ -6,8 +6,7 @@
 //          lastUsed metadata, selected preset id per UserType.
 //   DEPENDS: M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: M-PRESET, V-M-PRESET, FA-001, FA-011, DF-PRESET-APPLY
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

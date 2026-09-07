@@ -5,8 +5,7 @@
 //   SCOPE: build/layout без RenderFlex unbounded-height ошибок.
 //   DEPENDS: M-UI-SETTINGS, M-SETTINGS, M-THEME
 //   LINKS: V-M-UI-SETTINGS, FA-009
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

@@ -5,8 +5,7 @@
 //   SCOPE: base/red/white buttons, ThemeCubit.changeTheme, wrap-safe head-unit layout.
 //   DEPENDS: M-UI-SETTINGS, M-THEME
 //   LINKS: M-UI-SETTINGS, V-M-UI-SETTINGS, FA-009
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

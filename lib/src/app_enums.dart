@@ -6,8 +6,7 @@
 //   SCOPE: HeatMode, UserType, fromString-десериализация по .name.
 //   DEPENDS: none
 //   LINKS: M-ENUMS, V-M-ENUMS
-//   ROLE: TYPES
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

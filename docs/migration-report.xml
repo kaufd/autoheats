@@ -1,0 +1,143 @@
+<GraceMigrationReport graceVersion="4.0" status="validated">
+  <Project>
+    <Root>/Users/kaufd/_Projects/open-source/changan/autoheat-grace-v3-to-v4</Root>
+    <SourceBranch>master</SourceBranch>
+    <TargetBranch>migration/grace-v3-to-v4</TargetBranch>
+    <PreparedAt>2026-09-07T13:33:47Z</PreparedAt>
+  </Project>
+  <SourceInventory complete="true">
+    <Source path="docs/requirements.xml" disposition="map to .grace/context/requirements.xml" />
+    <Source path="docs/technology.xml" disposition="map to .grace/context/technology.xml" />
+    <Source path="docs/development-plan.xml" disposition="map modules/data flows to .grace/graph; map architecture and execution policy to context artifacts" />
+    <Source path="docs/verification-plan.xml" disposition="map module verification contracts to .grace/verification/index.xml and .grace/verification/autoheat.xml" />
+    <Source path="docs/knowledge-graph.xml" disposition="map module records, data flows, and graph links to .grace/graph/autoheat.xml" />
+    <Source path="docs/operational-packets.xml" disposition="map reusable packet conventions into Grace 4 context/principles and retain as legacy reference; no direct Grace 4 root equivalent" />
+    <Source path="docs/functional-audit-findings.md" disposition="supplemental context; retain; not a canonical Grace 3 artifact" />
+    <Source path="docs/superpowers/" disposition="supplemental design context; retain; not a canonical Grace 3 artifact" />
+  </SourceInventory>
+  <Backup restorable="true">
+    <Path>/Users/kaufd/_Projects/open-source/autoheat-grace-v3-backup-2026-09-07T133347Z</Path>
+    <CreatedAt>2026-09-07T13:33:47Z</CreatedAt>
+    <Verification>Full docs/ snapshot copied; six canonical XML SHA-256 values recorded in legacy-sha256.txt and all six current-source hashes match the backup.</Verification>
+    <Coverage>Canonical legacy sources and all supplemental docs/ files are present in the backup.</Coverage>
+  </Backup>
+  <WriteApproval approved="true">
+    <ConfirmedBy>user</ConfirmedBy>
+    <ConfirmedAt>2026-09-07T13:38:08Z</ConfirmedAt>
+  </WriteApproval>
+  <GeneratedGrace4Layout coverageVerified="true">
+    <Context>5/5 mandatory artifacts: .grace/context/requirements.xml, technology.xml, principles.xml, deployment.xml, ux-guidelines.xml.</Context>
+    <Graph>1 index plus 1 routed document: 20 modules and 5 data flows migrated under .grace/graph.</Graph>
+    <Verification>1 index plus 1 routed document: 20 V-M-* entries with commands, scenarios, trace/marker assertions, and existing test-file evidence under .grace/verification.</Verification>
+    <Changes>.grace/changes/active and .grace/changes/archive are present and empty; no retroactive C-* bundles were created.</Changes>
+    <CoverageGaps>All 20 modules are ready after reclassifying runtime Logger output and test-only semantic blocks as TraceAssertion evidence. Dart files use SUMMARY maps where the grace-cli Dart adapter cannot prove export parity. Lint still reports 54 Dart adapter confidence warnings; the adapter hard-codes heuristic confidence for Dart, so these cannot be removed by project markup without excluding governed Dart files or changing the external CLI. Historical planned test paths that do not exist in the repository are recorded as HistoricalPlannedTest text and are not asserted as current TestFiles.</CoverageGaps>
+  </GeneratedGrace4Layout>
+  <Ambiguities>
+    <Ambiguity>Legacy M-*, DF-*, and V-M-* elements carry metadata in attributes; Grace 4 semantic anchors must be attribute-free tags, so metadata will be moved to child elements.</Ambiguity>
+    <Ambiguity>Legacy CrossLink uses from/to/relation attributes containing semantic IDs, while the Grace 4 CLI rejects semantic anchors in attributes; links will be represented in a lint-compatible child-anchor form and relation text, with the legacy form preserved in the backup.</Ambiguity>
+    <Ambiguity>Legacy development-plan and knowledge-graph overlap but are not identical projections; the migration will reconcile their union, retaining current implementation paths from knowledge-graph and contracts/phases from development-plan.</Ambiguity>
+    <Ambiguity>docs/development-plan.xml is not well-formed XML at the legacy source: line 662 contains an unescaped &amp;&amp; and line 710 closes Phase-2 while Phase-1 is open. Its facts are migrated by direct inspection and the source is retained unchanged.</Ambiguity>
+    <Ambiguity>Legacy documents do not provide standalone principles, deployment, or UX artifacts; these mandatory Grace 4 contexts will be derived from the project instructions, requirements, technology, and existing implementation facts, and marked as derived.</Ambiguity>
+    <Ambiguity>operational-packets.xml contains templates rather than current project state and has no direct Grace 4 root; its operational schema will be summarized in context/principles while the legacy source remains untouched.</Ambiguity>
+  </Ambiguities>
+  <UnsupportedStructures>
+    <Unsupported source="docs/operational-packets.xml">ExecutionPacket, GraphDelta, VerificationDelta, FailurePacket, and CheckpointReport template wrappers are not current-state graph or verification records; preserved as legacy reference and summarized, not emitted as fake current modules or changes.</Unsupported>
+    <Unsupported source="docs/development-plan.xml">Historical Phase-* and Phase-Deferred wrappers are not emitted as retroactive C-* bundles; their completed/deferred facts are retained as context/graph notes.</Unsupported>
+  </UnsupportedStructures>
+  <Validation successful="true">
+    <Check command="grace lint --path /Users/kaufd/_Projects/open-source/changan/autoheat-grace-v3-to-v4 --assertions current --format json" exitCode="0" filesChecked="100" governedFiles="56" xmlFilesChecked="9" errors="0" warnings="54">Passed: no lint errors; all remaining warnings are the external Dart adapter's heuristic-confidence diagnostics.</Check>
+    <Check command="grace status --path /Users/kaufd/_Projects/open-source/changan/autoheat-grace-v3-to-v4 --with modules --json" exitCode="0" projectKind="grace4" graceVersion="4.0" integrityErrors="0" integrityWarnings="54" contextArtifacts="5" graphModules="20" verificationEntries="20" activeChanges="0" archivedChanges="0" readyModules="20" attentionModules="0" blockedModules="0" derivedState="unexplained-observed-drift">Passed: Grace 4 project recognized with zero integrity errors and all 20 modules ready. The unexplained-observed-drift state is expected for newly generated migration artifacts and is a separate grace-refresh reconciliation concern.</Check>
+  </Validation>
+  <GitPreflight available="true" inWorktree="true" dirty="true">
+    <WorktreeRoot>/Users/kaufd/_Projects/open-source/changan/autoheat-grace-v3-to-v4</WorktreeRoot>
+    <PorcelainCommand>git status --porcelain --untracked-files=all</PorcelainCommand>
+    <PorcelainOutput><![CDATA[ M lib/main.dart
+ M lib/src/app_enums.dart
+ M lib/src/constants/temperature_constants.dart
+ M lib/src/cubit/cabin_temperature_cubit.dart
+ M lib/src/cubit/mode_cubit.dart
+ M lib/src/cubit/preset_cubit.dart
+ M lib/src/cubit/settings_cubit.dart
+ M lib/src/di/service_locator.dart
+ M lib/src/models/manual_settings.dart
+ M lib/src/models/preset.dart
+ M lib/src/presentation/app_content.dart
+ M lib/src/presentation/screens/heat/components/cabin_temperature_display.dart
+ M lib/src/presentation/screens/heat/components/manual_heat_level_selector.dart
+ M lib/src/presentation/screens/heat/components/mode_toggler.dart
+ M lib/src/presentation/screens/heat/heat_screen.dart
+ M lib/src/presentation/screens/presets/components/preset_editor.dart
+ M lib/src/presentation/screens/presets/presets_tab.dart
+ M lib/src/presentation/screens/settings/components/theme_selector.dart
+ M lib/src/presentation/screens/settings/settings_screen.dart
+ M lib/src/presentation/ui/custom_alert_dialog.dart
+ M lib/src/services/accessibility_service.dart
+ M lib/src/services/auto_heat_service.dart
+ M lib/src/services/background_runtime_controller.dart
+ M lib/src/services/background_service.dart
+ M lib/src/services/hvac_service.dart
+ M lib/src/services/mode_service.dart
+ M lib/src/services/preset_service.dart
+ M lib/src/services/settings_service.dart
+ M lib/src/utils/logger.dart
+ M packages/android_automotive_plugin/android/src/main/java/com/bukharskii/flutter/automotive/android_automotive_plugin/AndroidAutomotivePlugin.java
+ M packages/android_automotive_plugin/android/src/main/java/com/bukharskii/flutter/automotive/android_automotive_plugin/CarAvcManagerUtils.java
+ M packages/android_automotive_plugin/lib/android_automotive_plugin.dart
+ M test/_helpers/fake_hvac_service.dart
+ M test/_helpers/fake_plugin.dart
+ M test/_helpers/logger_test_sink.dart
+ M test/unit/app_enums_test.dart
+ M test/unit/auto_heat_service_test.dart
+ M test/unit/background_runtime_controller_test.dart
+ M test/unit/cabin_temperature_cubit_test.dart
+ M test/unit/hvac_service_test.dart
+ M test/unit/logger_test.dart
+ M test/unit/mode_cubit_test.dart
+ M test/unit/mode_service_test.dart
+ M test/unit/preset_cubit_test.dart
+ M test/unit/preset_model_test.dart
+ M test/unit/preset_service_test.dart
+ M test/unit/service_locator_test.dart
+ M test/unit/temperature_constants_test.dart
+ M test/unit/theme_colors_test.dart
+ M test/widget/app_content_test.dart
+ M test/widget/app_smoke_test.dart
+ M test/widget/cabin_temperature_display_test.dart
+ M test/widget/settings_screen_test.dart
+ M test/widget/white_theme_button_contrast_test.dart
+?? .grace/context/deployment.xml
+?? .grace/context/principles.xml
+?? .grace/context/requirements.xml
+?? .grace/context/technology.xml
+?? .grace/context/ux-guidelines.xml
+?? .grace/graph/autoheat.xml
+?? .grace/graph/index.xml
+?? .grace/verification/autoheat.xml
+?? .grace/verification/index.xml
+?? docs/migration-report.xml]]></PorcelainOutput>
+  </GitPreflight>
+  <CleanupProposal approved="false">
+    <Item path="docs/requirements.xml" action="retain until separately approved; proposed archive/delete only after validation" />
+    <Item path="docs/technology.xml" action="retain until separately approved; proposed archive/delete only after validation" />
+    <Item path="docs/development-plan.xml" action="retain until separately approved; proposed archive/delete only after validation" />
+    <Item path="docs/verification-plan.xml" action="retain until separately approved; proposed archive/delete only after validation" />
+    <Item path="docs/knowledge-graph.xml" action="retain until separately approved; proposed archive/delete only after validation" />
+    <Item path="docs/operational-packets.xml" action="retain until separately approved; proposed archive/delete only after validation" />
+    <ConfirmedBy />
+    <ConfirmedAt />
+  </CleanupProposal>
+  <DirtyOrNonGitRiskAcknowledgement required="true" approved="false">
+    <Risk>The migration worktree is now dirty because the approved Grace 4 artifacts and file-local semantic markup were written. It remains separate from the user's pre-existing dirty original worktree, which is untouched; no cleanup or overwrite was performed.</Risk>
+    <ConfirmedBy />
+    <ConfirmedAt />
+  </DirtyOrNonGitRiskAcknowledgement>
+  <CleanupResults performed="false">
+    <Item path="docs/requirements.xml" result="legacy retained; no cleanup performed" />
+    <Item path="docs/technology.xml" result="legacy retained; no cleanup performed" />
+    <Item path="docs/development-plan.xml" result="legacy retained; no cleanup performed" />
+    <Item path="docs/verification-plan.xml" result="legacy retained; no cleanup performed" />
+    <Item path="docs/knowledge-graph.xml" result="legacy retained; no cleanup performed" />
+    <Item path="docs/operational-packets.xml" result="legacy retained; no cleanup performed" />
+    <FailurePreservationStatement>Legacy GRACE 3 artifacts remain untouched unless the failure output explicitly lists a completed move.</FailurePreservationStatement>
+  </CleanupResults>
+</GraceMigrationReport>

@@ -6,9 +6,12 @@
 //          сумм длительностей, порядок temperatureThresholds.
 //   DEPENDS: M-CONSTANTS-TEMPERATURE
 //   LINKS: V-M-CONSTANTS-TEMPERATURE
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - temperature-boundary, sequence, duration-sum, and forbidden-marker tests
+// END_MODULE_MAP
 
 import 'package:autoheat/src/constants/temperature_constants.dart';
 import 'package:flutter_test/flutter_test.dart';

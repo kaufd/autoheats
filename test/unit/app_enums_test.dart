@@ -6,9 +6,12 @@
 //          regression-snapshot строковых имён (контракт SharedPreferences).
 //   DEPENDS: M-ENUMS
 //   LINKS: V-M-ENUMS
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
+//
+// START_MODULE_MAP
+//   main - round-trip, fallback, case-sensitivity, and enum-name snapshot tests
+// END_MODULE_MAP
 
 import 'package:autoheat/src/app_enums.dart';
 import 'package:flutter_test/flutter_test.dart';

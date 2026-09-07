@@ -31,6 +31,13 @@ public class CarAvcManagerUtils {
     //   MAP_MODE: EXPORTS
     // END_MODULE_CONTRACT
     //
+    // START_MODULE_MAP
+    //   connect - initialize Car, HVAC, sensor, and vendor managers
+    //   isHvacReady - report CarHvacManager readiness
+    //   getHvacIntProperty - read an integer HVAC property
+    //   setHvacIntProperty - write an integer HVAC property
+    // END_MODULE_MAP
+    //
     // START_CHANGE_SUMMARY
     //   LAST_CHANGE: [v1.1.0 - Expose HVAC readiness and rethrow native HVAC read/write failures]
     // END_CHANGE_SUMMARY

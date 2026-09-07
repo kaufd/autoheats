@@ -7,8 +7,7 @@
 //          mode/level определяются runtime'ом при apply.
 //   DEPENDS: M-ENUMS, M-MANUAL-SETTINGS
 //   LINKS: M-PRESET, V-M-PRESET, DF-PRESET-APPLY
-//   ROLE: TYPES
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

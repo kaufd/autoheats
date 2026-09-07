@@ -1,0 +1,29 @@
+<GraceUXGuidelines graceVersion="4.0">
+  <Applicability>applicable</Applicability>
+  <Migration>
+    <Sources>docs/requirements.xml; docs/development-plan.xml; docs/functional-audit-findings.md; existing UI modules</Sources>
+    <Purpose>UX and operator guidance derived from the legacy use cases and the current Flutter screens.</Purpose>
+  </Migration>
+  <Navigation>
+    <PrimaryTabs>Management, Presets, Settings.</PrimaryTabs>
+    <Management>Show cabin temperature, driver/passenger selection, mode selection, and manual heat level controls.</Management>
+    <Presets>Use a driver/passenger selector, editable preset settings, selected-state highlight, apply, and delete actions.</Presets>
+    <Settings>Keep global theme and cabin-temperature visibility controls focused and bounded.</Settings>
+  </Navigation>
+  <InteractionRules>
+    <ImmediateFeedback>Manual level changes update visible state and issue the HVAC command without waiting for a later sensor event.</ImmediateFeedback>
+    <ModeSeparation>Manual, automatic, and presets modes remain distinct; applying a preset must not overwrite global automatic-mode settings.</ModeSeparation>
+    <SafeFallback>Deleting the active preset falls back to manual mode with level zero.</SafeFallback>
+    <TemperatureDisplay>Temperature reads are cached and update through independent listeners without changing seat level by themselves.</TemperatureDisplay>
+  </InteractionRules>
+  <Accessibility>
+    <Service>Accessibility service wake-up is supported for background lifecycle recovery.</Service>
+    <Contrast>Theme variants and white-theme button contrast are covered by widget verification.</Contrast>
+    <Layout>Controls must remain readable and bounded on the head-unit display; settings and preset sections avoid unbounded vertical expansion.</Layout>
+  </Accessibility>
+  <Diagnostics>
+    <DebugMode>Long-press on the cabin-temperature indicator exposes in-memory logs and a temperature injector for controlled diagnosis.</DebugMode>
+    <Reset>Disabling debug mode restores the real HVAC temperature and clears LogRingBuffer side effects.</Reset>
+    <Privacy>No secrets or sensitive user data are present; raw native property values are redacted outside debug logging.</Privacy>
+  </Diagnostics>
+</GraceUXGuidelines>

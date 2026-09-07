@@ -1,0 +1,43 @@
+<GraceTechnology graceVersion="4.0">
+  <Migration>
+    <Source>docs/technology.xml</Source>
+    <LegacyVersion>0.2.0</LegacyVersion>
+    <Method>Runtime, dependencies, constraints, tooling, observability, and testing policy were retained as explicit technology context.</Method>
+  </Migration>
+  <Runtime>
+    <Framework>Flutter 3.x with Dart 3 syntax and AOT Android builds.</Framework>
+    <Application>Flutter app using flutter_bloc Cubit state management, provider UI composition, and get_it service location.</Application>
+    <NativeBoundary>Android Automotive APIs are accessed through the path package android_automotive_plugin.</NativeBoundary>
+  </Runtime>
+  <Dependencies>
+    <Dependency-flutter_bloc>^9.0.0; Cubit-based state management.</Dependency-flutter_bloc>
+    <Dependency-provider>^6.1.2; UI-level inherited dependency composition.</Dependency-provider>
+    <Dependency-get_it>^8.0.3; service locator, registered independently per isolate.</Dependency-get_it>
+    <Dependency-shared_preferences>^2.5.2; settings, presets, modes, and theme persistence.</Dependency-shared_preferences>
+    <Dependency-equatable>^2.0.5; state equality.</Dependency-equatable>
+    <Dependency-json_annotation>^4.9.0; model serialization annotations.</Dependency-json_annotation>
+    <Dependency-flutter_background_service>^5.0.5; foreground service while the app is backgrounded.</Dependency-flutter_background_service>
+    <Dependency-android_automotive_plugin>path:packages/android_automotive_plugin; local HVAC, sensor, and ignition bridge.</Dependency-android_automotive_plugin>
+    <DevDependency-fake_async>^1.3.3; deterministic Timer verification.</DevDependency-fake_async>
+    <DevDependency-bloc_test>^10.0.0; Cubit state-machine assertions.</DevDependency-bloc_test>
+    <DevDependency-mocktail>^1.0.5; mock interactions for service and native boundaries.</DevDependency-mocktail>
+  </Dependencies>
+  <VersionConstraints>
+    <Flutter>minimum 3.6.0; maximum 3.x.</Flutter>
+    <AndroidMinSdk>23; Android Automotive compatibility range documented by the legacy plan.</AndroidMinSdk>
+    <Plugin>0.x local path package with no independent published version.</Plugin>
+  </VersionConstraints>
+  <Tooling>
+    <PackageManager>flutter pub</PackageManager>
+    <Codegen>build_runner with json_serializable</Codegen>
+    <Linter>flutter_lints ^5.0.0</Linter>
+    <Formatter>dart format</Formatter>
+    <Tests>flutter_test</Tests>
+    <Analyzer>dart analyze / flutter analyze</Analyzer>
+  </Tooling>
+  <Observability>
+    <LogFormat>[Module][function][BLOCK_NAME] message | key=value</LogFormat>
+    <Logger>Logger plus LogRingBuffer support structured fields, test sinks, redaction, and debug UI inspection.</Logger>
+    <NativeBoundary>Plugin code does not import the app Logger; HvacService and runtime modules provide application-level markers.</NativeBoundary>
+  </Observability>
+</GraceTechnology>

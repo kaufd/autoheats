@@ -5,8 +5,7 @@
 //   SCOPE: dialog chrome, cancel button, optional primary confirm button.
 //   DEPENDS: M-THEME, M-UI-SETTINGS, M-UI-PRESETS
 //   LINKS: M-THEME, V-M-UI-SETTINGS, V-M-THEME
-//   ROLE: RUNTIME
-//   MAP_MODE: EXPORTS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP

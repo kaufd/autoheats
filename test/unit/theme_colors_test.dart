@@ -5,8 +5,7 @@
 //   SCOPE: AppThemeColors.lerp и контрастные foreground/background токены.
 //   DEPENDS: M-THEME
 //   LINKS: V-M-THEME, M-THEME
-//   ROLE: TEST
-//   MAP_MODE: LOCALS
+//   MAP_MODE: SUMMARY
 // END_MODULE_CONTRACT
 //
 // START_MODULE_MAP
