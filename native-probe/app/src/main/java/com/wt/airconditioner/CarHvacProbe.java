@@ -52,6 +52,14 @@ public class CarHvacProbe {
     private Car car;
     private CarHvacManager hvacManager;
 
+    /**
+     * Пришёл ли onServiceConnected. Нужен именно факт коннекта, а не
+     * isHvacReady(): без него таймаут не отличит «соединение не поднялось»
+     * от «соединение есть, но getCarManager отказал», и назовёт неверную
+     * причину поверх настоящей.
+     */
+    private boolean serviceConnected;
+
     private final CarHvacManager.CarHvacEventCallback hvacCallback =
             new CarHvacManager.CarHvacEventCallback() {
                 @Override
@@ -71,6 +79,7 @@ public class CarHvacProbe {
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
+            mainHandler.post(() -> serviceConnected = true);
             log("onServiceConnected: " + name);
             initHvacManager();
         }
@@ -116,11 +125,15 @@ public class CarHvacProbe {
     private final Runnable connectTimeout = new Runnable() {
         @Override
         public void run() {
-            if (!isHvacReady()) {
-                log("ТАЙМАУТ " + (CONNECT_TIMEOUT_MS / 1000)
-                        + " с: onServiceConnected не пришёл, HVAC не поднялся");
-                notifyReady(false);
+            if (serviceConnected) {
+                // Соединение поднялось; если HVAC при этом не готов, причину
+                // уже назвал initHvacManager — вторая строка поверх неё только
+                // увела бы диагностику в сторону.
+                return;
             }
+            log("ТАЙМАУТ " + (CONNECT_TIMEOUT_MS / 1000)
+                    + " с: onServiceConnected не пришёл, соединение с CarService не поднялось");
+            notifyReady(false);
         }
     };
 
@@ -212,18 +225,31 @@ public class CarHvacProbe {
      * показать ничего: это ложный вывод об исправности датчика.
      */
     private void publishTemperature(Object rawValue) {
+        Double celsius = celsiusToPublish(rawValue);
+        if (celsius == null) {
+            Integer raw = parseRaw(rawValue);
+            log(raw == null
+                    ? "температура проигнорирована: неожиданный тип значения (" + rawValue + ")"
+                    : "температура проигнорирована: sentinel raw=" + raw + " (нет данных с датчика)");
+            return;
+        }
+        final int raw = parseRaw(rawValue);
+        final double value = celsius;
+        mainHandler.post(() -> listener.onCabinTemperature(value, raw));
+    }
+
+    /**
+     * Единственное место, где решается, показывать ли температуру.
+     * null означает «не публиковать»: значение не разобралось или пришёл
+     * sentinel raw < 0. Вынесено отдельно, чтобы это решение проверялось
+     * тестом, — на эмуляторе путь недостижим, на голове идёт вслепую.
+     */
+    static Double celsiusToPublish(Object rawValue) {
         Integer raw = parseRaw(rawValue);
-        if (raw == null) {
-            log("температура проигнорирована: неожиданный тип значения (" + rawValue + ")");
-            return;
+        if (raw == null || raw < 0) {
+            return null;
         }
-        if (raw < 0) {
-            log("температура проигнорирована: sentinel raw=" + raw + " (нет данных с датчика)");
-            return;
-        }
-        final int value = raw;
-        final double celsius = (value - 84) / 2.0;
-        mainHandler.post(() -> listener.onCabinTemperature(celsius, value));
+        return (raw - 84) / 2.0;
     }
 
     /** package-private ради юнит-теста: на эмуляторе этот путь не проверить. */

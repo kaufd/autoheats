@@ -38,4 +38,33 @@ public class CarHvacProbeTest {
         assertNull(CarHvacProbe.parseRaw(null));
         assertNull(CarHvacProbe.parseRaw(new Object()));
     }
+
+    // --- что именно попадёт на экран: null = температура не публикуется ---
+
+    @Test
+    public void publishesValidReading() {
+        assertEquals(Double.valueOf(20.0), CarHvacProbe.celsiusToPublish(124));
+        assertEquals(Double.valueOf(20.0), CarHvacProbe.celsiusToPublish("124"));
+        assertEquals(Double.valueOf(-0.5), CarHvacProbe.celsiusToPublish(83));
+    }
+
+    @Test
+    public void doesNotPublishSentinel() {
+        // Суть фикса: -1 дал бы "-42.5 °C" — ложный вывод об исправном датчике.
+        assertNull(CarHvacProbe.celsiusToPublish(-1));
+        assertNull(CarHvacProbe.celsiusToPublish("-1"));
+    }
+
+    @Test
+    public void doesNotPublishUnparseableValue() {
+        assertNull(CarHvacProbe.celsiusToPublish("нет данных"));
+        assertNull(CarHvacProbe.celsiusToPublish(null));
+        assertNull(CarHvacProbe.celsiusToPublish(new Object()));
+    }
+
+    @Test
+    public void publishesZeroRawAsItsRealValue() {
+        // raw = 0 валиден (-42 °C): sentinel — это строго отрицательное.
+        assertEquals(Double.valueOf(-42.0), CarHvacProbe.celsiusToPublish(0));
+    }
 }
