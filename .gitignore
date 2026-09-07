@@ -47,3 +47,10 @@ app.*.map.json
 
 # brainstorming visual companion mockups
 .superpowers/
+
+# Диагностические APK и рабочие материалы (не для git — ~170 MB)
+diagnostic-apks/
+temp/
+
+# FVM Version Cache
+.fvm/

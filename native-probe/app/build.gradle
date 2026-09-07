@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.wt.airconditioner'
+    compileSdk 33
+
+    defaultConfig {
+        // Имя обязано совпадать с whitelisted-пакетом головы: с любым другим
+        // CarService не отдаёт CarHvacManager (SecurityException "not in white list").
+        applicationId "com.wt.airconditioner"
+        minSdk 23
+        targetSdk 33
+        versionCode 200
+        versionName "0.1-probe"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            outputFileName = "AutoHeatProbe-v${variant.versionName}-vc${variant.versionCode}.apk"
+        }
+    }
+}
+
+dependencies {
+    // Стаб системного android.car — тот же jar и тот же способ подключения
+    // (implementation, не compileOnly), что у доказанно работающего плагина.
+    // На голове классы приходят из BOOTCLASSPATH, стаб в APK не мешает.
+    implementation files('libs/android.car.jar')
+}
