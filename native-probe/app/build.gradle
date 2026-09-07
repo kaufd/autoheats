@@ -28,6 +28,18 @@ android {
         }
     }
 
+    // Verification gate: lint обязан проходить без ошибок. Исключения по
+    // permissions подавлены адресно в манифесте, с объяснением.
+    lint {
+        abortOnError true
+        // Намеренные решения проекта, а не недосмотр:
+        //   OldTargetApi/GradleDependency — 33 выбран под legacy AAOS-голову,
+        //     ровно как у оригинального com.wt.airconditioner;
+        //   HardcodedText — диагностический инструмент на один экран,
+        //     ресурсы строк тут только мешают читать разметку.
+        disable += ['OldTargetApi', 'GradleDependency', 'HardcodedText']
+    }
+
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             outputFileName = "AutoHeatProbe-v${variant.versionName}-vc${variant.versionCode}.apk"
@@ -40,4 +52,6 @@ dependencies {
     // (implementation, не compileOnly), что у доказанно работающего плагина.
     // На голове классы приходят из BOOTCLASSPATH, стаб в APK не мешает.
     implementation files('libs/android.car.jar')
+
+    testImplementation 'junit:junit:4.13.2'
 }

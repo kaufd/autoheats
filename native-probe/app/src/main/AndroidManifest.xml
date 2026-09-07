@@ -1,23 +1,37 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permission envelope зеркалит рабочее приложение (см. CLAUDE.md: набор
          не тримить без smoke-теста на голове). Из него убрано только то, чего
          на этапе 1 нет физически: foreground-service, boot, уведомления,
-         accessibility. -->
+         accessibility. Сверено: у changan_first-main/example и SeatHeat_v2 по
+         34 permission, здесь 24 — подмножество, ничего лишнего.
+
+         Lint ругается на три из них, и все три есть в обоих оригиналах.
+         Правила писаны для публикации в Play Store; здесь sideload на AAOS,
+         где envelope доказанно работает, а урезание грозит потерей цикла
+         ручной прошивки. Поэтому подавляем адресно, а не удаляем:
+           CoarseFineLocation   — FINE без COARSE, как в оригинале;
+           ProtectedPermissions — system-only, обычному APK всё равно не
+                                  выдаются, но присутствуют в оригинале. -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.GET_TASKS" />
-    <uses-permission android:name="android.permission.WRITE_SETTINGS" />
-    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS" />
-    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES"
+        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
+        tools:ignore="CoarseFineLocation" />
 
     <uses-permission android:name="android.car.permission.CONTROL_CAR_CLIMATE" />
     <uses-permission android:name="android.car.permission.CAR_POWER" />

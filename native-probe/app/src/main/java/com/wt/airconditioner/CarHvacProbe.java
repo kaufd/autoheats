@@ -29,6 +29,13 @@ public class CarHvacProbe {
     /** VehicleAreaInOutCAR.InOutCAR_INSIDE — зона «внутри салона». */
     private static final int AREA_INSIDE = 1;
 
+    /**
+     * Сколько ждать onServiceConnected, прежде чем признать подключение
+     * несостоявшимся. Без этого статус «Подключение к Car…» может висеть
+     * вечно, а пробник обязан давать однозначный ответ.
+     */
+    private static final long CONNECT_TIMEOUT_MS = 10_000L;
+
     public interface Listener {
         void onLog(String message);
 
@@ -51,7 +58,7 @@ public class CarHvacProbe {
                 public void onChangeEvent(CarPropertyValue value) {
                     if (value.getPropertyId() == ID_HVAC_IN_OUT_TEMP
                             && value.getAreaId() == AREA_INSIDE) {
-                        publishTemperature(toInt(value.getValue()));
+                        publishTemperature(value.getValue());
                     }
                 }
 
@@ -99,23 +106,47 @@ public class CarHvacProbe {
             }
             car.connect();
             log("car.connect() вызван, ждём onServiceConnected");
+            mainHandler.postDelayed(connectTimeout, CONNECT_TIMEOUT_MS);
         } catch (Throwable t) {
             log("ОШИБКА подключения к Car: " + t);
             notifyReady(false);
         }
     }
 
+    private final Runnable connectTimeout = new Runnable() {
+        @Override
+        public void run() {
+            if (!isHvacReady()) {
+                log("ТАЙМАУТ " + (CONNECT_TIMEOUT_MS / 1000)
+                        + " с: onServiceConnected не пришёл, HVAC не поднялся");
+                notifyReady(false);
+            }
+        }
+    };
+
     private void initHvacManager() {
         try {
-            hvacManager = (CarHvacManager) car.getCarManager(Car.HVAC_SERVICE);
-            if (hvacManager == null) {
+            CarHvacManager manager = (CarHvacManager) car.getCarManager(Car.HVAC_SERVICE);
+            if (manager == null) {
                 log("ОШИБКА: getCarManager(HVAC_SERVICE) вернул null");
                 notifyReady(false);
                 return;
             }
-            hvacManager.registerCallback(hvacCallback);
-            log("CarHvacManager готов, подписка оформлена");
+            hvacManager = manager;
+            log("CarHvacManager готов");
             notifyReady(true);
+
+            // Подписка на события — отдельно и не критично: чтение по кнопке и
+            // установка уровня от неё не зависят. Если она упадёт, пробник
+            // должен остаться рабочим и сказать об этом, а не притвориться
+            // мёртвым, оставив isHvacReady() противоречить статусу на экране.
+            try {
+                manager.registerCallback(hvacCallback);
+                log("подписка на события HVAC оформлена");
+            } catch (Throwable t) {
+                log("подписка на события HVAC не удалась (чтение и запись работают): " + t);
+            }
+
             readCabinTemperature();
         } catch (Throwable t) {
             // Ожидаемое место падения, если пакет не в whitelist головы:
@@ -159,6 +190,7 @@ public class CarHvacProbe {
     }
 
     public void disconnect() {
+        mainHandler.removeCallbacks(connectTimeout);
         try {
             if (hvacManager != null) {
                 hvacManager.unregisterCallback(hvacCallback);
@@ -172,14 +204,41 @@ public class CarHvacProbe {
         }
     }
 
-    /** Формула датчика головы: (raw - 84) / 2 = °C. Та же, что в HvacService. */
-    private void publishTemperature(int raw) {
-        final double celsius = (raw - 84) / 2.0;
-        mainHandler.post(() -> listener.onCabinTemperature(celsius, raw));
+    /**
+     * Формула датчика головы: (raw - 84) / 2 = °C. Та же, что в HvacService,
+     * вместе с его правилами валидности: значение приходит числом ИЛИ строкой,
+     * а raw < 0 — это sentinel «нет данных», а не -42 °C. Для диагностического
+     * инструмента показать -42 °C как рабочую температуру хуже, чем не
+     * показать ничего: это ложный вывод об исправности датчика.
+     */
+    private void publishTemperature(Object rawValue) {
+        Integer raw = parseRaw(rawValue);
+        if (raw == null) {
+            log("температура проигнорирована: неожиданный тип значения (" + rawValue + ")");
+            return;
+        }
+        if (raw < 0) {
+            log("температура проигнорирована: sentinel raw=" + raw + " (нет данных с датчика)");
+            return;
+        }
+        final int value = raw;
+        final double celsius = (value - 84) / 2.0;
+        mainHandler.post(() -> listener.onCabinTemperature(celsius, value));
     }
 
-    private static int toInt(Object value) {
-        return value instanceof Number ? ((Number) value).intValue() : 0;
+    /** package-private ради юнит-теста: на эмуляторе этот путь не проверить. */
+    static Integer parseRaw(Object value) {
+        if (value instanceof Number) {
+            return ((Number) value).intValue();
+        }
+        if (value instanceof String) {
+            try {
+                return (int) Double.parseDouble(((String) value).trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
     }
 
     private void notifyReady(boolean ready) {
