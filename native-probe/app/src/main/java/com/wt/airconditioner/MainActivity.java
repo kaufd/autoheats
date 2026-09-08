@@ -18,6 +18,8 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Locale;
 
 /**
@@ -29,27 +31,33 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private static final int[] LEVELS = {0, 1, 2, 3};
 
+    /**
+     * Насколько лог экрана может перерасти буфер сервиса, прежде чем его
+     * подрежут. Без запаса каждая строка сверх лимита требовала бы полной
+     * перерисовки TextView; с запасом это раз в сотню строк.
+     */
+    private static final int LOG_TRIM_SLACK = 100;
+
     private TextView statusView;
     private TextView temperatureView;
     private TextView logView;
     private ScrollView logScroll;
 
-    private final StringBuilder logBuffer = new StringBuilder();
+    private final Deque<String> logLines = new ArrayDeque<>();
 
     private SeatHeatService service;
+    private boolean bound;
 
     private final ServiceConnection connection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
             service = ((SeatHeatService.LocalBinder) binder).getService();
-            // Лог сервиса мог начаться до открытия экрана — забираем целиком.
-            logBuffer.setLength(0);
-            for (String line : service.logSnapshot()) {
-                logBuffer.append(line).append('\n');
-            }
-            logView.setText(logBuffer);
-            scrollLogToBottom();
-            service.setUiListener(MainActivity.this);
+            // Лог сервиса мог начаться до открытия экрана; setUiListener
+            // отдаёт его вместе с подпиской, чтобы ничего не потерялось и не
+            // задвоилось.
+            logLines.clear();
+            logLines.addAll(service.setUiListener(MainActivity.this));
+            renderLog();
         }
 
         @Override
@@ -77,6 +85,17 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             }
         });
         findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
+        findViewById(R.id.restartCar).setOnClickListener(v -> {
+            if (service == null) {
+                return;
+            }
+            // Статус ставим сами: пока новый CarHvacProbe не ответит,
+            // готовность неизвестна, и прежний зелёный «HVAC подключён»
+            // означал бы связь, которой уже нет.
+            statusView.setText("Переподключение к Car…");
+            statusView.setTextColor(0xFFFFC107);
+            service.restartCarConnection();
+        });
 
         Intent intent = new Intent(this, SeatHeatService.class);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -84,7 +103,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         } else {
             startService(intent);
         }
-        bindService(intent, connection, 0);
+        bound = bindService(intent, connection, 0);
+        if (!bound) {
+            statusView.setText("Сервис не привязался");
+        }
     }
 
     @Override
@@ -92,7 +114,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         if (service != null) {
             service.setUiListener(null);
         }
-        unbindService(connection);
+        if (bound) {
+            unbindService(connection);
+            bound = false;
+        }
         // Сервис намеренно не останавливаем: он должен пережить закрытие
         // экрана, иначе автовыключение по зажиганию перестанет работать.
         super.onDestroy();
@@ -122,8 +147,21 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         if (clipboard == null) {
             return;
         }
-        clipboard.setPrimaryClip(ClipData.newPlainText("AutoHeatProbe", logBuffer.toString()));
+        clipboard.setPrimaryClip(ClipData.newPlainText("AutoHeatProbe", logText()));
         Toast.makeText(this, "Лог скопирован", Toast.LENGTH_SHORT).show();
+    }
+
+    private String logText() {
+        StringBuilder text = new StringBuilder();
+        for (String line : logLines) {
+            text.append(line).append('\n');
+        }
+        return text.toString();
+    }
+
+    private void renderLog() {
+        logView.setText(logText());
+        scrollLogToBottom();
     }
 
     private void scrollLogToBottom() {
@@ -135,9 +173,19 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     @Override
     public void onLogLine(String line) {
         runOnUiThread(() -> {
-            logBuffer.append(line).append('\n');
-            logView.setText(logBuffer);
-            scrollLogToBottom();
+            logLines.addLast(line);
+            // Сервис держит 500 строк — экран не должен расти дальше:
+            // за долгую поездку поток температурных событий иначе превратит
+            // каждую строку в перерисовку всё более длинного текста.
+            if (logLines.size() > SeatHeatService.LOG_CAPACITY + LOG_TRIM_SLACK) {
+                while (logLines.size() > SeatHeatService.LOG_CAPACITY) {
+                    logLines.removeFirst();
+                }
+                renderLog();
+            } else {
+                logView.append(line + "\n");
+                scrollLogToBottom();
+            }
         });
     }
 

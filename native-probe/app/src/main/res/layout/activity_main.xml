@@ -80,6 +80,16 @@
                 android:layout_weight="1"
                 android:text="Копировать лог" />
         </LinearLayout>
+
+        <!-- Проверка пересоединения без перезапуска CarService: настоящий
+             onServiceDisconnected так не вызвать, но весь наш код разрыва и
+             повторной подписки проходится целиком. -->
+        <Button
+            android:id="@+id/restartCar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Переподключиться к Car" />
     </LinearLayout>
 
     <ScrollView

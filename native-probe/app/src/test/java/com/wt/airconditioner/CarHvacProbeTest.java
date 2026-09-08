@@ -71,12 +71,20 @@ public class CarHvacProbeTest {
 
     @Test
     public void treatsEveryOtherStateAsIgnitionOff() {
-        // UNDEFINED, LOCK, OFF, ACC, START — то же правило, что в
-        // BackgroundRuntimeController.handleIgnition.
-        for (int state : new int[]{0, 1, 2, 3, 5}) {
+        // UNDEFINED, LOCK, OFF, ACC — правило из
+        // BackgroundRuntimeController.handleIgnition. START сюда не входит.
+        for (int state : new int[]{0, 1, 2, 3}) {
             assertEquals("состояние " + state, Boolean.FALSE,
                     CarHvacProbe.ignitionOn(new int[]{state}));
         }
+    }
+
+    @Test
+    public void doesNotTreatStarterAsIgnitionOff() {
+        // Лог с головы: ON → «не ON (5)» → выключили оба сиденья → ON, всё за
+        // секунду. START — это запуск двигателя, а не уход из машины, поэтому
+        // состояние не меняется. Здесь native расходится с Flutter-версией.
+        assertNull(CarHvacProbe.ignitionOn(new int[]{5}));
     }
 
     @Test

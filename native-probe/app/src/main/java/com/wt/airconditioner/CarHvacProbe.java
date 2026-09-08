@@ -7,6 +7,7 @@ import android.car.hardware.CarPropertyValue;
 import android.car.hardware.CarSensorEvent;
 import android.car.hardware.CarSensorManager;
 import android.car.hardware.hvac.CarHvacManager;
+import android.car.hardware.power.CarPowerManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.ServiceConnection;
@@ -41,6 +42,14 @@ public class CarHvacProbe {
     /** IgnitionState.IGNITION_STATE_ON — всё остальное считается «зажигание не включено». */
     private static final int IGNITION_STATE_ON = 4;
 
+    /**
+     * IgnitionState.IGNITION_STATE_START — проворот стартера. Машину заводят,
+     * а не покидают, поэтому состояние пропускается: считать его «выключено»
+     * значит гасить подогрев ровно в момент запуска двигателя. Видно в логе с
+     * головы: ON → «не ON (5)» → выключили оба сиденья → ON, за одну секунду.
+     */
+    private static final int IGNITION_STATE_START = 5;
+
     public interface Listener {
         void onLog(String message);
 
@@ -52,6 +61,12 @@ public class CarHvacProbe {
 
         /** Событие зажигания; false — любое состояние, кроме ON. */
         void onIgnition(boolean on);
+
+        /**
+         * Голова проснулась после сна. Для приложения это то же самое, что
+         * запуск: процесс пережил короткую стоянку, но в машину сели заново.
+         */
+        void onWakeUp();
     }
 
     private final Listener listener;
@@ -85,6 +100,7 @@ public class CarHvacProbe {
             };
 
     private CarSensorManager sensorManager;
+    private CarPowerManager powerManager;
 
     private final CarSensorManager.OnSensorChangedListener sensorListener =
             new CarSensorManager.OnSensorChangedListener() {
@@ -96,7 +112,7 @@ public class CarHvacProbe {
                     }
                     Boolean on = ignitionOn(event.intValues);
                     if (on == null) {
-                        log("событие зажигания без значения — пропущено");
+                        log("зажигание: пропущено — " + skipReason(event.intValues));
                         return;
                     }
                     final boolean ignitionOn = on;
@@ -106,28 +122,53 @@ public class CarHvacProbe {
             };
 
     /**
-     * Зажигание включено только в состоянии ON; ACC, LOCK, OFF, START и
-     * UNDEFINED трактуются как выключенное — то же правило, что в
-     * BackgroundRuntimeController.handleIgnition. null — событие без значения.
+     * Зажигание включено только в состоянии ON; ACC, LOCK, OFF и UNDEFINED
+     * трактуются как выключенное — правило из
+     * BackgroundRuntimeController.handleIgnition. Отличие одно: START не
+     * считается выключением, см. IGNITION_STATE_START. null — «состояние не
+     * менять»: событие без значения или START.
      */
     static Boolean ignitionOn(int[] intValues) {
         if (intValues == null || intValues.length == 0) {
             return null;
         }
+        if (intValues[0] == IGNITION_STATE_START) {
+            return null;
+        }
         return intValues[0] == IGNITION_STATE_ON;
+    }
+
+    /** Почему событие зажигания пропущено — для строки в логе. */
+    private static String skipReason(int[] intValues) {
+        return intValues == null || intValues.length == 0
+                ? "событие без значения"
+                : "START (" + intValues[0] + ") — двигатель запускается";
     }
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
         public void onServiceConnected(ComponentName name, IBinder binder) {
-            mainHandler.post(() -> serviceConnected = true);
+            serviceConnected = true;
+            // Соединение состоялось — сторожевой таймаут больше не нужен.
+            // Иначе после разрыва связи он сработает по старому расписанию и
+            // объявит несостоявшимся подключение, которое на самом деле было.
+            mainHandler.removeCallbacks(connectTimeout);
             log("onServiceConnected: " + name);
             initHvacManager();
+            // Зажигание поднимаем независимо от исхода HVAC: без него теряется
+            // автовыключение сидений, а отказ HVAC (например, пакет не в
+            // whitelist) сам по себе не значит, что датчик недоступен.
+            initSensorManager();
+            initPowerManager();
         }
 
         @Override
         public void onServiceDisconnected(ComponentName name) {
-            log("onServiceDisconnected");
+            log("onServiceDisconnected: жду автоматического переподключения");
+            serviceConnected = false;
+            // Оба менеджера принадлежат умершему CarService: если оставить
+            // ссылки, повторная подписка молча перезапишет их, а старый
+            // listener так и останется зарегистрированным на мёртвом инстансе.
             if (hvacManager != null) {
                 try {
                     hvacManager.unregisterCallback(hvacCallback);
@@ -136,7 +177,25 @@ public class CarHvacProbe {
                 }
                 hvacManager = null;
             }
+            if (sensorManager != null) {
+                try {
+                    sensorManager.unregisterListener(sensorListener);
+                } catch (Exception e) {
+                    log("unregisterListener error: " + e);
+                }
+                sensorManager = null;
+            }
+            powerManager = null;
             notifyReady(false);
+            // Своего реконнекта здесь намеренно нет. Car.createCar биндится с
+            // BIND_AUTO_CREATE, поэтому систему держит наш же биндинг: она сама
+            // перепривяжется к поднявшемуся CarService и снова вызовет
+            // onServiceConnected, где менеджеры оформляются заново. Ручной
+            // car.connect() на том же объекте на Android 9 либо бросит
+            // IllegalStateException (состояние ещё не DISCONNECTED), либо
+            // сделает второй bindService поверх живого биндинга — то есть
+            // добавит недетерминированности ровно в тот путь, который должен
+            // быть предсказуемым.
         }
     };
 
@@ -202,7 +261,6 @@ public class CarHvacProbe {
             }
 
             readCabinTemperature();
-            initSensorManager();
         } catch (Throwable t) {
             // Ожидаемое место падения, если пакет не в whitelist головы:
             // здесь прилетает SecurityException "… is not in white list!".
@@ -227,8 +285,108 @@ public class CarHvacProbe {
                     CarSensorManager.SENSOR_RATE_NORMAL);
             sensorManager = manager;
             log("подписка на зажигание оформлена");
+            publishCurrentIgnition(manager);
         } catch (Throwable t) {
             log("подписка на зажигание не удалась (подогрев работает): " + t);
+        }
+    }
+
+    /**
+     * Текущее состояние зажигания сразу после подписки. Без этого сервис,
+     * поднявшийся при уже выключенном зажигании (автозапуск после
+     * перезагрузки, реконнект к CarService), дождётся только следующего
+     * изменения — а его может не быть, и сиденья останутся включёнными.
+     */
+    private void publishCurrentIgnition(CarSensorManager manager) {
+        try {
+            CarSensorEvent event = manager.getLatestSensorEvent(
+                    CarSensorManager.SENSOR_TYPE_IGNITION_STATE);
+            if (event == null) {
+                log("текущее зажигание неизвестно: getLatestSensorEvent вернул null");
+                return;
+            }
+            Boolean on = ignitionOn(event.intValues);
+            if (on == null) {
+                log("текущее зажигание не определено: " + skipReason(event.intValues));
+                return;
+            }
+            final boolean ignitionOn = on;
+            log("текущее зажигание: " + (ignitionOn ? "ON" : "не ON (" + event.intValues[0] + ")"));
+            mainHandler.post(() -> listener.onIgnition(ignitionOn));
+        } catch (Throwable t) {
+            log("текущее зажигание прочитать не удалось: " + t);
+        }
+    }
+
+    /**
+     * Причина, по которой поднялось ГУ, и события засыпания. Отвечает на
+     * вопрос, который иначе не проверить: просыпается ли голова при
+     * дистанционном запуске двигателя. Если да, `getBootReason()` вернёт
+     * REMOTE_START, и подогрев можно готовить к приходу водителя; если нет,
+     * приложение в этот момент физически не выполняется.
+     *
+     * SUSPEND_ENTER / SHUTDOWN_ENTER заодно показывают, засыпает голова или
+     * выключается совсем — от этого зависит, доживает ли сервис до
+     * возвращения.
+     */
+    private void initPowerManager() {
+        try {
+            CarPowerManager manager = (CarPowerManager) car.getCarManager(Car.POWER_SERVICE);
+            if (manager == null) {
+                log("питание: getCarManager(POWER_SERVICE) вернул null");
+                return;
+            }
+            powerManager = manager;
+            log("причина запуска ГУ: " + bootReasonName(manager.getBootReason()));
+            manager.setListener(this::onPowerState, mainHandler::post);
+            log("подписка на состояние питания оформлена");
+        } catch (Throwable t) {
+            log("питание недоступно (на работу подогрева не влияет): " + t);
+        }
+    }
+
+    /**
+     * Голова засыпает на первые ~30 минут стоянки и только потом выключается
+     * совсем. Значит после короткой остановки процесс не перезапускается, и
+     * без этого события «новая посадка» осталась бы незамеченной: сервис
+     * считал бы, что поездка не кончалась.
+     */
+    private void onPowerState(int state) {
+        log("состояние питания: " + powerStateName(state));
+        if (state == CarPowerManager.CarPowerStateListener.SUSPEND_EXIT) {
+            listener.onWakeUp();
+        }
+    }
+
+    private static String bootReasonName(int reason) {
+        switch (reason) {
+            case CarPowerManager.BOOT_REASON_USER_POWER_ON:
+                return "USER_POWER_ON (кнопка)";
+            case CarPowerManager.BOOT_REASON_DOOR_UNLOCK:
+                return "DOOR_UNLOCK (разблокировка)";
+            case CarPowerManager.BOOT_REASON_TIMER:
+                return "TIMER (по таймеру)";
+            case CarPowerManager.BOOT_REASON_DOOR_OPEN:
+                return "DOOR_OPEN (открыта дверь)";
+            case CarPowerManager.BOOT_REASON_REMOTE_START:
+                return "REMOTE_START (дистанционный запуск)";
+            default:
+                return "неизвестна (" + reason + ")";
+        }
+    }
+
+    private static String powerStateName(int state) {
+        switch (state) {
+            case CarPowerManager.CarPowerStateListener.SHUTDOWN_CANCELLED:
+                return "SHUTDOWN_CANCELLED";
+            case CarPowerManager.CarPowerStateListener.SHUTDOWN_ENTER:
+                return "SHUTDOWN_ENTER (выключение)";
+            case CarPowerManager.CarPowerStateListener.SUSPEND_ENTER:
+                return "SUSPEND_ENTER (засыпание)";
+            case CarPowerManager.CarPowerStateListener.SUSPEND_EXIT:
+                return "SUSPEND_EXIT (пробуждение)";
+            default:
+                return "неизвестно (" + state + ")";
         }
     }
 
@@ -249,38 +407,63 @@ public class CarHvacProbe {
         }
     }
 
-    /** level 0..3, где 0 — выключено. */
-    public void setSeatHeat(boolean isDriver, int level) {
+    /**
+     * level 0..3, где 0 — выключено. Возвращает, дошла ли запись до
+     * автомобиля: вызывающий обязан знать, что выключение сидений не
+     * состоялось, — молчаливая потеря этой команды оставляет подогрев
+     * включённым до следующей поездки.
+     */
+    public boolean setSeatHeat(boolean isDriver, int level) {
         String seat = isDriver ? "водитель" : "пассажир";
         if (!isHvacReady()) {
             log("setSeatHeat(" + seat + ", " + level + ") пропущено: HVAC не готов");
-            return;
+            return false;
         }
         int area = isDriver ? VehicleAreaSeat.SEAT_MAIN_DRIVER : VehicleAreaSeat.SEAT_PASSENGER;
         try {
             hvacManager.setIntProperty(VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, area, level);
             log("setSeatHeat OK: " + seat + " → " + level);
+            return true;
         } catch (Exception e) {
             log("ОШИБКА setSeatHeat(" + seat + ", " + level + "): " + e);
+            return false;
         }
     }
 
     public void disconnect() {
         mainHandler.removeCallbacks(connectTimeout);
-        try {
-            if (sensorManager != null) {
+        // Каждый шаг под своим catch: падение первого unregister не должно
+        // оставить car соединённым, а callback — зарегистрированным.
+        if (sensorManager != null) {
+            try {
                 sensorManager.unregisterListener(sensorListener);
-                sensorManager = null;
+            } catch (Exception e) {
+                log("ОШИБКА unregisterListener: " + e);
             }
-            if (hvacManager != null) {
+            sensorManager = null;
+        }
+        if (hvacManager != null) {
+            try {
                 hvacManager.unregisterCallback(hvacCallback);
-                hvacManager = null;
+            } catch (Exception e) {
+                log("ОШИБКА unregisterCallback: " + e);
             }
-            if (car != null) {
+            hvacManager = null;
+        }
+        if (powerManager != null) {
+            try {
+                powerManager.clearListener();
+            } catch (Exception e) {
+                log("ОШИБКА clearListener: " + e);
+            }
+            powerManager = null;
+        }
+        if (car != null) {
+            try {
                 car.disconnect();
+            } catch (Exception e) {
+                log("ОШИБКА car.disconnect: " + e);
             }
-        } catch (Exception e) {
-            log("ОШИБКА disconnect: " + e);
         }
     }
 

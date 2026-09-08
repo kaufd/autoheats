@@ -37,7 +37,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     private static final int NOTIFICATION_ID = 888;
 
     /** Сколько строк лога держим для UI. Экран — единственный вывод: adb нет. */
-    private static final int LOG_CAPACITY = 500;
+    static final int LOG_CAPACITY = 500;
 
     /** Слушатель UI; сервис работает и без него. */
     public interface UiListener {
@@ -60,9 +60,36 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
     private CarHvacProbe probe;
     private UiListener uiListener;
-    private boolean hvacReady;
+
+    /** null — готовность ещё не известна; реплеить такое в UI нельзя. */
+    private Boolean hvacReady;
     private Double lastCelsius;
     private Integer lastRaw;
+
+    /**
+     * Сиденья подтверждённо выключены. Голова отдаёт выключение зажигания
+     * лестницей состояний (ACC → OFF), и без этого флага каждая ступень
+     * повторяла бы уже выполненное выключение, забивая лог дублями.
+     *
+     * На старте — true, и это не догадка: подогрев запитан от ГУ и гаснет
+     * вместе с ним, так что к моменту запуска сервиса сиденья заведомо
+     * выключены. Иначе сервис, перезапущенный при живом ГУ в ACC
+     * (START_STICKY, обновление, краш), погасил бы подогрев, который водитель
+     * включил сам и продолжает им пользоваться.
+     */
+    private boolean seatsOff = true;
+
+    /**
+     * В этой сессии зажигание уже было ON — то есть машина ехала, и следующее
+     * «не ON» означает конец поездки.
+     *
+     * ГУ на этой голове стартует от открытия водительской двери, задолго до
+     * зажигания, и подогрев в этот момент уже физически работает (проверено на
+     * машине: сиденья греют при выключенном зажигании). Без этого флага первое
+     * же событие «не ON» гасило бы подогрев, включённый пока человек садится,
+     * — ровно то, ради чего приложение и существует.
+     */
+    private boolean sawIgnitionOn;
 
     @Override
     public void onCreate() {
@@ -94,25 +121,35 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
     // --- API для Activity ---
 
-    public void setUiListener(UiListener listener) {
-        this.uiListener = listener;
-        if (listener == null) {
-            return;
-        }
-        // Отдаём накопленное: события до открытия экрана не должны пропасть.
-        listener.onHvacReady(hvacReady);
-        if (lastCelsius != null) {
-            listener.onCabinTemperature(lastCelsius, lastRaw);
-        }
-    }
-
-    public List<String> logSnapshot() {
+    /**
+     * Подключает экран и отдаёт ему накопленное состояние. Лог возвращается
+     * отсюда же под тем же замком, что и его пополнение: иначе строка,
+     * пришедшая между снимком и подпиской, потерялась бы.
+     */
+    public List<String> setUiListener(UiListener listener) {
         synchronized (logLines) {
-            return new ArrayList<>(logLines);
+            this.uiListener = listener;
+            if (listener == null) {
+                return new ArrayList<>();
+            }
+            List<String> snapshot = new ArrayList<>(logLines);
+            // hvacReady == null — ответа от Car ещё нет. Реплей false выглядел
+            // бы на экране как вердикт «HVAC недоступен», хотя подключение
+            // просто не завершилось: для пробника это ложный диагноз.
+            if (hvacReady != null) {
+                listener.onHvacReady(hvacReady);
+            }
+            if (lastCelsius != null) {
+                listener.onCabinTemperature(lastCelsius, lastRaw);
+            }
+            return snapshot;
         }
     }
 
     public void setSeatHeat(boolean isDriver, int level) {
+        if (level > 0) {
+            seatsOff = false;
+        }
         probe.setSeatHeat(isDriver, level);
     }
 
@@ -120,20 +157,41 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         probe.readCabinTemperature();
     }
 
+    /**
+     * Рвёт связь с Car и поднимает её заново. Нужно затем, что перезапуск
+     * самого CarService на голове недоступен: настоящий onServiceDisconnected
+     * так не вызвать, но весь наш код — teardown обоих менеджеров, повторный
+     * connect, переоформление подписок, чтение стартового зажигания —
+     * проходится целиком. Остаётся непроверенным только приход коллбэка от
+     * системы, а его делает платформа.
+     */
+    public void restartCarConnection() {
+        onLog("--- ручное переподключение к Car ---");
+        if (probe != null) {
+            probe.disconnect();
+        }
+        // Готовность снова неизвестна: реплей старого значения соврал бы
+        // экрану, который откроют после переподключения.
+        hvacReady = null;
+        probe = new CarHvacProbe(this, this);
+    }
+
     // --- CarHvacProbe.Listener ---
 
     @Override
     public void onLog(String message) {
         String line = timeFormat.format(new Date()) + "  " + message;
+        // Пополнение буфера и выдача строки экрану — под одним замком с
+        // setUiListener: иначе строка, добавленная между снимком и подпиской,
+        // ушла бы в UI дважды.
         synchronized (logLines) {
             if (logLines.size() >= LOG_CAPACITY) {
                 logLines.removeFirst();
             }
             logLines.addLast(line);
-        }
-        UiListener listener = uiListener;
-        if (listener != null) {
-            listener.onLogLine(line);
+            if (uiListener != null) {
+                uiListener.onLogLine(line);
+            }
         }
     }
 
@@ -159,15 +217,59 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     }
 
     @Override
+    public void onWakeUp() {
+        // Короткая стоянка: голова спала, процесс жив, но в машину сели
+        // заново. Состояние сессии начинается с нуля — иначе первое же «не ON»
+        // после пробуждения сочли бы концом старой поездки, а автоподогрев,
+        // когда он появится, не запустился бы вовсе.
+        onLog("голова проснулась → новая сессия");
+        sawIgnitionOn = false;
+        seatsOff = true;
+    }
+
+    @Override
     public void onIgnition(boolean on) {
         if (on) {
+            if (!sawIgnitionOn) {
+                onLog("зажигание ON — с этого момента выключение по зажиганию активно");
+            }
+            sawIgnitionOn = true;
             return;
         }
-        // Зажигание выключено — гасим оба сиденья, чтобы подогрев не остался
-        // включённым до следующей поездки.
+        if (!sawIgnitionOn) {
+            // Машину ещё не заводили: ГУ подняли открытием двери, человек
+            // садится. Подогрев в этот момент уже может работать — гасить его
+            // здесь значит ломать то, ради чего приложение и нужно.
+            return;
+        }
+        if (seatsOff) {
+            // ACC → OFF идут одно за другим; второе выключение ничего не
+            // меняет, только прячет в логе то, что важно.
+            return;
+        }
+        // Зажигание выключено — гасим оба сиденья.
+        //
+        // Одной попытки достаточно: проверка на голове показала, что при
+        // выключении зажигания ГУ гаснет мгновенно (с открытой дверью —
+        // сразу), унося с собой наш процесс, и тем же выключением
+        // обесточивается сам подогрев. Ретраи здесь просто не успели бы
+        // выполниться, а если бы успели — гасить было бы уже нечего.
         onLog("зажигание выключено → выключаю оба сиденья");
-        probe.setSeatHeat(true, 0);
-        probe.setSeatHeat(false, 0);
+        shutdownSeats();
+    }
+
+    /**
+     * Выключение обоих сидений. Обе записи учитываются независимо: если
+     * прошла только одна, состояние не считается подтверждённым и следующее
+     * событие зажигания попробует ещё раз.
+     */
+    private void shutdownSeats() {
+        boolean driver = probe.setSeatHeat(true, 0);
+        boolean passenger = probe.setSeatHeat(false, 0);
+        seatsOff = driver && passenger;
+        if (!seatsOff) {
+            onLog("ВНИМАНИЕ: выключение сидений не подтверждено");
+        }
     }
 
     // --- уведомление ---

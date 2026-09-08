@@ -3,12 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Permission envelope зеркалит рабочее приложение (см. CLAUDE.md: набор
-         не тримить без smoke-теста на голове). Из него убрано только то, чего
-         на этапе 1 нет физически: foreground-service, boot, уведомления,
+         не тримить без smoke-теста на голове). Из него не взято только то,
+         чего в пробнике нет физически: будильники, вибрация, wake lock,
          accessibility. Сверено: у changan_first-main/example и SeatHeat_v2 по
-         34 permission, здесь 24 — подмножество, ничего лишнего.
+         34 permission, здесь 28 — подмножество, ничего лишнего.
 
-         Lint ругается на три из них, и все три есть в обоих оригиналах.
+         Lint ругается на четыре из них, и все четыре есть в обоих оригиналах.
          Правила писаны для публикации в Play Store; здесь sideload на AAOS,
          где envelope доказанно работает, а урезание грозит потерей цикла
          ручной прошивки. Поэтому подавляем адресно, а не удаляем:
@@ -80,6 +80,10 @@
             android:enabled="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <!-- MTK-головы при быстром старте шлют vendor-действие вместо
+                     BOOT_COMPLETED; фильтр ничего не стоит, см. BootReceiver. -->
+                <action android:name="android.intent.action.ACTION_BOOT_IPO" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
             </intent-filter>
         </receiver>
     </application>
