@@ -45,7 +45,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
         void onHvacReady(boolean ready);
 
-        void onCabinTemperature(double celsius, int raw);
+        /** raw может быть null для температуры, введённой в debug-инжекторе. */
+        void onCabinTemperature(double celsius, Integer raw);
 
         /** Уровень изменился — не важно, вручную, каскадом или выключением. */
         void onSeatLevel(Seat seat, int level);
@@ -125,6 +126,9 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
     @Override
     public void onDestroy() {
+        if (autoHeat != null) {
+            autoHeat.stopAll();
+        }
         if (probe != null) {
             probe.disconnect();
         }
@@ -161,16 +165,18 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         }
     }
 
-    public void setSeatHeat(Seat seat, int level) {
+    public boolean setSeatHeat(Seat seat, int level) {
+        if (probe == null || !probe.setSeatHeat(seat == Seat.DRIVER, level)) {
+            // `levels` содержит только подтверждённое состояние автомобиля.
+            // Иначе UI и engine могли бы перейти вперёд после потерянной записи.
+            return false;
+        }
         if (level > 0) {
             seatsOff = false;
         }
         levels.put(seat, level);
-        probe.setSeatHeat(seat == Seat.DRIVER, level);
-        UiListener listener = uiListener;
-        if (listener != null) {
-            listener.onSeatLevel(seat, level);
-        }
+        notifySeatLevel(seat, level);
+        return true;
     }
 
     /**
@@ -180,6 +186,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     public void setManualLevel(Seat seat, int level) {
         settings.setManualLevel(seat, level);
         setSeatHeat(seat, level);
+    }
+
+    /** Очищает источник лога, а не только его текущее представление в Activity. */
+    public void clearLogs() {
+        synchronized (logLines) {
+            logLines.clear();
+        }
     }
 
     public int levelOf(Seat seat) {
@@ -401,16 +414,24 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     private void shutdownSeats() {
         boolean driver = probe.setSeatHeat(true, 0);
         boolean passenger = probe.setSeatHeat(false, 0);
-        levels.put(Seat.DRIVER, 0);
-        levels.put(Seat.PASSENGER, 0);
-        UiListener listener = uiListener;
-        if (listener != null) {
-            listener.onSeatLevel(Seat.DRIVER, 0);
-            listener.onSeatLevel(Seat.PASSENGER, 0);
+        if (driver) {
+            levels.put(Seat.DRIVER, 0);
+            notifySeatLevel(Seat.DRIVER, 0);
+        }
+        if (passenger) {
+            levels.put(Seat.PASSENGER, 0);
+            notifySeatLevel(Seat.PASSENGER, 0);
         }
         seatsOff = driver && passenger;
         if (!seatsOff) {
             onLog("ВНИМАНИЕ: выключение сидений не подтверждено");
+        }
+    }
+
+    private void notifySeatLevel(Seat seat, int level) {
+        UiListener listener = uiListener;
+        if (listener != null) {
+            listener.onSeatLevel(seat, level);
         }
     }
 

@@ -43,7 +43,7 @@ final class PresetsPanel {
     private final Activity activity;
     private final PresetStore store;
     private final OnApply onApply;
-    private final int accent;
+    private int accent;
 
     private final LinearLayout list;
     private final LinearLayout levelsContainer;
@@ -75,6 +75,22 @@ final class PresetsPanel {
         activity.findViewById(R.id.presetSave).setOnClickListener(v -> askNameAndSave());
         activity.findViewById(R.id.presetNew).setOnClickListener(v -> resetEditor());
 
+        render();
+    }
+
+    /** Перерисовывает динамический UI, сохраняя выбранное расписание. */
+    void setAccent(int accent) {
+        int thresholdIndex = thresholdBar.getProgress();
+        this.accent = accent;
+        buildSeatSegments();
+        buildLevelSliders();
+        buildThreshold();
+        thresholdBar.setProgress(thresholdIndex);
+        buildThresholdLabels();
+        activity.findViewById(R.id.presetDivider)
+                .setBackgroundColor(withAlpha(accent, 70));
+        paintButton(activity.findViewById(R.id.presetSave));
+        paintButton(activity.findViewById(R.id.presetNew));
         render();
     }
 

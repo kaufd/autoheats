@@ -26,7 +26,8 @@ final class AutoHeatEngine {
 
     /** Куда уходит решение о новом уровне подогрева. */
     interface LevelCallback {
-        void onLevel(int level);
+        /** false — внешний исполнитель не подтвердил запись уровня. */
+        boolean onLevel(int level);
     }
 
     /** Диагностика на экран; в тестах обычно не нужна. */
@@ -144,7 +145,9 @@ final class AutoHeatEngine {
             cancelTimer(seat);
             activeLevels.remove(seat);
             if (offSent.add(seat)) {
-                callback.onLevel(0);
+                if (!callback.onLevel(0)) {
+                    offSent.remove(seat);
+                }
             }
             return;
         }
@@ -185,10 +188,17 @@ final class AutoHeatEngine {
 
     private void stepDown(Seat seat, int newLevel, HeatSequence sequence,
             LevelCallback callback) {
-        activeLevels.put(seat, newLevel);
         log(String.format(Locale.US, "%s: уровень %d (в салоне %.1f °C)",
                 seat.title, newLevel, currentTemperature));
-        callback.onLevel(newLevel);
+        if (!callback.onLevel(newLevel)) {
+            // Не переводим доменное состояние вперёд, если автомобиль не
+            // подтвердил команду. Следующее событие температуры сможет
+            // повторить тот же переход.
+            cancelTimer(seat);
+            activeLevels.remove(seat);
+            return;
+        }
+        activeLevels.put(seat, newLevel);
 
         if (newLevel <= 0) {
             finishedPlans.put(seat, sequence.planKey());

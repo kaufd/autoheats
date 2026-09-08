@@ -292,9 +292,13 @@ public class CarHvacProbe {
                 log("датчик зажигания недоступен: getCarManager(SENSOR_SERVICE) вернул null");
                 return;
             }
-            manager.registerListener(sensorListener,
+            boolean registered = manager.registerListener(sensorListener,
                     CarSensorManager.SENSOR_TYPE_IGNITION_STATE,
                     CarSensorManager.SENSOR_RATE_NORMAL);
+            if (!registered) {
+                log("подписка на зажигание отклонена CarSensorManager");
+                return;
+            }
             sensorManager = manager;
             log("подписка на зажигание оформлена");
             publishCurrentIgnition(manager);

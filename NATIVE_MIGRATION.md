@@ -1,7 +1,7 @@
 # Миграция AutoHeat с Flutter на native Android
 
 **Ветка**: `native/probe-hvac` (от `master`)
-**Состояние**: этапы 1 и 2 подтверждены на голове; в работе этап 3
+**Состояние**: native-миграция завершена; текущая ветка содержит production-рефакторинг UI
 **Дата**: 2026-09-08
 
 ---
@@ -86,7 +86,10 @@ d11afb2  Правки пробника по второму ревью
 |---|---|
 | `CarHvacProbe.java` | мост к `android.car`: подключение, температура, уровни сидений, датчик зажигания |
 | `SeatHeatService.java` | foreground-сервис — владелец соединения с `Car`, кольцевой лог, выключение по зажиганию |
-| `MainActivity.java` | экран: вкладки, темы, сиденья с режимами и уровнями, лог |
+| `MainActivity.java` | lifecycle Activity, вкладки, темы, настройки и wiring UI-контроллеров |
+| `ServiceBindingController.java` | binding foreground-сервиса и передача snapshot состояния экрану |
+| `SeatHeatUiController.java` | controls главной вкладки; два фиксированных сиденья без локальной копии runtime-состояния |
+| `LogUiController.java` | отображение лога, очистка сервисного буфера и debug-инжектор температуры |
 | `AutoHeatEngine.java` | каскад 3→2→1→0 на чистой Java; время — через `Scheduler` |
 | `TemperatureConstants.java` | расписания по диапазонам температуры |
 | `Preset.java`, `PresetStore.java` | пресеты: текстовый формат и их список |
@@ -436,7 +439,7 @@ NotoSans, палитра (`ColorConstants`, `AppThemeColors`) и расклад�
 
 APK вырос со 195 KB до 2 MB — за счёт фонов и шрифта; против 18 MB у Flutter.
 
-## Этап 3: что делать дальше
+## Исторический план этапа 3 (выполнен)
 
 **Тесты портируются первыми.** `lib/src/constants/temperature_constants.dart`
 и `lib/src/services/auto_heat_service.dart` вместе со 143 dart-тестами — это
