@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Палитра перенесена из lib/src/config/color_constants.dart и theme_colors.dart
+     дословно: приложение должно выглядеть так же, как Flutter-версия. -->
+<resources>
+    <color name="accent_green">#FF289676</color>
+    <color name="accent_red">#FF951019</color>
+    <color name="accent_white">#FFCDD5D3</color>
+
+    <color name="system_white">#FFFFFFFF</color>
+    <color name="system_grey">#FFACACAC</color>
+    <color name="system_black">#FF000000</color>
+
+    <!-- Цвет значения температуры по диапазонам, как в CabinTemperatureDisplay -->
+    <color name="temp_cold">#FF2196F3</color>
+    <color name="temp_cool">#FF03A9F4</color>
+    <color name="temp_warm">#FFFF9800</color>
+
+    <color name="text_body">#FFFFFFFF</color>
+    <color name="text_muted">#B3FFFFFF</color>
+    <color name="transparent">#00000000</color>
+</resources>

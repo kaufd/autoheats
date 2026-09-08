@@ -46,6 +46,9 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         void onHvacReady(boolean ready);
 
         void onCabinTemperature(double celsius, int raw);
+
+        /** Уровень изменился — не важно, вручную, каскадом или выключением. */
+        void onSeatLevel(Seat seat, int level);
     }
 
     public class LocalBinder extends Binder {
@@ -80,6 +83,9 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      * включил сам и продолжает им пользоваться.
      */
     private boolean seatsOff = true;
+
+    /** Что сейчас выставлено на каждом сиденье — для экрана и для реплея. */
+    private final java.util.Map<Seat, Integer> levels = new java.util.EnumMap<>(Seat.class);
 
     /**
      * В этой сессии зажигание уже было ON — то есть машина ехала, и следующее
@@ -146,15 +152,57 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
             if (lastCelsius != null) {
                 listener.onCabinTemperature(lastCelsius, lastRaw);
             }
+            for (Seat seat : Seat.values()) {
+                listener.onSeatLevel(seat, levelOf(seat));
+            }
             return snapshot;
         }
     }
 
-    public void setSeatHeat(boolean isDriver, int level) {
+    public void setSeatHeat(Seat seat, int level) {
         if (level > 0) {
             seatsOff = false;
         }
-        probe.setSeatHeat(isDriver, level);
+        levels.put(seat, level);
+        probe.setSeatHeat(seat == Seat.DRIVER, level);
+        UiListener listener = uiListener;
+        if (listener != null) {
+            listener.onSeatLevel(seat, level);
+        }
+    }
+
+    /**
+     * Ручная установка уровня: запоминается в настройках, чтобы экран после
+     * перезапуска показывал то же, что греет в машине.
+     */
+    public void setManualLevel(Seat seat, int level) {
+        settings.setManualLevel(seat, level);
+        setSeatHeat(seat, level);
+    }
+
+    public int levelOf(Seat seat) {
+        Integer level = levels.get(seat);
+        return level == null ? settings.manualLevel(seat) : level;
+    }
+
+    public HeatMode modeOf(Seat seat) {
+        return settings.mode(seat);
+    }
+
+    /**
+     * Смена режима сиденья. «Вручную» останавливает каскад, но уровень не
+     * трогает: человек мог только что его выставить. «Авто» запускает каскад
+     * сразу, если температура уже известна, — ждать следующего зажигания
+     * незачем, а по ON он всё равно перезапустится.
+     */
+    public void setMode(Seat seat, HeatMode mode) {
+        settings.setMode(seat, mode);
+        onLog("режим " + seat.title + ": " + mode.title);
+        if (mode == HeatMode.AUTO) {
+            startCascade(seat);
+        } else {
+            autoHeat.stop(seat);
+        }
     }
 
     public void readCabinTemperature() {
@@ -179,21 +227,6 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         autoHeat.setTemperature(celsius);
     }
 
-    public boolean isAutoEnabled(Seat seat) {
-        return settings.isAutoEnabled(seat);
-    }
-
-    /**
-     * Включает автоподогрев для сиденья. Уже идущий каскад не трогаем: смена
-     * настройки на ходу означала бы либо обрыв прогрева под человеком, либо
-     * запуск тройки посреди поездки.
-     */
-    public void setAutoEnabled(Seat seat, boolean enabled) {
-        settings.setAutoEnabled(seat, enabled);
-        onLog("автоподогрев " + seat.title + ": " + (enabled ? "включён" : "выключен")
-                + " (вступит в силу со следующего зажигания ON)");
-    }
-
     /**
      * Запускает пресет немедленно: человек выбрал расписание руками и ждёт
      * тепла сейчас, а не со следующего зажигания. Порог пресета проверяет сам
@@ -201,8 +234,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      */
     public void applyPreset(Preset preset) {
         onLog("пресет «" + preset.name + "» → " + preset.seat.title);
-        autoHeat.start(preset.seat, level -> setSeatHeat(preset.seat == Seat.DRIVER, level),
-                preset.settings);
+        settings.setMode(preset.seat, HeatMode.PRESETS);
+        autoHeat.start(preset.seat, level -> setSeatHeat(preset.seat, level), preset.settings);
     }
 
     /**
@@ -328,12 +361,15 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      */
     private void startAutoHeat() {
         for (Seat seat : Seat.values()) {
-            if (!settings.isAutoEnabled(seat)) {
-                continue;
+            if (settings.mode(seat) == HeatMode.AUTO) {
+                startCascade(seat);
             }
-            onLog("автоподогрев включён для " + seat.title + " → жду температуру");
-            autoHeat.start(seat, level -> setSeatHeat(seat == Seat.DRIVER, level));
         }
+    }
+
+    private void startCascade(Seat seat) {
+        onLog("автоподогрев для " + seat.title + " → жду температуру");
+        autoHeat.start(seat, level -> setSeatHeat(seat, level));
     }
 
     /**
@@ -344,6 +380,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     private void shutdownSeats() {
         boolean driver = probe.setSeatHeat(true, 0);
         boolean passenger = probe.setSeatHeat(false, 0);
+        levels.put(Seat.DRIVER, 0);
+        levels.put(Seat.PASSENGER, 0);
+        UiListener listener = uiListener;
+        if (listener != null) {
+            listener.onSeatLevel(Seat.DRIVER, 0);
+            listener.onSeatLevel(Seat.PASSENGER, 0);
+        }
         seatsOff = driver && passenger;
         if (!seatsOff) {
             onLog("ВНИМАНИЕ: выключение сидений не подтверждено");
