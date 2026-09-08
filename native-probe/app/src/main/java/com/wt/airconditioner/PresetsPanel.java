@@ -262,15 +262,20 @@ final class PresetsPanel {
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView schedule = new TextView(activity);
-        schedule.setText(String.format(Locale.US, "%d/%d/%d мин, до %.0f °C",
+        schedule.setText(String.format(Locale.US, "%d \u2014 %d \u2014 %d мин, до %.0f °C",
                 preset.settings.sequence.level3Minutes,
                 preset.settings.sequence.level2Minutes,
                 preset.settings.sequence.level1Minutes,
                 preset.settings.thresholdCelsius));
         schedule.setTextColor(0xFFB0BEC5);
-        schedule.setTextSize(14);
+        schedule.setTextSize(17);
         schedule.setTypeface(Fonts.regular(activity));
-        card.addView(schedule);
+        LinearLayout.LayoutParams scheduleParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        // Отступ до кнопок действий: иначе расписание липнет к карандашу.
+        scheduleParams.setMarginEnd(dp(28));
+        card.addView(schedule, scheduleParams);
 
         card.addView(iconButton(R.drawable.ic_edit, accent, v -> loadIntoEditor(preset)));
         card.addView(iconButton(R.drawable.ic_play, accent, v -> onApply.apply(preset)));

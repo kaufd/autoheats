@@ -53,7 +53,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private static final int MODE_PADDING_DP = 20;
     private static final int LEVEL_TEXT_SP = 14;
     private static final int LEVEL_HEIGHT_DP = 29;
-    private static final int LEVEL_PADDING_DP = 16;
+    private static final int LEVEL_PADDING_DP = 4;
 
     /** Быстрые значения инжектора температуры — как в LogsScreen оригинала. */
     private static final int[] QUICK_TEMPERATURES = {-15, -10, -5, 0, 5, 10};
@@ -75,7 +75,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private ViewFlipper flipper;
     private TextView[] tabButtons;
     private TextView temperatureView;
-    private TextView autostartView;
     private TextView logView;
     private ScrollView logScroll;
 
@@ -111,7 +110,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         accent = getResources().getColor(theme.accentColorRes);
 
         temperatureView = findViewById(R.id.temperature);
-        autostartView = findViewById(R.id.autostart);
         logView = findViewById(R.id.log);
         logScroll = findViewById(R.id.logScroll);
         flipper = findViewById(R.id.flipper);
@@ -156,7 +154,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         super.onResume();
         // Службу доступности включают на чужом экране, вернуться оттуда можно
         // только сюда — здесь и перечитываем её состояние.
-        renderAutostart();
+        renderPermissions();
     }
 
     @Override
@@ -413,13 +411,13 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         });
         applyTemperatureVisibility();
 
-        findViewById(R.id.enableAutostart).setOnClickListener(v -> enableAutostart());
+        findViewById(R.id.enableAutostart).setOnClickListener(v -> requestPermissions());
         findViewById(R.id.startCascade).setOnClickListener(v -> {
             if (service != null) {
                 service.startAutoHeatNow();
             }
         });
-        renderAutostart();
+        renderPermissions();
     }
 
     /**
@@ -467,28 +465,26 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                 .setVisibility(show ? View.VISIBLE : View.INVISIBLE);
     }
 
-    private void renderAutostart() {
-        if (autostartView == null) {
-            return;
-        }
-        boolean enabled = AccessibilityToggle.isEnabled(this);
-        autostartView.setText(enabled
-                ? "Служба «AutoHeat» включена — приложение поднимется само"
-                : "Служба «AutoHeat» в «Спец. возможностях» выключена: после сна "
-                        + "головы подогрев не запустится сам");
-        autostartView.setTextColor(enabled
-                ? getResources().getColor(R.color.accent_green)
-                : getResources().getColor(R.color.temp_warm));
-        findViewById(R.id.enableAutostart).setEnabled(!enabled);
+    /**
+     * Права выданы — галка цветом темы, нет — кнопка, ведущая на их выдачу.
+     * Строка нужна потому, что служба доступности слетает после сброса или
+     * обновления, и тогда приложение молча перестаёт запускаться само.
+     */
+    private void renderPermissions() {
+        boolean granted = AccessibilityToggle.isEnabled(this);
+        ImageView check = findViewById(R.id.permissionsGranted);
+        check.setVisibility(granted ? View.VISIBLE : View.GONE);
+        check.setColorFilter(accent, PorterDuff.Mode.SRC_IN);
+        findViewById(R.id.enableAutostart).setVisibility(granted ? View.GONE : View.VISIBLE);
     }
 
-    private void enableAutostart() {
+    private void requestPermissions() {
         // Сначала пробуем без UI — замер, отдаёт ли голова WRITE_SECURE_SETTINGS
         // whitelisted-пакету. Ожидаемо не отдаёт, тогда ведём человека на экран.
         if (AccessibilityToggle.enableWithoutUi(this)) {
             log("замер: служба доступности включена программно "
                     + "(WRITE_SECURE_SETTINGS выдан)");
-            renderAutostart();
+            renderPermissions();
             return;
         }
         log("замер: программно включить не удалось, открываю «Спец. возможности»");

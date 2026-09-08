@@ -2,10 +2,15 @@ package com.wt.airconditioner;
 
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.util.TypedValue;
+import android.graphics.PorterDuff;
 import android.view.Gravity;
+import android.view.View;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -22,6 +27,8 @@ final class SegmentedControl {
 
     /** Фон невыбранного сегмента — замерен на скриншоте оригинала. */
     private static final int UNSELECTED = 0xFF303030;
+    /** Тонкая линия между сегментами — почти чёрная, как в оригинале. */
+    private static final int DIVIDER = 0xFF141414;
     private static final int CORNER_DP = 30;
 
     interface OnSelected {
@@ -54,37 +61,69 @@ final class SegmentedControl {
 
         for (int index = 0; index < items.length; index++) {
             boolean selected = index == selectedIndex;
-            TextView segment = new TextView(context);
-            segment.setText(items[index].title);
-            segment.setGravity(Gravity.CENTER);
-            segment.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);
-            segment.setTextColor(selected ? Palette.textOn(accentColor) : Color.WHITE);
-            segment.setTypeface(Fonts.regular(context));
-            segment.setPadding(dp(context, paddingDp), 0, dp(context, paddingDp), 0);
-            segment.setBackground(background(context, index, items.length, selected, accentColor));
-            segment.setSingleLine(true);
+            int textColor = selected ? Palette.textOn(accentColor) : Color.WHITE;
 
+            TextView label = new TextView(context);
+            label.setText(items[index].title);
+            label.setGravity(Gravity.CENTER);
+            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, textSizeSp);
+            label.setTextColor(textColor);
+            label.setTypeface(Fonts.regular(context));
+            label.setSingleLine(true);
+            // Без этого шрифт добавляет свои поля сверху и снизу, и подпись в
+            // сегменте фиксированной высоты уезжает вниз.
+            label.setIncludeFontPadding(false);
+
+            View content = label;
             if (items[index].iconRes != 0) {
-                Drawable icon = context.getResources().getDrawable(items[index].iconRes);
-                int size = dp(context, textSizeSp + 3);
-                icon.setBounds(0, 0, size, size);
-                segment.setCompoundDrawables(icon, null, null, null);
-                segment.setCompoundDrawablePadding(dp(context, 6));
+                // Иконка с подписью — отдельная строка по центру сегмента:
+                // compound drawable прижал бы значок к краю, и у короткого
+                // слова он оторвался бы от текста.
+                LinearLayout pair = new LinearLayout(context);
+                pair.setOrientation(LinearLayout.HORIZONTAL);
+                pair.setGravity(Gravity.CENTER);
+
+                ImageView icon = new ImageView(context);
+                icon.setImageResource(items[index].iconRes);
+                icon.setColorFilter(textColor, PorterDuff.Mode.SRC_IN);
+                int size = dp(context, textSizeSp);
+                LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(size, size);
+                iconParams.setMarginEnd(dp(context, 8));
+                pair.addView(icon, iconParams);
+                pair.addView(label);
+                content = pair;
             }
+
+            content.setPadding(dp(context, paddingDp), 0, dp(context, paddingDp), 0);
+            content.setBackground(withDivider(context,
+                    background(context, index, items.length, selected, accentColor), index));
 
             final int position = index;
             if (listener != null) {
-                segment.setOnClickListener(v -> listener.onSelected(position));
+                content.setOnClickListener(v -> listener.onSelected(position));
             }
 
             // Сегменты равной ширины: в оригинале переключатель — цельная
             // пилюля, и «Авто» занимает столько же, сколько «Вручную».
-            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
-                    0, dp(context, heightDp), 1f);
-            // Зазора нет: в оригинале сегменты стыкуются вплотную и делятся
-            // только цветом заливки.
-            container.addView(segment, params);
+            container.addView(content, new LinearLayout.LayoutParams(
+                    0, dp(context, heightDp), 1f));
         }
+    }
+
+    /**
+     * Разделитель между сегментами — волосяная линия в один пиксель, как в
+     * оригинале. Рисуется подложкой самого сегмента, а не зазором: сквозь
+     * зазор просвечивал бы фон, который под переключателем то тёмный, то
+     * подсвеченный.
+     */
+    private static Drawable withDivider(Context context, GradientDrawable body, int index) {
+        if (index == 0) {
+            return body;
+        }
+        LayerDrawable layers = new LayerDrawable(
+                new Drawable[]{new ColorDrawable(DIVIDER), body});
+        layers.setLayerInset(1, 1, 0, 0, 0);
+        return layers;
     }
 
     /**
