@@ -47,6 +47,17 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private static final int[] LEVEL_ORDER = {1, 2, 3, 0};
     private static final String[] LEVEL_TITLES = {"1", "2", "3", "OFF"};
 
+    /** Размеры переключателей сняты со скриншотов Flutter-версии (1920×720). */
+    private static final int MODE_TEXT_SP = 19;
+    private static final int MODE_HEIGHT_DP = 46;
+    private static final int MODE_PADDING_DP = 20;
+    private static final int LEVEL_TEXT_SP = 14;
+    private static final int LEVEL_HEIGHT_DP = 29;
+    private static final int LEVEL_PADDING_DP = 16;
+
+    /** Быстрые значения инжектора температуры — как в LogsScreen оригинала. */
+    private static final int[] QUICK_TEMPERATURES = {-15, -10, -5, 0, 5, 10};
+
     /**
      * Насколько лог экрана может перерасти буфер сервиса, прежде чем его
      * подрежут. Без запаса каждая строка сверх лимита требовала бы полной
@@ -64,7 +75,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private ViewFlipper flipper;
     private TextView[] tabButtons;
     private TextView temperatureView;
-    private TextView statusView;
     private TextView autostartView;
     private TextView logView;
     private ScrollView logScroll;
@@ -101,7 +111,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         accent = getResources().getColor(theme.accentColorRes);
 
         temperatureView = findViewById(R.id.temperature);
-        statusView = findViewById(R.id.status);
         autostartView = findViewById(R.id.autostart);
         logView = findViewById(R.id.log);
         logScroll = findViewById(R.id.logScroll);
@@ -138,7 +147,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
         bound = bindService(intent, connection, 0);
         if (!bound) {
-            statusView.setText("Сервис не привязался");
+            Toast.makeText(this, "Сервис не привязался", Toast.LENGTH_LONG).show();
         }
     }
 
@@ -189,10 +198,24 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         renderTabs();
         renderSeats();
         buildSettingsTab();
+        paintPanel(findViewById(R.id.logScroll));
+        paintPanel(findViewById(R.id.injectPanel));
+        buildQuickTemperatures();
         for (int id : new int[]{R.id.enableAutostart, R.id.startCascade, R.id.presetSave,
-                R.id.injectTemp, R.id.readTemp, R.id.copyLog, R.id.restartCar}) {
+                R.id.presetNew, R.id.injectTemp, R.id.readTemp, R.id.copyLog,
+                R.id.clearLog, R.id.restartCar}) {
             paintButton(findViewById(id));
         }
+    }
+
+    /** Панель с рамкой: так во Flutter-версии оформлены лог и сайдбар. */
+    private void paintPanel(View panel) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.RECTANGLE);
+        shape.setCornerRadius(dp(12));
+        shape.setColor(0x99000000);
+        shape.setStroke(dp(1), withAlpha(accent, 90));
+        panel.setBackground(shape);
     }
 
     private void paintButton(TextView button) {
@@ -276,20 +299,27 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private void renderSeat(Seat seat, int modesId, int levelsId, int dotsId) {
         HeatMode mode = service == null ? settings.mode(seat) : service.modeOf(seat);
-        String[] modeTitles = {HeatMode.MANUAL.title, HeatMode.PRESETS.title, HeatMode.AUTO.title};
-
-        SegmentedControl.build(findViewById(modesId), modeTitles, mode.ordinal(), accent, 17,
+        SegmentedControl.Item[] modes = {
+                new SegmentedControl.Item(HeatMode.MANUAL.title, R.drawable.ic_touch_app),
+                new SegmentedControl.Item(HeatMode.PRESETS.title, R.drawable.ic_settings),
+                new SegmentedControl.Item(HeatMode.AUTO.title, R.drawable.ic_auto),
+        };
+        SegmentedControl.build(findViewById(modesId), modes, mode.ordinal(), accent,
+                MODE_TEXT_SP, MODE_HEIGHT_DP, MODE_PADDING_DP,
                 index -> selectMode(seat, HeatMode.values()[index]));
 
         int level = levelOf(seat);
         int selected = -1;
+        SegmentedControl.Item[] levelItems = new SegmentedControl.Item[LEVEL_ORDER.length];
         for (int i = 0; i < LEVEL_ORDER.length; i++) {
+            levelItems[i] = new SegmentedControl.Item(LEVEL_TITLES[i]);
             if (LEVEL_ORDER[i] == level) {
                 selected = i;
             }
         }
         LinearLayout levelsRow = findViewById(levelsId);
-        SegmentedControl.build(levelsRow, LEVEL_TITLES, selected, accent, 17,
+        SegmentedControl.build(levelsRow, levelItems, selected, accent,
+                LEVEL_TEXT_SP, LEVEL_HEIGHT_DP, LEVEL_PADDING_DP,
                 index -> setLevel(seat, LEVEL_ORDER[index]));
         // Уровнями управляют вручную; в остальных режимах уровень выбирает
         // приложение, и кнопки только показывают, что сейчас происходит.
@@ -368,16 +398,11 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     // --- вкладка настроек ---
 
     private void buildSettingsTab() {
-        String[] themeTitles = new String[AppTheme.values().length];
-        for (int index = 0; index < themeTitles.length; index++) {
-            themeTitles[index] = AppTheme.values()[index].title;
+        LinearLayout themes = findViewById(R.id.themeSegments);
+        themes.removeAllViews();
+        for (AppTheme option : AppTheme.values()) {
+            themes.addView(themeButton(option));
         }
-        SegmentedControl.build(findViewById(R.id.themeSegments), themeTitles,
-                theme.ordinal(), accent, 17, index -> {
-                    theme = AppTheme.values()[index];
-                    settings.setTheme(theme);
-                    applyTheme();
-                });
 
         Switch showTemperature = findViewById(R.id.showTemperature);
         showTemperature.setOnCheckedChangeListener(null);
@@ -395,6 +420,41 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             }
         });
         renderAutostart();
+    }
+
+    /**
+     * Кнопка выбора темы: выбранная залита акцентом, остальные обведены —
+     * ровно как в оригинале, где это три отдельные кнопки, а не переключатель.
+     */
+    private TextView themeButton(AppTheme option) {
+        TextView button = new TextView(this);
+        button.setText(option.title);
+        button.setTextSize(16);
+        button.setGravity(android.view.Gravity.CENTER);
+        button.setTypeface(Fonts.regular(this));
+        button.setPadding(dp(28), 0, dp(28), 0);
+
+        boolean selected = option == theme;
+        int accentOfOption = getResources().getColor(option.accentColorRes);
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.RECTANGLE);
+        shape.setCornerRadius(dp(30));
+        shape.setColor(selected ? accentOfOption : Color.TRANSPARENT);
+        shape.setStroke(dp(1), selected ? accentOfOption : Color.WHITE);
+        button.setBackground(shape);
+        button.setTextColor(selected ? Palette.textOn(accentOfOption) : Color.WHITE);
+
+        button.setOnClickListener(v -> {
+            theme = option;
+            settings.setTheme(option);
+            applyTheme();
+        });
+
+        LinearLayout.LayoutParams params =
+                new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, dp(44));
+        params.setMarginStart(dp(12));
+        button.setLayoutParams(params);
+        return button;
     }
 
     /**
@@ -448,17 +508,65 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             }
         });
         findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
+        findViewById(R.id.clearLog).setOnClickListener(v -> {
+            logLines.clear();
+            renderLog();
+        });
         findViewById(R.id.injectTemp).setOnClickListener(v -> injectTemperature());
         findViewById(R.id.restartCar).setOnClickListener(v -> {
-            if (service == null) {
-                return;
+            if (service != null) {
+                service.restartCarConnection();
             }
-            // Статус ставим сами: пока новый CarHvacProbe не ответит,
-            // готовность неизвестна, и прежнее «подключён» означало бы связь,
-            // которой уже нет.
-            statusView.setText("Переподключение к автомобилю…");
-            service.restartCarConnection();
         });
+        buildQuickTemperatures();
+    }
+
+    /** Быстрые значения инжектора — те же шесть, что в оригинале. */
+    private void buildQuickTemperatures() {
+        LinearLayout container = findViewById(R.id.quickTemperatures);
+        container.removeAllViews();
+
+        LinearLayout row = null;
+        for (int index = 0; index < QUICK_TEMPERATURES.length; index++) {
+            if (index % 3 == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowParams.topMargin = dp(6);
+                container.addView(row, rowParams);
+            }
+            row.addView(quickTemperatureButton(QUICK_TEMPERATURES[index], index % 3 > 0));
+        }
+    }
+
+    private TextView quickTemperatureButton(int celsius, boolean withMargin) {
+        TextView button = new TextView(this);
+        button.setText(celsius + "°C");
+        button.setTextSize(14);
+        button.setTextColor(accent);
+        button.setTypeface(Fonts.regular(this));
+        button.setGravity(android.view.Gravity.CENTER);
+
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.RECTANGLE);
+        shape.setCornerRadius(dp(10));
+        shape.setColor(withAlpha(accent, 51));
+        shape.setStroke(dp(1), withAlpha(accent, 120));
+        button.setBackground(shape);
+        button.setOnClickListener(v -> {
+            if (service != null) {
+                service.injectTemperature(celsius);
+            }
+        });
+
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        if (withMargin) {
+            params.setMarginStart(dp(6));
+        }
+        button.setLayoutParams(params);
+        return button;
     }
 
     private void injectTemperature() {
@@ -494,6 +602,8 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private void renderLog() {
         logView.setText(logText());
+        TextView counter = findViewById(R.id.logCounter);
+        counter.setText(logLines.size() + " / " + SeatHeatService.LOG_CAPACITY);
         scrollLogToBottom();
     }
 
@@ -530,8 +640,8 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     @Override
     public void onHvacReady(boolean ready) {
-        runOnUiThread(() -> statusView.setText(
-                ready ? "" : "Нет связи с автомобилем"));
+        // Оригинал состояние связи на экране не показывает: пока её нет,
+        // температура остаётся прочерком, и этого достаточно.
     }
 
     @Override

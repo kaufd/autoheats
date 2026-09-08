@@ -5,12 +5,11 @@
 <resources>
     <style name="TabButton">
         <item name="android:layout_width">wrap_content</item>
-        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_height">52dp</item>
         <item name="android:layout_marginEnd">8dp</item>
-        <item name="android:paddingStart">28dp</item>
-        <item name="android:paddingEnd">28dp</item>
-        <item name="android:paddingTop">10dp</item>
-        <item name="android:paddingBottom">10dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:paddingStart">43dp</item>
+        <item name="android:paddingEnd">43dp</item>
         <item name="android:textSize">21sp</item>
         <item name="android:textColor">@color/system_white</item>
         <item name="android:background">@drawable/tab_button</item>
