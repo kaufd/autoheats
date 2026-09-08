@@ -62,6 +62,31 @@ public class CarHvacProbeTest {
         assertNull(CarHvacProbe.celsiusToPublish(new Object()));
     }
 
+    // --- зажигание: ON только состояние 4, всё прочее выключает подогрев ---
+
+    @Test
+    public void treatsOnlyStateOnAsIgnitionOn() {
+        assertEquals(Boolean.TRUE, CarHvacProbe.ignitionOn(new int[]{4}));
+    }
+
+    @Test
+    public void treatsEveryOtherStateAsIgnitionOff() {
+        // UNDEFINED, LOCK, OFF, ACC, START — то же правило, что в
+        // BackgroundRuntimeController.handleIgnition.
+        for (int state : new int[]{0, 1, 2, 3, 5}) {
+            assertEquals("состояние " + state, Boolean.FALSE,
+                    CarHvacProbe.ignitionOn(new int[]{state}));
+        }
+    }
+
+    @Test
+    public void ignoresIgnitionEventWithoutValue() {
+        // null означает «событие пропустить», а не «зажигание выключено»:
+        // иначе пустое событие погасило бы подогрев на ходу.
+        assertNull(CarHvacProbe.ignitionOn(null));
+        assertNull(CarHvacProbe.ignitionOn(new int[0]));
+    }
+
     @Test
     public void publishesZeroRawAsItsRealValue() {
         // raw = 0 валиден (-42 °C): sentinel — это строго отрицательное.

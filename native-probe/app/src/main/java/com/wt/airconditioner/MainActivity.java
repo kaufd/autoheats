@@ -3,8 +3,13 @@ package com.wt.airconditioner;
 import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -13,18 +18,14 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
 import java.util.Locale;
 
 /**
- * Этап 1 миграции на native: проверяет ровно две вещи на реальной голове —
- * рисуется ли нативный UI (Flutter давал белый экран) и отвечает ли HVAC.
- *
- * Сознательно без AccessibilityService и foreground-service: если пробник не
- * запустится, причина должна быть однозначной. Их черёд — этап 2.
+ * Экран управления. Соединением с Car владеет SeatHeatService — Activity
+ * только показывает его состояние и передаёт команды, поэтому закрытие экрана
+ * не рвёт связь с автомобилем.
  */
-public class MainActivity extends Activity implements CarHvacProbe.Listener {
+public class MainActivity extends Activity implements SeatHeatService.UiListener {
 
     private static final int[] LEVELS = {0, 1, 2, 3};
 
@@ -34,10 +35,28 @@ public class MainActivity extends Activity implements CarHvacProbe.Listener {
     private ScrollView logScroll;
 
     private final StringBuilder logBuffer = new StringBuilder();
-    private final SimpleDateFormat timeFormat =
-            new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
 
-    private CarHvacProbe probe;
+    private SeatHeatService service;
+
+    private final ServiceConnection connection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName name, IBinder binder) {
+            service = ((SeatHeatService.LocalBinder) binder).getService();
+            // Лог сервиса мог начаться до открытия экрана — забираем целиком.
+            logBuffer.setLength(0);
+            for (String line : service.logSnapshot()) {
+                logBuffer.append(line).append('\n');
+            }
+            logView.setText(logBuffer);
+            scrollLogToBottom();
+            service.setUiListener(MainActivity.this);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName name) {
+            service = null;
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,18 +71,30 @@ public class MainActivity extends Activity implements CarHvacProbe.Listener {
         buildLevelButtons(findViewById(R.id.driverRow), true);
         buildLevelButtons(findViewById(R.id.passengerRow), false);
 
-        findViewById(R.id.readTemp).setOnClickListener(v -> probe.readCabinTemperature());
+        findViewById(R.id.readTemp).setOnClickListener(v -> {
+            if (service != null) {
+                service.readCabinTemperature();
+            }
+        });
         findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
 
-        onLog("UI создан — белого экрана нет");
-        probe = new CarHvacProbe(this, this);
+        Intent intent = new Intent(this, SeatHeatService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+        bindService(intent, connection, 0);
     }
 
     @Override
     protected void onDestroy() {
-        if (probe != null) {
-            probe.disconnect();
+        if (service != null) {
+            service.setUiListener(null);
         }
+        unbindService(connection);
+        // Сервис намеренно не останавливаем: он должен пережить закрытие
+        // экрана, иначе автовыключение по зажиганию перестанет работать.
         super.onDestroy();
     }
 
@@ -73,7 +104,11 @@ public class MainActivity extends Activity implements CarHvacProbe.Listener {
             button.setText(level == 0 ? "OFF" : String.valueOf(level));
             button.setTextSize(22);
             button.setGravity(Gravity.CENTER);
-            button.setOnClickListener(v -> probe.setSeatHeat(isDriver, level));
+            button.setOnClickListener(v -> {
+                if (service != null) {
+                    service.setSeatHeat(isDriver, level);
+                }
+            });
 
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                     0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
@@ -91,24 +126,32 @@ public class MainActivity extends Activity implements CarHvacProbe.Listener {
         Toast.makeText(this, "Лог скопирован", Toast.LENGTH_SHORT).show();
     }
 
-    // --- CarHvacProbe.Listener (всё приходит на main thread) ---
+    private void scrollLogToBottom() {
+        logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
+    }
+
+    // --- SeatHeatService.UiListener (приходит с потока сервиса) ---
 
     @Override
-    public void onLog(String message) {
-        logBuffer.append(timeFormat.format(new Date())).append("  ").append(message).append('\n');
-        logView.setText(logBuffer);
-        logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
+    public void onLogLine(String line) {
+        runOnUiThread(() -> {
+            logBuffer.append(line).append('\n');
+            logView.setText(logBuffer);
+            scrollLogToBottom();
+        });
     }
 
     @Override
     public void onHvacReady(boolean ready) {
-        statusView.setText(ready ? "HVAC подключён" : "HVAC недоступен");
-        statusView.setTextColor(ready ? 0xFF8BC34A : 0xFFF44336);
+        runOnUiThread(() -> {
+            statusView.setText(ready ? "HVAC подключён" : "HVAC недоступен");
+            statusView.setTextColor(ready ? 0xFF8BC34A : 0xFFF44336);
+        });
     }
 
     @Override
     public void onCabinTemperature(double celsius, int raw) {
-        temperatureView.setText(String.format(Locale.US, "%.1f °C", celsius));
-        onLog("температура: raw=" + raw + " → " + String.format(Locale.US, "%.1f", celsius) + " °C");
+        runOnUiThread(() ->
+                temperatureView.setText(String.format(Locale.US, "%.1f °C", celsius)));
     }
 }

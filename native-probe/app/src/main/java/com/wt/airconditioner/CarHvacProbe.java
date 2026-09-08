@@ -4,6 +4,8 @@ import android.car.Car;
 import android.car.VehicleAreaSeat;
 import android.car.VehiclePropertyIds;
 import android.car.hardware.CarPropertyValue;
+import android.car.hardware.CarSensorEvent;
+import android.car.hardware.CarSensorManager;
 import android.car.hardware.hvac.CarHvacManager;
 import android.content.ComponentName;
 import android.content.Context;
@@ -36,6 +38,9 @@ public class CarHvacProbe {
      */
     private static final long CONNECT_TIMEOUT_MS = 10_000L;
 
+    /** IgnitionState.IGNITION_STATE_ON — всё остальное считается «зажигание не включено». */
+    private static final int IGNITION_STATE_ON = 4;
+
     public interface Listener {
         void onLog(String message);
 
@@ -44,6 +49,9 @@ public class CarHvacProbe {
 
         /** Событие температуры салона от подписки на HVAC. */
         void onCabinTemperature(double celsius, int raw);
+
+        /** Событие зажигания; false — любое состояние, кроме ON. */
+        void onIgnition(boolean on);
     }
 
     private final Listener listener;
@@ -75,6 +83,39 @@ public class CarHvacProbe {
                     log("HVAC onErrorEvent: property=" + propertyId + ", zone=" + zone);
                 }
             };
+
+    private CarSensorManager sensorManager;
+
+    private final CarSensorManager.OnSensorChangedListener sensorListener =
+            new CarSensorManager.OnSensorChangedListener() {
+                @Override
+                public void onSensorChanged(CarSensorEvent event) {
+                    if (event == null
+                            || event.sensorType != CarSensorManager.SENSOR_TYPE_IGNITION_STATE) {
+                        return;
+                    }
+                    Boolean on = ignitionOn(event.intValues);
+                    if (on == null) {
+                        log("событие зажигания без значения — пропущено");
+                        return;
+                    }
+                    final boolean ignitionOn = on;
+                    log("зажигание: " + (ignitionOn ? "ON" : "не ON (" + event.intValues[0] + ")"));
+                    mainHandler.post(() -> listener.onIgnition(ignitionOn));
+                }
+            };
+
+    /**
+     * Зажигание включено только в состоянии ON; ACC, LOCK, OFF, START и
+     * UNDEFINED трактуются как выключенное — то же правило, что в
+     * BackgroundRuntimeController.handleIgnition. null — событие без значения.
+     */
+    static Boolean ignitionOn(int[] intValues) {
+        if (intValues == null || intValues.length == 0) {
+            return null;
+        }
+        return intValues[0] == IGNITION_STATE_ON;
+    }
 
     private final ServiceConnection serviceConnection = new ServiceConnection() {
         @Override
@@ -161,11 +202,33 @@ public class CarHvacProbe {
             }
 
             readCabinTemperature();
+            initSensorManager();
         } catch (Throwable t) {
             // Ожидаемое место падения, если пакет не в whitelist головы:
             // здесь прилетает SecurityException "… is not in white list!".
             log("ОШИБКА initHvacManager: " + t);
             notifyReady(false);
+        }
+    }
+
+    /**
+     * Датчик зажигания — отдельно от HVAC и тоже необязателен: без него
+     * подогрев продолжает работать, теряется только автовыключение.
+     */
+    private void initSensorManager() {
+        try {
+            CarSensorManager manager = (CarSensorManager) car.getCarManager(Car.SENSOR_SERVICE);
+            if (manager == null) {
+                log("датчик зажигания недоступен: getCarManager(SENSOR_SERVICE) вернул null");
+                return;
+            }
+            manager.registerListener(sensorListener,
+                    CarSensorManager.SENSOR_TYPE_IGNITION_STATE,
+                    CarSensorManager.SENSOR_RATE_NORMAL);
+            sensorManager = manager;
+            log("подписка на зажигание оформлена");
+        } catch (Throwable t) {
+            log("подписка на зажигание не удалась (подогрев работает): " + t);
         }
     }
 
@@ -205,6 +268,10 @@ public class CarHvacProbe {
     public void disconnect() {
         mainHandler.removeCallbacks(connectTimeout);
         try {
+            if (sensorManager != null) {
+                sensorManager.unregisterListener(sensorListener);
+                sensorManager = null;
+            }
             if (hvacManager != null) {
                 hvacManager.unregisterCallback(hvacCallback);
                 hvacManager = null;
