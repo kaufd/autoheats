@@ -40,6 +40,8 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private TextView statusView;
     private TextView temperatureView;
+    private TextView autostartView;
+    private Button enableAutostartButton;
     private TextView logView;
     private ScrollView logScroll;
 
@@ -73,8 +75,12 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
         statusView = findViewById(R.id.status);
         temperatureView = findViewById(R.id.temperature);
+        autostartView = findViewById(R.id.autostart);
+        enableAutostartButton = findViewById(R.id.enableAutostart);
         logView = findViewById(R.id.log);
         logScroll = findViewById(R.id.logScroll);
+
+        enableAutostartButton.setOnClickListener(v -> enableAutostart());
 
         buildLevelButtons(findViewById(R.id.driverRow), true);
         buildLevelButtons(findViewById(R.id.passengerRow), false);
@@ -106,6 +112,46 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         bound = bindService(intent, connection, 0);
         if (!bound) {
             statusView.setText("Сервис не привязался");
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // Службу включают на чужом экране, вернуться оттуда можно только сюда.
+        renderAutostart();
+    }
+
+    private void renderAutostart() {
+        boolean enabled = AccessibilityToggle.isEnabled(this);
+        autostartView.setText(enabled
+                ? "Автозапуск после сна: работает"
+                : "Автозапуск после сна: ВЫКЛЮЧЕН — служба «AutoHeat» "
+                        + "в «Спец. возможностях» не включена");
+        autostartView.setTextColor(enabled ? 0xFF8BC34A : 0xFFFFC107);
+        enableAutostartButton.setEnabled(!enabled);
+    }
+
+    private void enableAutostart() {
+        // Сначала пробуем без UI — замер, отдаёт ли голова WRITE_SECURE_SETTINGS
+        // whitelisted-пакету. Ожидаемо не отдаёт, тогда ведём человека на экран.
+        if (AccessibilityToggle.enableWithoutUi(this)) {
+            log("замер: служба доступности включена программно "
+                    + "(WRITE_SECURE_SETTINGS выдан)");
+            renderAutostart();
+            return;
+        }
+        log("замер: программно включить не удалось, открываю «Спец. возможности»");
+        if (!AccessibilityToggle.openSettings(this)) {
+            Toast.makeText(this, "Экран «Спец. возможности» не открылся — "
+                    + "включите службу AutoHeat вручную", Toast.LENGTH_LONG).show();
+            log("ВНИМАНИЕ: экран «Спец. возможности» не открылся");
+        }
+    }
+
+    private void log(String message) {
+        if (service != null) {
+            service.onLog(message);
         }
     }
 

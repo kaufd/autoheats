@@ -22,6 +22,23 @@
             android:textSize="20sp"
             android:textColor="#FFC107" />
 
+        <!-- Автозапуск после сна головы держится на службе доступности, а её
+             включает только человек. Строка наверху, потому что выключенная
+             служба выглядит как «приложение перестало работать само». -->
+        <TextView
+            android:id="@+id/autostart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textSize="14sp" />
+
+        <Button
+            android:id="@+id/enableAutostart"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Включить автозапуск" />
+
         <TextView
             android:id="@+id/temperature"
             android:layout_width="match_parent"

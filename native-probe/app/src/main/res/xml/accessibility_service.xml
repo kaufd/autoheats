@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Минимальный конфиг: служба нужна только ради того, чтобы система биндила
+  процесс, содержимое экрана она не читает. Flutter-версия просила здесь
+  touch exploration и canRetrieveWindowContent — для оживления процесса это
+  лишнее и делает системное предупреждение при включении страшнее, чем есть.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:canRetrieveWindowContent="false"
+    android:description="@string/accessibility_description"
+    android:notificationTimeout="1000" />

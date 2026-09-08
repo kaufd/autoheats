@@ -15,6 +15,8 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
+import java.util.Locale;
+
 /**
  * Минимальный мост к android.car HVAC: подключение, чтение температуры салона,
  * установка уровня подогрева сидений.
@@ -31,6 +33,15 @@ public class CarHvacProbe {
 
     /** VehicleAreaInOutCAR.InOutCAR_INSIDE — зона «внутри салона». */
     private static final int AREA_INSIDE = 1;
+
+    /**
+     * VehicleAreaInOutCAR.InOutCAR_OUTSIDE — вторая зона того же свойства.
+     * Алгоритму не нужна (греется человек в салоне), но существует ли она на
+     * этой голове — открытый вопрос: владельцы наружную температуру в API не
+     * находили. Замер стоит одного чтения, а ответ решает, можно ли вообще
+     * показывать её на экране.
+     */
+    private static final int AREA_OUTSIDE = 2;
 
     /**
      * Сколько ждать onServiceConnected, прежде чем признать подключение
@@ -248,6 +259,7 @@ public class CarHvacProbe {
             hvacManager = manager;
             log("CarHvacManager готов");
             notifyReady(true);
+            probeOutsideTemperature();
 
             // Подписка на события — отдельно и не критично: чтение по кнопке и
             // установка уровня от неё не зависят. Если она упадёт, пробник
@@ -404,6 +416,23 @@ public class CarHvacProbe {
             publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE));
         } catch (Exception e) {
             log("ОШИБКА чтения температуры: " + e);
+        }
+    }
+
+    /**
+     * Разовый замер: отвечает ли зона «снаружи» у того же свойства. Только в
+     * лог и только при подключении — это вопрос к голове, а не рабочий путь.
+     */
+    private void probeOutsideTemperature() {
+        try {
+            Object raw = hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_OUTSIDE);
+            Double celsius = celsiusToPublish(raw);
+            log(celsius == null
+                    ? "замер: зона OUTSIDE отвечает, но данных нет (raw=" + raw + ")"
+                    : String.format(Locale.US, "замер: наружная температура %.1f °C (raw=%s)",
+                            celsius, raw));
+        } catch (Throwable t) {
+            log("замер: зона OUTSIDE недоступна: " + t);
         }
     }
 

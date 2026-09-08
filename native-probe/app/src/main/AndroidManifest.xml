@@ -6,9 +6,17 @@
          не тримить без smoke-теста на голове). Из него не взято только то,
          чего в пробнике нет физически: будильники, вибрация, wake lock,
          accessibility. Сверено: у changan_first-main/example и SeatHeat_v2 по
-         34 permission, здесь 28 — подмножество, ничего лишнего.
+         34 permission, здесь 26 — подмножество, ничего лишнего.
 
-         Lint ругается на четыре из них, и все четыре есть в обоих оригиналах.
+         Намеренно убраны SYSTEM_ALERT_WINDOW и WRITE_SETTINGS: это единственные
+         два разрешения набора, которые система требует включать руками на
+         отдельном экране, а кодом они не используются нигде — ни здесь, ни во
+         Flutter-версии, ни в плагине. Поверх окон мы не рисуем и Activity из
+         фона не запускаем (ограничение появилось на Android 10, голова — 9),
+         системные настройки не меняем. Убрав их, убираем и ручной шаг после
+         установки. Если на голове что-то отвалится, вернуть — одна строка.
+
+         Lint ругается на три оставшихся, и все три есть в обоих оригиналах.
          Правила писаны для публикации в Play Store; здесь sideload на AAOS,
          где envelope доказанно работает, а урезание грозит потерей цикла
          ручной прошивки. Поэтому подавляем адресно, а не удаляем:
@@ -21,14 +29,11 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.GET_TASKS" />
-    <uses-permission android:name="android.permission.WRITE_SETTINGS"
-        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.MOUNT_UNMOUNT_FILESYSTEMS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.KILL_BACKGROUND_PROCESSES"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
         tools:ignore="CoarseFineLocation" />
@@ -53,6 +58,14 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Замер, а не рабочий путь: даёт ли голова whitelisted-пакету право
+         включить службу доступности без похода в настройки. Обычному APK не
+         выдаётся никогда (signature|privileged), но com.wt.airconditioner эта
+         голова уже пускает к car API, так что проверить дешевле, чем гадать.
+         Если на голове не выдалось — строку удалить вместе с enableWithoutUi. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:label="AutoHeat Probe"
         android:icon="@android:drawable/ic_menu_compass"
@@ -73,6 +86,21 @@
             android:name=".SeatHeatService"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
+
+        <!-- Оживление процесса после сна головы: BOOT_COMPLETED при пробуждении
+             не приходит, а службу доступности система биндит сама. -->
+        <service
+            android:name=".HeatAccessibilityService"
+            android:exported="true"
+            android:label="AutoHeat"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service" />
+        </service>
 
         <receiver
             android:name=".BootReceiver"
