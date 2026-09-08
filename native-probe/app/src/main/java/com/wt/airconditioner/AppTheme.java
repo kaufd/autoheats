@@ -5,9 +5,9 @@ package com.wt.airconditioner;
  * больше ничего, поэтому вместо системных стилей хватает перекраски в коде.
  */
 enum AppTheme {
-    BASE("Зелёная", R.color.accent_green, R.drawable.background_base),
+    BASE("Зеленая", R.color.accent_green, R.drawable.background_base),
     RED("Красная", R.color.accent_red, R.drawable.background_red),
-    WHITE("Светлая", R.color.accent_white, R.drawable.background_white);
+    WHITE("Белая", R.color.accent_white, R.drawable.background_white);
 
     final String title;
     final int accentColorRes;
