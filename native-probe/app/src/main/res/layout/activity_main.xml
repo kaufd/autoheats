@@ -450,16 +450,38 @@
 
                         <TextView
                             android:id="@+id/logCounter"
-                            android:layout_width="0dp"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
                             android:text="0 / 500"
                             android:textSize="15sp"
                             android:textColor="@color/text_body" />
 
+                        <CheckBox
+                            android:id="@+id/autoScroll"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="24dp"
+                            android:checked="true"
+                            android:text="Автопрокрутка"
+                            android:textSize="15sp"
+                            android:textColor="@color/text_body" />
+
+                        <TextView
+                            android:id="@+id/readTemp"
+                            style="@style/PrimaryButton"
+                            android:text="Прочитать" />
+
+                        <TextView
+                            android:id="@+id/restartCar"
+                            style="@style/PrimaryButton"
+                            android:layout_marginStart="12dp"
+                            android:text="Переподключиться" />
+
                         <TextView
                             android:id="@+id/copyLog"
                             style="@style/PrimaryButton"
+                            android:layout_marginStart="12dp"
                             android:text="Скопировать" />
 
                         <TextView
@@ -487,13 +509,19 @@
                     </ScrollView>
                 </LinearLayout>
 
-                <LinearLayout
-                    android:id="@+id/injectPanel"
+                <!-- Сайдбар в прокрутке: на голове экран ниже эмулятора, и
+                     нижние кнопки иначе оказываются за краем. -->
+                <ScrollView
                     android:layout_width="320dp"
                     android:layout_height="match_parent"
-                    android:layout_marginStart="24dp"
+                    android:layout_marginStart="24dp">
+
+                <LinearLayout
+                    android:id="@+id/injectPanel"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="20dp">
+                    android:padding="16dp">
 
                     <TextView
                         android:layout_width="wrap_content"
@@ -509,6 +537,39 @@
                         android:text="Тот же путь, что и у события датчика."
                         android:textSize="13sp"
                         android:textColor="@color/text_muted" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <ImageView
+                            android:id="@+id/injectThermometer"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:contentDescription="Текущая температура"
+                            android:src="@drawable/ic_thermostat" />
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="Сейчас в салоне"
+                            android:textSize="14sp"
+                            android:textColor="@color/text_body" />
+
+                        <TextView
+                            android:id="@+id/injectCurrent"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="-- °C"
+                            android:textSize="14sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/temp_warm" />
+                    </LinearLayout>
 
                     <TextView
                         android:layout_width="match_parent"
@@ -552,24 +613,8 @@
                         android:layout_marginTop="12dp"
                         android:text="Применить" />
 
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="0dp"
-                        android:layout_weight="1" />
-
-                    <TextView
-                        android:id="@+id/readTemp"
-                        style="@style/PrimaryButton"
-                        android:layout_width="match_parent"
-                        android:text="Прочитать температуру" />
-
-                    <TextView
-                        android:id="@+id/restartCar"
-                        style="@style/PrimaryButton"
-                        android:layout_width="match_parent"
-                        android:layout_marginTop="8dp"
-                        android:text="Переподключиться к Car" />
                 </LinearLayout>
+                </ScrollView>
             </LinearLayout>
 
         </ViewFlipper>

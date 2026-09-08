@@ -22,6 +22,22 @@ final class PresetStore {
         return Preset.decodeAll(preferences.getString(KEY, ""));
     }
 
+    /**
+     * Ищет пресет по его же строковому представлению. Удалённый пресет не
+     * найдётся — и сиденье честно отправит человека выбирать заново.
+     */
+    Preset find(String encoded) {
+        if (encoded == null) {
+            return null;
+        }
+        for (Preset preset : load()) {
+            if (preset.encode().equals(encoded)) {
+                return preset;
+            }
+        }
+        return null;
+    }
+
     void add(Preset preset) {
         List<Preset> presets = load();
         presets.add(preset);

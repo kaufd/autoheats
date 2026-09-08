@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.view.View;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -196,6 +197,8 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         renderTabs();
         renderSeats();
         buildSettingsTab();
+        ((ImageView) findViewById(R.id.injectThermometer))
+                .setColorFilter(accent, PorterDuff.Mode.SRC_IN);
         paintPanel(findViewById(R.id.logScroll));
         paintPanel(findViewById(R.id.injectPanel));
         buildQuickTemperatures();
@@ -357,9 +360,12 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             return;
         }
         if (mode == HeatMode.PRESETS) {
-            // Как во Flutter-версии: сегмент «Пресеты» ведёт на вкладку выбора,
-            // потому что без выбранного расписания включать нечего.
-            showTab(TAB_PRESETS);
+            // Как во Flutter-версии: если пресет у сиденья уже выбран, сегмент
+            // просто включает его заново, и только иначе ведёт на вкладку.
+            if (!service.applyActivePreset(seat)) {
+                showTab(TAB_PRESETS);
+            }
+            renderSeats();
             return;
         }
         service.setMode(seat, mode);
@@ -603,7 +609,15 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         scrollLogToBottom();
     }
 
+    /**
+     * Автопрокрутка отключается галочкой: без этого невозможно прочитать
+     * старую строку — поток температурных событий утаскивает лог вниз.
+     */
     private void scrollLogToBottom() {
+        CheckBox autoScroll = findViewById(R.id.autoScroll);
+        if (autoScroll != null && !autoScroll.isChecked()) {
+            return;
+        }
         logScroll.post(() -> logScroll.fullScroll(View.FOCUS_DOWN));
     }
 
@@ -643,8 +657,14 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     @Override
     public void onCabinTemperature(double celsius, int raw) {
         runOnUiThread(() -> {
-            temperatureView.setText(String.format(Locale.US, "%.1f °C", celsius));
-            temperatureView.setTextColor(temperatureColor(celsius));
+            String text = String.format(Locale.US, "%.1f °C", celsius);
+            int color = temperatureColor(celsius);
+            temperatureView.setText(text);
+            temperatureView.setTextColor(color);
+
+            TextView current = findViewById(R.id.injectCurrent);
+            current.setText(text);
+            current.setTextColor(color);
         });
     }
 

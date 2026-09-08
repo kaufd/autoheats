@@ -19,6 +19,7 @@ final class HeatSettings {
     private static final String KEY_THEME = "theme";
     private static final String KEY_SHOW_TEMPERATURE = "show_temperature";
     private static final String KEY_DEBUG = "debug_mode";
+    private static final String KEY_ACTIVE_PRESET_PREFIX = "preset_";
 
     private final SharedPreferences preferences;
 
@@ -44,6 +45,18 @@ final class HeatSettings {
 
     void setManualLevel(Seat seat, int level) {
         preferences.edit().putInt(KEY_LEVEL_PREFIX + seat.name(), level).apply();
+    }
+
+    /**
+     * Последний применённый пресет сиденья — целиком строкой, а не позицией в
+     * списке: позиции плывут при удалении соседей.
+     */
+    String activePreset(Seat seat) {
+        return preferences.getString(KEY_ACTIVE_PRESET_PREFIX + seat.name(), null);
+    }
+
+    void setActivePreset(Seat seat, String encoded) {
+        preferences.edit().putString(KEY_ACTIVE_PRESET_PREFIX + seat.name(), encoded).apply();
     }
 
     AppTheme theme() {

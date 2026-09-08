@@ -64,6 +64,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     private CarHvacProbe probe;
     private AutoHeatEngine autoHeat;
     private HeatSettings settings;
+    private PresetStore presets;
     private UiListener uiListener;
 
     /** null — готовность ещё не известна; реплеить такое в UI нельзя. */
@@ -105,6 +106,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         startForeground(NOTIFICATION_ID, buildNotification("Подключение к автомобилю…"));
         onLog("сервис запущен");
         settings = new HeatSettings(this);
+        presets = new PresetStore(this);
         autoHeat = new AutoHeatEngine(new HandlerScheduler(), this::onLog);
         probe = new CarHvacProbe(this, this);
     }
@@ -235,7 +237,21 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     public void applyPreset(Preset preset) {
         onLog("пресет «" + preset.name + "» → " + preset.seat.title);
         settings.setMode(preset.seat, HeatMode.PRESETS);
+        settings.setActivePreset(preset.seat, preset.encode());
         autoHeat.start(preset.seat, level -> setSeatHeat(preset.seat, level), preset.settings);
+    }
+
+    /**
+     * Повторяет последний пресет сиденья. false — повторять нечего: пресет ещё
+     * не выбирали или его удалили, и тогда человека нужно отправить выбирать.
+     */
+    public boolean applyActivePreset(Seat seat) {
+        Preset preset = presets.find(settings.activePreset(seat));
+        if (preset == null) {
+            return false;
+        }
+        applyPreset(preset);
+        return true;
     }
 
     /**
@@ -361,8 +377,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      */
     private void startAutoHeat() {
         for (Seat seat : Seat.values()) {
-            if (settings.mode(seat) == HeatMode.AUTO) {
+            HeatMode mode = settings.mode(seat);
+            if (mode == HeatMode.AUTO) {
                 startCascade(seat);
+            } else if (mode == HeatMode.PRESETS) {
+                // Сиденье осталось в режиме пресета с прошлой поездки — значит
+                // его и ждут, а не ручное управление.
+                applyActivePreset(seat);
             }
         }
     }
