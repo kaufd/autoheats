@@ -67,7 +67,7 @@
         tools:ignore="ProtectedPermissions" />
 
     <application
-        android:label="AutoHeat Probe"
+        android:label="AutoHeat"
         android:icon="@android:drawable/ic_menu_compass"
         android:theme="@android:style/Theme.Material.NoActionBar">
 

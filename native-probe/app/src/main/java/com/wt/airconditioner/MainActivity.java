@@ -14,10 +14,12 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.ViewFlipper;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -32,6 +34,11 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private static final int[] LEVELS = {0, 1, 2, 3};
 
+    /** Порядок вкладок в ViewFlipper — он же порядок кнопок сверху. */
+    private static final int TAB_HEAT = 0;
+    private static final int TAB_PRESETS = 1;
+    private static final int TAB_LOG = 2;
+
     /**
      * Насколько лог экрана может перерасти буфер сервиса, прежде чем его
      * подрежут. Без запаса каждая строка сверх лимита требовала бы полной
@@ -45,6 +52,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private Button enableAutostartButton;
     private TextView logView;
     private ScrollView logScroll;
+    private ViewFlipper flipper;
 
     private final Deque<String> logLines = new ArrayDeque<>();
 
@@ -86,6 +94,16 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
         buildLevelButtons(findViewById(R.id.driverRow), true);
         buildLevelButtons(findViewById(R.id.passengerRow), false);
+        buildTabs();
+
+        // Пресеты живут в SharedPreferences и не зависят от связи с сервисом —
+        // список показываем сразу, не дожидаясь привязки.
+        new PresetsPanel(this, new PresetStore(this), preset -> {
+            if (service != null) {
+                service.applyPreset(preset);
+                showTab(TAB_HEAT);
+            }
+        });
 
         findViewById(R.id.readTemp).setOnClickListener(v -> {
             if (service != null) {
@@ -93,6 +111,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             }
         });
         findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
+        findViewById(R.id.injectTemp).setOnClickListener(v -> injectTemperature());
         findViewById(R.id.startCascade).setOnClickListener(v -> {
             if (service != null) {
                 service.startAutoHeatNow();
@@ -174,6 +193,34 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         // Сервис намеренно не останавливаем: он должен пережить закрытие
         // экрана, иначе автовыключение по зажиганию перестанет работать.
         super.onDestroy();
+    }
+
+    private void injectTemperature() {
+        EditText field = findViewById(R.id.injectValue);
+        String text = field.getText().toString().trim().replace(',', '.');
+        if (service == null || text.isEmpty()) {
+            return;
+        }
+        try {
+            service.injectTemperature(Double.parseDouble(text));
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "Не похоже на температуру", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void buildTabs() {
+        flipper = findViewById(R.id.flipper);
+        findViewById(R.id.tabHeat).setOnClickListener(v -> showTab(TAB_HEAT));
+        findViewById(R.id.tabPresets).setOnClickListener(v -> showTab(TAB_PRESETS));
+        findViewById(R.id.tabLog).setOnClickListener(v -> showTab(TAB_LOG));
+        showTab(TAB_HEAT);
+    }
+
+    private void showTab(int index) {
+        flipper.setDisplayedChild(index);
+        if (index == TAB_LOG) {
+            scrollLogToBottom();
+        }
     }
 
     /**

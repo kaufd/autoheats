@@ -12,8 +12,8 @@ android {
         applicationId "com.wt.airconditioner"
         minSdk 23
         targetSdk 33
-        versionCode 241
-        versionName "0.5.1-session"
+        versionCode 260
+        versionName "0.6.0"
     }
 
     compileOptions {
@@ -42,7 +42,7 @@ android {
 
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
-            outputFileName = "AutoHeatProbe-v${variant.versionName}-vc${variant.versionCode}.apk"
+            outputFileName = "AutoHeat-native-v${variant.versionName}-vc${variant.versionCode}.apk"
         }
     }
 }

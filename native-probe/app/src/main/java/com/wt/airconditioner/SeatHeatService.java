@@ -161,6 +161,24 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         probe.readCabinTemperature();
     }
 
+    /**
+     * Подставляет температуру вместо датчика. Иначе каскад проверяется только
+     * зимой и только в поездке: на голове летом, на эмуляторе всегда — событий
+     * от датчика просто нет. Путь тот же, что у настоящего события, поэтому
+     * проверяется вся цепочка до записи уровня в автомобиль.
+     */
+    public void injectTemperature(double celsius) {
+        onLog("ОТЛАДКА: подставлена температура " + String.format(Locale.US, "%.1f", celsius)
+                + " °C");
+        lastCelsius = celsius;
+        lastRaw = null;
+        UiListener listener = uiListener;
+        if (listener != null) {
+            listener.onCabinTemperature(celsius, 0);
+        }
+        autoHeat.setTemperature(celsius);
+    }
+
     public boolean isAutoEnabled(Seat seat) {
         return settings.isAutoEnabled(seat);
     }
@@ -174,6 +192,17 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         settings.setAutoEnabled(seat, enabled);
         onLog("автоподогрев " + seat.title + ": " + (enabled ? "включён" : "выключен")
                 + " (вступит в силу со следующего зажигания ON)");
+    }
+
+    /**
+     * Запускает пресет немедленно: человек выбрал расписание руками и ждёт
+     * тепла сейчас, а не со следующего зажигания. Порог пресета проверяет сам
+     * движок — в тёплом салоне каскад не начнётся.
+     */
+    public void applyPreset(Preset preset) {
+        onLog("пресет «" + preset.name + "» → " + preset.seat.title);
+        autoHeat.start(preset.seat, level -> setSeatHeat(preset.seat == Seat.DRIVER, level),
+                preset.settings);
     }
 
     /**

@@ -1,161 +1,380 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Разметка под альбомный экран головы (1920x720): слева управление,
-     справа лог. Лог на экране обязателен — adb-доступа к голове нет. -->
+<!-- Экран головы: 1920x720, альбомный и низкий. Поэтому внутри каждой вкладки
+     содержимое раскладывается в две колонки, а не столбиком: вертикального
+     места мало, горизонтального — с избытком. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="horizontal"
+    android:orientation="vertical"
     android:background="#101418"
-    android:padding="16dp">
+    android:padding="12dp">
 
     <LinearLayout
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
-        android:orientation="vertical">
-
-        <TextView
-            android:id="@+id/status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Подключение к Car…"
-            android:textSize="20sp"
-            android:textColor="#FFC107" />
-
-        <!-- Автозапуск после сна головы держится на службе доступности, а её
-             включает только человек. Строка наверху, потому что выключенная
-             служба выглядит как «приложение перестало работать само». -->
-        <TextView
-            android:id="@+id/autostart"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textSize="14sp" />
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
 
         <Button
-            android:id="@+id/enableAutostart"
-            android:layout_width="match_parent"
+            android:id="@+id/tabHeat"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Включить автозапуск" />
-
-        <TextView
-            android:id="@+id/temperature"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="— °C"
-            android:textSize="48sp"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:text="Водитель"
-            android:textSize="18sp"
-            android:textColor="#B0BEC5" />
-
-        <LinearLayout
-            android:id="@+id/driverRow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Пассажир"
-            android:textSize="18sp"
-            android:textColor="#B0BEC5" />
-
-        <LinearLayout
-            android:id="@+id/passengerRow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal" />
-
-        <!-- Автоподогрев: каскад 3→2→1→0 стартует по зажиганию ON для
-             отмеченных сидений. Кнопка рядом запускает его вручную — иначе
-             расписание проверяется только зимой и только в поездке. -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:orientation="horizontal">
-
-            <CheckBox
-                android:id="@+id/autoDriver"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Авто: водитель"
-                android:textColor="#B0BEC5" />
-
-            <CheckBox
-                android:id="@+id/autoPassenger"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Авто: пассажир"
-                android:textColor="#B0BEC5" />
-        </LinearLayout>
+            android:layout_weight="1"
+            android:text="Подогрев" />
 
         <Button
-            android:id="@+id/startCascade"
-            android:layout_width="match_parent"
+            android:id="@+id/tabPresets"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:text="Запустить каскад сейчас" />
+            android:layout_weight="1"
+            android:text="Пресеты" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:orientation="horizontal">
-
-            <Button
-                android:id="@+id/readTemp"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Прочитать температуру" />
-
-            <Button
-                android:id="@+id/copyLog"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Копировать лог" />
-        </LinearLayout>
-
-        <!-- Проверка пересоединения без перезапуска CarService: настоящий
-             onServiceDisconnected так не вызвать, но весь наш код разрыва и
-             повторной подписки проходится целиком. -->
         <Button
-            android:id="@+id/restartCar"
-            android:layout_width="match_parent"
+            android:id="@+id/tabLog"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Переподключиться к Car" />
+            android:layout_weight="1"
+            android:text="Лог" />
     </LinearLayout>
 
-    <ScrollView
-        android:id="@+id/logScroll"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
+    <ViewFlipper
+        android:id="@+id/flipper"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
         android:layout_weight="1"
-        android:layout_marginStart="16dp"
-        android:background="#0A0D10"
-        android:padding="8dp">
+        android:layout_marginTop="8dp">
 
-        <TextView
-            android:id="@+id/log"
+        <!-- Вкладка «Подогрев» -->
+        <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:typeface="monospace"
-            android:textColor="#8BC34A" />
-    </ScrollView>
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/status"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Подключение к автомобилю…"
+                    android:textSize="18sp"
+                    android:textColor="#FFC107" />
+
+                <TextView
+                    android:id="@+id/temperature"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="— °C"
+                    android:textSize="56sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="температура в салоне"
+                    android:textSize="13sp"
+                    android:textColor="#78909C" />
+
+                <!-- Автозапуск после сна головы держится на службе доступности,
+                     а её включает только человек. Без неё приложение выглядит
+                     «переставшим работать само». -->
+                <TextView
+                    android:id="@+id/autostart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/enableAutostart"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Включить автозапуск" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Водитель"
+                    android:textSize="16sp"
+                    android:textColor="#B0BEC5" />
+
+                <LinearLayout
+                    android:id="@+id/driverRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+                <CheckBox
+                    android:id="@+id/autoDriver"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="автоматически по температуре"
+                    android:textSize="13sp"
+                    android:textColor="#B0BEC5" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Пассажир"
+                    android:textSize="16sp"
+                    android:textColor="#B0BEC5" />
+
+                <LinearLayout
+                    android:id="@+id/passengerRow"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+                <CheckBox
+                    android:id="@+id/autoPassenger"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="автоматически по температуре"
+                    android:textSize="13sp"
+                    android:textColor="#B0BEC5" />
+
+                <!-- Обычный триггер каскада — зажигание ON, то есть раз в
+                     поездку и только на холодном салоне. Проверить расписание
+                     иначе нечем. -->
+                <Button
+                    android:id="@+id/startCascade"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Запустить каскад сейчас" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- Вкладка «Пресеты»: слева сохранённые расписания, справа редактор -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="horizontal">
+
+            <ScrollView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:id="@+id/presetList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
+            <ScrollView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:layout_marginStart="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Новый пресет"
+                        android:textSize="16sp"
+                        android:textColor="#B0BEC5" />
+
+                    <EditText
+                        android:id="@+id/presetName"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="Название"
+                        android:inputType="text"
+                        android:maxLength="40"
+                        android:textColor="#FFFFFF"
+                        android:importantForAutofill="no" />
+
+                    <RadioGroup
+                        android:id="@+id/presetSeat"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <RadioButton
+                            android:id="@+id/presetSeatDriver"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:checked="true"
+                            android:text="Водитель"
+                            android:textColor="#B0BEC5" />
+
+                        <RadioButton
+                            android:id="@+id/presetSeatPassenger"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Пассажир"
+                            android:textColor="#B0BEC5" />
+                    </RadioGroup>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Минут на уровнях 3 / 2 / 1"
+                        android:textSize="13sp"
+                        android:textColor="#78909C" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal">
+
+                        <EditText
+                            android:id="@+id/presetLevel3"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="3"
+                            android:inputType="number"
+                            android:maxLength="2"
+                            android:textColor="#FFFFFF"
+                            android:importantForAutofill="no" />
+
+                        <EditText
+                            android:id="@+id/presetLevel2"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="2"
+                            android:inputType="number"
+                            android:maxLength="2"
+                            android:textColor="#FFFFFF"
+                            android:importantForAutofill="no" />
+
+                        <EditText
+                            android:id="@+id/presetLevel1"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:hint="1"
+                            android:inputType="number"
+                            android:maxLength="2"
+                            android:textColor="#FFFFFF"
+                            android:importantForAutofill="no" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Не запускать, если в салоне теплее, °C"
+                        android:textSize="13sp"
+                        android:textColor="#78909C" />
+
+                    <EditText
+                        android:id="@+id/presetThreshold"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:hint="5"
+                        android:inputType="numberSigned|numberDecimal"
+                        android:maxLength="5"
+                        android:textColor="#FFFFFF"
+                        android:importantForAutofill="no" />
+
+                    <Button
+                        android:id="@+id/presetSave"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="Сохранить пресет" />
+                </LinearLayout>
+            </ScrollView>
+        </LinearLayout>
+
+        <!-- Вкладка «Лог»: единственный вывод диагностики, adb к голове нет -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <ScrollView
+                android:id="@+id/logScroll"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:background="#0A0D10"
+                android:padding="8dp">
+
+                <TextView
+                    android:id="@+id/log"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:typeface="monospace"
+                    android:textColor="#8BC34A" />
+            </ScrollView>
+
+            <!-- Подстановка температуры: без неё каскад не проверить ни на
+                 эмуляторе, ни на голове летом — датчик молчит. -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/injectValue"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Температура, °C"
+                    android:inputType="numberSigned|numberDecimal"
+                    android:maxLength="6"
+                    android:textColor="#FFFFFF"
+                    android:importantForAutofill="no" />
+
+                <Button
+                    android:id="@+id/injectTemp"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Подставить температуру" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button
+                    android:id="@+id/readTemp"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Прочитать температуру" />
+
+                <Button
+                    android:id="@+id/copyLog"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Копировать лог" />
+
+                <Button
+                    android:id="@+id/restartCar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Переподключиться к Car" />
+            </LinearLayout>
+        </LinearLayout>
+    </ViewFlipper>
 </LinearLayout>
