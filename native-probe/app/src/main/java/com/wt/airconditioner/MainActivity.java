@@ -13,6 +13,7 @@ import android.os.IBinder;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -60,6 +61,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             logLines.clear();
             logLines.addAll(service.setUiListener(MainActivity.this));
             renderLog();
+            renderAutoCheckboxes();
         }
 
         @Override
@@ -91,6 +93,11 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             }
         });
         findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
+        findViewById(R.id.startCascade).setOnClickListener(v -> {
+            if (service != null) {
+                service.startAutoHeatNow();
+            }
+        });
         findViewById(R.id.restartCar).setOnClickListener(v -> {
             if (service == null) {
                 return;
@@ -167,6 +174,25 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         // Сервис намеренно не останавливаем: он должен пережить закрытие
         // экрана, иначе автовыключение по зажиганию перестанет работать.
         super.onDestroy();
+    }
+
+    /**
+     * Галочки заполняются только когда сервис привязан: до этого сохранённое
+     * состояние неизвестно, а показать «выключено» вместо него значит соврать.
+     */
+    private void renderAutoCheckboxes() {
+        bindAutoCheckbox(findViewById(R.id.autoDriver), Seat.DRIVER);
+        bindAutoCheckbox(findViewById(R.id.autoPassenger), Seat.PASSENGER);
+    }
+
+    private void bindAutoCheckbox(CheckBox checkBox, Seat seat) {
+        checkBox.setOnCheckedChangeListener(null);
+        checkBox.setChecked(service.isAutoEnabled(seat));
+        checkBox.setOnCheckedChangeListener((button, checked) -> {
+            if (service != null) {
+                service.setAutoEnabled(seat, checked);
+            }
+        });
     }
 
     private void buildLevelButtons(LinearLayout row, boolean isDriver) {

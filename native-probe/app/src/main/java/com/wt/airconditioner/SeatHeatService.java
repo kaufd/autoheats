@@ -59,6 +59,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     private final SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm:ss.SSS", Locale.US);
 
     private CarHvacProbe probe;
+    private AutoHeatEngine autoHeat;
+    private HeatSettings settings;
     private UiListener uiListener;
 
     /** null — готовность ещё не известна; реплеить такое в UI нельзя. */
@@ -96,6 +98,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         super.onCreate();
         startForeground(NOTIFICATION_ID, buildNotification("Подключение к автомобилю…"));
         onLog("сервис запущен");
+        settings = new HeatSettings(this);
+        autoHeat = new AutoHeatEngine(new HandlerScheduler(), this::onLog);
         probe = new CarHvacProbe(this, this);
     }
 
@@ -157,6 +161,31 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         probe.readCabinTemperature();
     }
 
+    public boolean isAutoEnabled(Seat seat) {
+        return settings.isAutoEnabled(seat);
+    }
+
+    /**
+     * Включает автоподогрев для сиденья. Уже идущий каскад не трогаем: смена
+     * настройки на ходу означала бы либо обрыв прогрева под человеком, либо
+     * запуск тройки посреди поездки.
+     */
+    public void setAutoEnabled(Seat seat, boolean enabled) {
+        settings.setAutoEnabled(seat, enabled);
+        onLog("автоподогрев " + seat.title + ": " + (enabled ? "включён" : "выключен")
+                + " (вступит в силу со следующего зажигания ON)");
+    }
+
+    /**
+     * Запуск каскада вручную — единственный способ проверить расписание на
+     * голове, не дожидаясь зимы и поездки: обычный триггер, зажигание ON,
+     * бывает раз в поездку и только при холодном салоне.
+     */
+    public void startAutoHeatNow() {
+        onLog("--- ручной запуск каскада ---");
+        startAutoHeat();
+    }
+
     /**
      * Рвёт связь с Car и поднимает её заново. Нужно затем, что перезапуск
      * самого CarService на голове недоступен: настоящий onServiceDisconnected
@@ -210,6 +239,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         lastCelsius = celsius;
         lastRaw = raw;
         onLog("температура: raw=" + raw + " → " + String.format(Locale.US, "%.1f", celsius) + " °C");
+        autoHeat.setTemperature(celsius);
         UiListener listener = uiListener;
         if (listener != null) {
             listener.onCabinTemperature(celsius, raw);
@@ -225,6 +255,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         onLog("голова проснулась → новая сессия");
         sawIgnitionOn = false;
         seatsOff = true;
+        autoHeat.stopAll();
     }
 
     @Override
@@ -232,6 +263,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         if (on) {
             if (!sawIgnitionOn) {
                 onLog("зажигание ON — с этого момента выключение по зажиганию активно");
+                startAutoHeat();
             }
             sawIgnitionOn = true;
             return;
@@ -255,7 +287,24 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         // обесточивается сам подогрев. Ретраи здесь просто не успели бы
         // выполниться, а если бы успели — гасить было бы уже нечего.
         onLog("зажигание выключено → выключаю оба сиденья");
+        autoHeat.stopAll();
         shutdownSeats();
+    }
+
+    /**
+     * Каскад запускается по зажиганию ON, а не по старту сервиса. ГУ поднимается
+     * от открытия двери, но греть в этот момент некого: без нагрузки на сиденье
+     * нагреватель не включается (см. NATIVE_MIGRATION.md, «Принятое допущение»).
+     * ON — первый момент, когда человек гарантированно сидит.
+     */
+    private void startAutoHeat() {
+        for (Seat seat : Seat.values()) {
+            if (!settings.isAutoEnabled(seat)) {
+                continue;
+            }
+            onLog("автоподогрев включён для " + seat.title + " → жду температуру");
+            autoHeat.start(seat, level -> setSeatHeat(seat == Seat.DRIVER, level));
+        }
     }
 
     /**

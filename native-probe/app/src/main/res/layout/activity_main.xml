@@ -77,10 +77,42 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal" />
 
+        <!-- Автоподогрев: каскад 3→2→1→0 стартует по зажиганию ON для
+             отмеченных сидений. Кнопка рядом запускает его вручную — иначе
+             расписание проверяется только зимой и только в поездке. -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal">
+
+            <CheckBox
+                android:id="@+id/autoDriver"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Авто: водитель"
+                android:textColor="#B0BEC5" />
+
+            <CheckBox
+                android:id="@+id/autoPassenger"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Авто: пассажир"
+                android:textColor="#B0BEC5" />
+        </LinearLayout>
+
+        <Button
+            android:id="@+id/startCascade"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Запустить каскад сейчас" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:orientation="horizontal">
 
             <Button
