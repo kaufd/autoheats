@@ -8,6 +8,8 @@
 
     <color name="system_white">#FFFFFFFF</color>
     <color name="system_grey">#FFACACAC</color>
+    <!-- ColorConstants.systemGreyDark — трек выключенного переключателя. -->
+    <color name="system_grey_dark">#FF625A5A</color>
     <color name="system_black">#FF000000</color>
 
     <!-- Цвет значения температуры по диапазонам, как в CabinTemperatureDisplay -->

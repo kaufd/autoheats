@@ -1,7 +1,6 @@
 package com.wt.airconditioner;
 
 import android.app.Activity;
-import android.graphics.Color;
 import android.graphics.PorterDuff;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -27,9 +26,20 @@ import java.util.Locale;
  */
 final class PresetsPanel {
 
-    /** Что делать с выбранным пресетом; знает только сервис. */
-    interface OnApply {
-        void apply(Preset preset);
+    /**
+     * Что панель просит сделать со своим пресетом. Всё, что переживает экран,
+     * решает сервис: панель редактирует записи, но не знает, какая из них
+     * сейчас работает на сиденье.
+     */
+    interface Listener {
+        void onApply(Preset preset);
+
+        /**
+         * Запись заменена или удалена (newEncoded == null). Сервис хранит
+         * «последний пресет сиденья» строкой самого пресета, и без этого
+         * уведомления указатель остался бы на исчезнувшем расписании.
+         */
+        void onPresetChanged(String oldEncoded, String newEncoded);
     }
 
     /** Значения слайдера порога — те же, что в TemperatureConstants оригинала. */
@@ -37,13 +47,19 @@ final class PresetsPanel {
     private static final int DEFAULT_THRESHOLD_INDEX = 2;
     private static final int MAX_MINUTES = 15;
 
-    /** Стартовые длительности: расписание диапазона «cold» из оригинала. */
-    private static final int[] DEFAULT_MINUTES = {8, 5, 10};
+    /**
+     * Стартовые длительности нового пресета — ManualHeatSettings.defaultFor из
+     * Flutter-версии: уровень 1 держится 2 минуты, второй 5, третий 10. Это не
+     * расписание из TemperatureConstants: у пресета своя логика, и дефолт у
+     * него всегда был свой. Порядок здесь — как в массиве minutes, от первого
+     * уровня.
+     */
+    private static final int[] DEFAULT_MINUTES = {2, 5, 10};
 
     private final Activity activity;
     private final PresetStore store;
-    private final OnApply onApply;
-    private int accent;
+    private final Listener listener;
+    private ThemePalette palette;
 
     private final LinearLayout list;
     private final LinearLayout levelsContainer;
@@ -54,11 +70,17 @@ final class PresetsPanel {
     /** Минуты по индексу уровня: [0] — уровень 1, [2] — уровень 3. */
     private final int[] minutes = DEFAULT_MINUTES.clone();
 
-    PresetsPanel(Activity activity, PresetStore store, int accent, OnApply onApply) {
+    /**
+     * Пресет, открытый по карандашу, в том виде, в каком он лежит в хранилище.
+     * null — редактор заполняют с нуля, и сохранение добавит новую запись.
+     */
+    private String editing;
+
+    PresetsPanel(Activity activity, PresetStore store, ThemePalette palette, Listener listener) {
         this.activity = activity;
         this.store = store;
-        this.accent = accent;
-        this.onApply = onApply;
+        this.palette = palette;
+        this.listener = listener;
 
         list = activity.findViewById(R.id.presetList);
         levelsContainer = activity.findViewById(R.id.presetLevels);
@@ -69,9 +91,10 @@ final class PresetsPanel {
         buildThreshold();
         buildThresholdLabels();
 
-        activity.findViewById(R.id.presetDivider).setBackgroundColor(withAlpha(accent, 70));
-        paintButton(activity.findViewById(R.id.presetSave));
-        paintButton(activity.findViewById(R.id.presetNew));
+        // Кнопки не красим: их находит Ui.paintButtons обходом по тегу из
+        // @style/PrimaryButton — у покраски должен быть один владелец, иначе
+        // при добавлении кнопки снова придётся гадать, кто про неё вспомнит.
+        activity.findViewById(R.id.presetDivider).setBackgroundColor(palette.divider);
         activity.findViewById(R.id.presetSave).setOnClickListener(v -> askNameAndSave());
         activity.findViewById(R.id.presetNew).setOnClickListener(v -> resetEditor());
 
@@ -79,18 +102,16 @@ final class PresetsPanel {
     }
 
     /** Перерисовывает динамический UI, сохраняя выбранное расписание. */
-    void setAccent(int accent) {
+    void applyTheme(ThemePalette palette) {
         int thresholdIndex = thresholdBar.getProgress();
-        this.accent = accent;
+        this.palette = palette;
         buildSeatSegments();
         buildLevelSliders();
         buildThreshold();
         thresholdBar.setProgress(thresholdIndex);
         buildThresholdLabels();
         activity.findViewById(R.id.presetDivider)
-                .setBackgroundColor(withAlpha(accent, 70));
-        paintButton(activity.findViewById(R.id.presetSave));
-        paintButton(activity.findViewById(R.id.presetNew));
+                .setBackgroundColor(palette.divider);
         render();
     }
 
@@ -99,7 +120,7 @@ final class PresetsPanel {
                 new SegmentedControl.Item[]{
                         new SegmentedControl.Item(Seat.DRIVER.label),
                         new SegmentedControl.Item(Seat.PASSENGER.label)},
-                selectedSeat.ordinal(), accent, 18, 50, 24, index -> {
+                selectedSeat.ordinal(), palette, 18, 50, 24, index -> {
                     selectedSeat = Seat.values()[index];
                     buildSeatSegments();
                     render();
@@ -118,7 +139,7 @@ final class PresetsPanel {
         LinearLayout row = new LinearLayout(activity);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(0, dp(8), 0, dp(8));
+        row.setPadding(0, Ui.dp(activity, 8), 0, Ui.dp(activity, 8));
 
         row.addView(levelBadge(index + 1));
 
@@ -128,8 +149,8 @@ final class PresetsPanel {
         paintSeekBar(bar, MAX_MINUTES);
         LinearLayout.LayoutParams barParams = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
-        barParams.setMarginStart(dp(12));
-        barParams.setMarginEnd(dp(12));
+        barParams.setMarginStart(Ui.dp(activity, 12));
+        barParams.setMarginEnd(Ui.dp(activity, 12));
         row.addView(bar, barParams);
 
         TextView duration = durationPill(minutes[index]);
@@ -200,7 +221,7 @@ final class PresetsPanel {
 
     /** Имя спрашиваем при сохранении, как в SavePresetDialog оригинала. */
     private void askNameAndSave() {
-        AppDialog.prompt(activity, accent, "Сохранение пресета", "Название пресета",
+        AppDialog.prompt(activity, palette, "Сохранение пресета", "Название пресета",
                 "Сохранить", this::save);
     }
 
@@ -216,11 +237,18 @@ final class PresetsPanel {
                     Toast.LENGTH_LONG).show();
             return;
         }
-        store.add(preset);
+        if (editing != null && store.replace(editing, preset)) {
+            listener.onPresetChanged(editing, preset.encode());
+        } else if (!store.add(preset)) {
+            Toast.makeText(activity, "Такой пресет уже сохранён", Toast.LENGTH_LONG).show();
+            return;
+        }
+        editing = null;
         render();
     }
 
     private void resetEditor() {
+        editing = null;
         System.arraycopy(DEFAULT_MINUTES, 0, minutes, 0, minutes.length);
         thresholdBar.setProgress(DEFAULT_THRESHOLD_INDEX);
         buildLevelSliders();
@@ -251,7 +279,7 @@ final class PresetsPanel {
             placeholder.setTextSize(16);
             placeholder.setTypeface(Fonts.regular(activity));
             placeholder.setGravity(Gravity.CENTER);
-            placeholder.setPadding(0, dp(40), 0, 0);
+            placeholder.setPadding(0, Ui.dp(activity, 40), 0, 0);
             list.addView(placeholder);
         }
     }
@@ -260,13 +288,13 @@ final class PresetsPanel {
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
-        card.setPadding(dp(16), dp(10), dp(10), dp(10));
+        card.setPadding(Ui.dp(activity, 16), Ui.dp(activity, 10), Ui.dp(activity, 10), Ui.dp(activity, 10));
 
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(12));
+        shape.setCornerRadius(Ui.dp(activity, 12));
         shape.setColor(0x66000000);
-        shape.setStroke(dp(1), withAlpha(accent, 120));
+        shape.setStroke(Ui.dp(activity, 1), palette.chipStroke);
         card.setBackground(shape);
 
         TextView title = new TextView(activity);
@@ -290,28 +318,33 @@ final class PresetsPanel {
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
         // Отступ до кнопок действий: иначе расписание липнет к карандашу.
-        scheduleParams.setMarginEnd(dp(28));
+        scheduleParams.setMarginEnd(Ui.dp(activity, 28));
         card.addView(schedule, scheduleParams);
 
-        card.addView(iconButton(R.drawable.ic_edit, accent, v -> loadIntoEditor(preset)));
-        card.addView(iconButton(R.drawable.ic_play, accent, v -> onApply.apply(preset)));
+        card.addView(iconButton(R.drawable.ic_edit, palette.accent, v -> loadIntoEditor(preset)));
+        card.addView(iconButton(R.drawable.ic_play, palette.accent, v -> listener.onApply(preset)));
         card.addView(iconButton(R.drawable.ic_delete, 0xFFE53935, v ->
-                AppDialog.confirm(activity, accent, "Удаление пресета",
+                AppDialog.confirm(activity, palette, "Удаление пресета",
                         "Удалить пресет «" + preset.name + "»?", "Удалить", () -> {
                             store.removeAt(index);
+                            listener.onPresetChanged(preset.encode(), null);
+                            if (preset.encode().equals(editing)) {
+                                editing = null;
+                            }
                             render();
                         })));
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        params.bottomMargin = dp(12);
+        params.bottomMargin = Ui.dp(activity, 12);
         card.setLayoutParams(params);
         return card;
     }
 
     /** Правка пресета: значения уезжают в редактор, как по карандашу в оригинале. */
     private void loadIntoEditor(Preset preset) {
+        editing = preset.encode();
         minutes[0] = preset.settings.sequence.level1Minutes;
         minutes[1] = preset.settings.sequence.level2Minutes;
         minutes[2] = preset.settings.sequence.level3Minutes;
@@ -327,10 +360,10 @@ final class PresetsPanel {
         ImageView button = new ImageView(activity);
         button.setImageResource(iconRes);
         button.setColorFilter(color, PorterDuff.Mode.SRC_IN);
-        button.setPadding(dp(10), dp(10), dp(10), dp(10));
+        button.setPadding(Ui.dp(activity, 10), Ui.dp(activity, 10), Ui.dp(activity, 10), Ui.dp(activity, 10));
         button.setOnClickListener(listener);
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(44), dp(44));
-        params.setMarginStart(dp(4));
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(Ui.dp(activity, 44), Ui.dp(activity, 44));
+        params.setMarginStart(Ui.dp(activity, 4));
         button.setLayoutParams(params);
         return button;
     }
@@ -340,16 +373,16 @@ final class PresetsPanel {
         TextView badge = new TextView(activity);
         badge.setText(String.valueOf(level));
         badge.setTextSize(10);
-        badge.setTextColor(accent);
+        badge.setTextColor(palette.accent);
         badge.setTypeface(Fonts.bold(activity));
         badge.setGravity(Gravity.CENTER);
-        badge.setPadding(dp(8), dp(4), dp(8), dp(4));
+        badge.setPadding(Ui.dp(activity, 8), Ui.dp(activity, 4), Ui.dp(activity, 8), Ui.dp(activity, 4));
 
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(12));
-        shape.setColor(withAlpha(accent, 51));
-        shape.setStroke(dp(1), accent);
+        shape.setCornerRadius(Ui.dp(activity, 12));
+        shape.setColor(palette.chipFill);
+        shape.setStroke(Ui.dp(activity, 1), palette.accent);
         badge.setBackground(shape);
         return badge;
     }
@@ -358,17 +391,17 @@ final class PresetsPanel {
         TextView pill = new TextView(activity);
         pill.setText(minutesText(value));
         pill.setTextSize(13);
-        pill.setTextColor(accent);
+        pill.setTextColor(palette.accent);
         pill.setTypeface(Fonts.regular(activity));
         pill.setGravity(Gravity.CENTER);
 
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(16));
-        shape.setColor(withAlpha(accent, 51));
-        shape.setStroke(dp(1), withAlpha(accent, 120));
+        shape.setCornerRadius(Ui.dp(activity, 16));
+        shape.setColor(palette.chipFill);
+        shape.setStroke(Ui.dp(activity, 1), palette.chipStroke);
         pill.setBackground(shape);
-        pill.setLayoutParams(new LinearLayout.LayoutParams(dp(90), dp(32)));
+        pill.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(activity, 90), Ui.dp(activity, 32)));
         return pill;
     }
 
@@ -385,35 +418,18 @@ final class PresetsPanel {
         // Слой обязан иметь id «progress»: иначе SeekBar сбросит уровень трека
         // в ноль, обновляя вторичный прогресс, и заливка не появится.
         LayerDrawable track = new LayerDrawable(
-                new Drawable[]{new SliderTrack(accent, divisions, dp(8), dp(2))});
+                new Drawable[]{new SliderTrack(palette.accent, divisions, Ui.dp(activity, 8), Ui.dp(activity, 2))});
         track.setId(0, android.R.id.progress);
         bar.setProgressDrawable(track);
 
         GradientDrawable thumb = new GradientDrawable();
         thumb.setShape(GradientDrawable.OVAL);
-        thumb.setColor(accent);
-        thumb.setSize(dp(20), dp(20));
+        thumb.setColor(palette.accent);
+        thumb.setSize(Ui.dp(activity, 20), Ui.dp(activity, 20));
         bar.setThumb(thumb);
         bar.setThumbOffset(0);
-        bar.setPadding(dp(10), dp(8), dp(10), dp(8));
+        bar.setPadding(Ui.dp(activity, 10), Ui.dp(activity, 8), Ui.dp(activity, 10), Ui.dp(activity, 8));
         bar.setSplitTrack(false);
     }
 
-    private void paintButton(TextView button) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(30));
-        shape.setColor(accent);
-        button.setBackground(shape);
-        button.setTextColor(Palette.textOn(accent));
-        button.setTypeface(Fonts.regular(activity));
-    }
-
-    private int withAlpha(int color, int alpha) {
-        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
-    }
-
-    private int dp(float value) {
-        return Math.round(value * activity.getResources().getDisplayMetrics().density);
-    }
 }

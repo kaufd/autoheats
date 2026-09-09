@@ -111,6 +111,21 @@ public class PresetTest {
         assertEquals("порог по умолчанию", 5.0, defaulted.settings.thresholdCelsius, 0.001);
     }
 
+    /**
+     * Перевод строки в имени — единственный символ, способный разорвать
+     * хранилище: записи разделены им же. Вставка из буфера или USB-клавиатура
+     * его пропускают, и без замены пресет пропал бы вместе с соседним.
+     */
+    @Test
+    public void nameWithNewlineStaysOneRecord() {
+        Preset broken = Preset.fromInput("Утро\nв гараже", Seat.DRIVER, "3", "2", "1", "5");
+        Preset neighbour = Preset.fromInput("Вечер", Seat.PASSENGER, "3", "2", "1", "5");
+
+        assertEquals("Утро в гараже", broken.name);
+        assertEquals("обе записи читаются обратно", 2,
+                Preset.decodeAll(Preset.encodeAll(Arrays.asList(broken, neighbour))).size());
+    }
+
     /** Длительность уровня ограничена 15 минутами — потолок из Flutter-версии. */
     @Test
     public void clampsLevelDurations() {

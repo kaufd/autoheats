@@ -68,7 +68,11 @@ final class Preset {
      */
     static Preset fromInput(String name, Seat seat, String level3, String level2,
             String level1, String threshold) {
-        String trimmedName = name == null ? "" : name.trim();
+        // Перевод строки в имени разорвал бы запись надвое: RECORD — это \n.
+        // С экранной клавиатуры головы его не ввести, но вставка из буфера и
+        // подключённая USB-клавиатура — вполне, а цена ошибки в том, что
+        // пресет пропадает и утаскивает за собой соседнюю запись.
+        String trimmedName = name == null ? "" : name.replace(RECORD, " ").trim();
         if (trimmedName.isEmpty()) {
             return null;
         }
@@ -132,15 +136,5 @@ final class Preset {
             }
         }
         return presets;
-    }
-
-    /** Строка для списка на экране: «Утро — водитель, 3/2/1 мин, до 5 °C». */
-    String describe() {
-        return String.format(Locale.US, "%s — %s, %d/%d/%d мин, до %.0f °C",
-                name, seat.title,
-                settings.sequence.level3Minutes,
-                settings.sequence.level2Minutes,
-                settings.sequence.level1Minutes,
-                settings.thresholdCelsius);
     }
 }

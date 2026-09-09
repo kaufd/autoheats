@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Вкладка «Пресеты»: сверху по центру выбор сиденья, слева редактор
+     со слайдерами, справа список сохранённых расписаний.
+
+     Вынесено из activity_main.xml: одна портянка на четыре вкладки
+     правилась вслепую. Порядок <include> в ViewFlipper обязан совпадать
+     с константами TAB_* в MainActivity — по ним и листаются вкладки. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/presetSeatSegments"
+        android:layout_width="276dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal"
+        android:orientation="horizontal" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="30dp"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingEnd="32dp">
+
+            <TextView
+                android:id="@+id/presetEditorTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Создайте новый пресет"
+                android:textSize="24sp"
+                android:textColor="@color/text_body" />
+
+            <LinearLayout
+                android:id="@+id/presetLevels"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:orientation="vertical" />
+
+            <TextView
+                android:id="@+id/presetThresholdTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="28dp"
+                android:textSize="16sp"
+                android:textColor="@color/text_body" />
+
+            <SeekBar
+                android:id="@+id/presetThreshold"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:max="4" />
+
+            <LinearLayout
+                android:id="@+id/presetThresholdLabels"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal" />
+
+            <TextView
+                android:id="@+id/presetSave"
+                style="@style/PrimaryButton"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="28dp"
+                android:text="Сохранить" />
+        </LinearLayout>
+
+        <View
+            android:id="@+id/presetDivider"
+            android:layout_width="2dp"
+            android:layout_height="match_parent" />
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="32dp">
+
+            <ScrollView
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <LinearLayout
+                    android:id="@+id/presetList"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
+            <TextView
+                android:id="@+id/presetNew"
+                style="@style/PrimaryButton"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="16dp"
+                android:text="Новый пресет" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

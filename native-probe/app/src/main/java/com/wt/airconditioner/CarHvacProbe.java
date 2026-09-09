@@ -15,7 +15,6 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
-import java.util.Locale;
 
 /**
  * Минимальный мост к android.car HVAC: подключение, чтение температуры салона,
@@ -35,20 +34,21 @@ public class CarHvacProbe {
     private static final int AREA_INSIDE = 1;
 
     /**
-     * VehicleAreaInOutCAR.InOutCAR_OUTSIDE — вторая зона того же свойства.
-     * Алгоритму не нужна (греется человек в салоне), но существует ли она на
-     * этой голове — открытый вопрос: владельцы наружную температуру в API не
-     * находили. Замер стоит одного чтения, а ответ решает, можно ли вообще
-     * показывать её на экране.
-     */
-    private static final int AREA_OUTSIDE = 2;
-
-    /**
      * Сколько ждать onServiceConnected, прежде чем признать подключение
      * несостоявшимся. Без этого статус «Подключение к Car…» может висеть
      * вечно, а пробник обязан давать однозначный ответ.
      */
     private static final long CONNECT_TIMEOUT_MS = 10_000L;
+
+    /**
+     * Повторы подписки на зажигание. Без неё теряется автовыключение сидений —
+     * единственная защита от подогрева, оставленного в пустой машине, — а
+     * отказ сразу после подъёма CarService вполне может оказаться временным.
+     * Три попытки с шагом в пять секунд перекрывают запуск головы и при этом
+     * не превращаются в бесконечный опрос мёртвого сервиса.
+     */
+    private static final int SENSOR_RETRIES = 3;
+    private static final long SENSOR_RETRY_DELAY_MS = 5_000L;
 
     /** IgnitionState.IGNITION_STATE_ON — всё остальное считается «зажигание не включено». */
     private static final int IGNITION_STATE_ON = 4;
@@ -113,6 +113,26 @@ public class CarHvacProbe {
     private CarSensorManager sensorManager;
     private CarPowerManager powerManager;
 
+    /** Сколько повторов подписки на зажигание осталось в этом подключении. */
+    private int sensorRetriesLeft = SENSOR_RETRIES;
+
+    /**
+     * Отложенный повтор подписки — полем, чтобы его можно было снять. Иначе
+     * после disconnect() и создания нового пробника (restartCarConnection)
+     * старый callback всё равно сработает и полезет к менеджерам мёртвого
+     * соединения.
+     */
+    private final Runnable sensorRetry = new Runnable() {
+        @Override
+        public void run() {
+            // Связь могла оборваться, пока мы ждали: после реконнекта подписку
+            // оформит onServiceConnected, и с полным счётчиком попыток.
+            if (serviceConnected && sensorManager == null) {
+                initSensorManager();
+            }
+        }
+    };
+
     private final CarSensorManager.OnSensorChangedListener sensorListener =
             new CarSensorManager.OnSensorChangedListener() {
                 @Override
@@ -165,6 +185,9 @@ public class CarHvacProbe {
             // объявит несостоявшимся подключение, которое на самом деле было.
             mainHandler.removeCallbacks(connectTimeout);
             log("onServiceConnected: " + name);
+            // Новое соединение — новый счёт попыток: предыдущие относились к
+            // умершему CarService и ничего не говорят о поднявшемся.
+            sensorRetriesLeft = SENSOR_RETRIES;
             initHvacManager();
             // Зажигание поднимаем независимо от исхода HVAC: без него теряется
             // автовыключение сидений, а отказ HVAC (например, пакет не в
@@ -259,7 +282,6 @@ public class CarHvacProbe {
             hvacManager = manager;
             log("CarHvacManager готов");
             notifyReady(true);
-            probeOutsideTemperature();
 
             // Подписка на события — отдельно и не критично: чтение по кнопке и
             // установка уровня от неё не зависят. Если она упадёт, пробник
@@ -289,22 +311,41 @@ public class CarHvacProbe {
         try {
             CarSensorManager manager = (CarSensorManager) car.getCarManager(Car.SENSOR_SERVICE);
             if (manager == null) {
-                log("датчик зажигания недоступен: getCarManager(SENSOR_SERVICE) вернул null");
+                retrySensorManager("getCarManager(SENSOR_SERVICE) вернул null");
                 return;
             }
             boolean registered = manager.registerListener(sensorListener,
                     CarSensorManager.SENSOR_TYPE_IGNITION_STATE,
                     CarSensorManager.SENSOR_RATE_NORMAL);
             if (!registered) {
-                log("подписка на зажигание отклонена CarSensorManager");
+                retrySensorManager("подписка отклонена CarSensorManager");
                 return;
             }
             sensorManager = manager;
+            sensorRetriesLeft = SENSOR_RETRIES;
             log("подписка на зажигание оформлена");
             publishCurrentIgnition(manager);
         } catch (Throwable t) {
-            log("подписка на зажигание не удалась (подогрев работает): " + t);
+            retrySensorManager(String.valueOf(t));
         }
+    }
+
+    /**
+     * Повторяет подписку на зажигание, пока попытки не кончатся. Исчерпанные
+     * попытки — не мелочь в логе, а потеря автовыключения: об этом сказано
+     * отдельной строкой, чтобы её было видно среди прочего вывода.
+     */
+    private void retrySensorManager(String reason) {
+        if (sensorRetriesLeft <= 0) {
+            log("ВНИМАНИЕ: зажигание недоступно (" + reason
+                    + ") — автовыключение сидений не работает");
+            return;
+        }
+        sensorRetriesLeft--;
+        log("подписка на зажигание не удалась (" + reason + "), повтор через "
+                + (SENSOR_RETRY_DELAY_MS / 1000) + " с");
+        mainHandler.removeCallbacks(sensorRetry);
+        mainHandler.postDelayed(sensorRetry, SENSOR_RETRY_DELAY_MS);
     }
 
     /**
@@ -424,23 +465,6 @@ public class CarHvacProbe {
     }
 
     /**
-     * Разовый замер: отвечает ли зона «снаружи» у того же свойства. Только в
-     * лог и только при подключении — это вопрос к голове, а не рабочий путь.
-     */
-    private void probeOutsideTemperature() {
-        try {
-            Object raw = hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_OUTSIDE);
-            Double celsius = celsiusToPublish(raw);
-            log(celsius == null
-                    ? "замер: зона OUTSIDE отвечает, но данных нет (raw=" + raw + ")"
-                    : String.format(Locale.US, "замер: наружная температура %.1f °C (raw=%s)",
-                            celsius, raw));
-        } catch (Throwable t) {
-            log("замер: зона OUTSIDE недоступна: " + t);
-        }
-    }
-
-    /**
      * level 0..3, где 0 — выключено. Возвращает, дошла ли запись до
      * автомобиля: вызывающий обязан знать, что выключение сидений не
      * состоялось, — молчаливая потеря этой команды оставляет подогрев
@@ -463,8 +487,37 @@ public class CarHvacProbe {
         }
     }
 
+    /**
+     * Что стоит на сиденье по мнению автомобиля. null — прочитать не удалось:
+     * свойство может оказаться доступным только на запись, и тогда вызывающий
+     * остаётся при своём представлении, а не при выдуманном нуле.
+     */
+    public Integer readSeatHeat(boolean isDriver) {
+        String seat = isDriver ? "водитель" : "пассажир";
+        if (!isHvacReady()) {
+            return null;
+        }
+        int area = isDriver ? VehicleAreaSeat.SEAT_MAIN_DRIVER : VehicleAreaSeat.SEAT_PASSENGER;
+        try {
+            int level = hvacManager.getIntProperty(
+                    VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, area);
+            if (level < 0 || level > 3) {
+                log("уровень подогрева (" + seat + ") вне диапазона: " + level);
+                return null;
+            }
+            return level;
+        } catch (Exception e) {
+            log("уровень подогрева (" + seat + ") прочитать не удалось: " + e);
+            return null;
+        }
+    }
+
     public void disconnect() {
         mainHandler.removeCallbacks(connectTimeout);
+        // Отложенный повтор подписки принадлежит этому соединению: после
+        // restartCarConnection он полез бы к менеджерам, которых уже нет.
+        mainHandler.removeCallbacks(sensorRetry);
+        serviceConnected = false;
         // Каждый шаг под своим catch: падение первого unregister не должно
         // оставить car соединённым, а callback — зарегистрированным.
         if (sensorManager != null) {

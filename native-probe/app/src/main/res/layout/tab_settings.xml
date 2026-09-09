@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Вкладка «Настройки»: тема, показ температуры, разрешения.
+
+     Вынесено из activity_main.xml: одна портянка на четыре вкладки
+     правилась вслепую. Порядок <include> в ViewFlipper обязан совпадать
+     с константами TAB_* в MainActivity — по ним и листаются вкладки. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Тема приложения:"
+            android:textSize="24sp"
+            android:textColor="@color/text_body" />
+
+        <LinearLayout
+            android:id="@+id/themeSegments"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Показывать температуру в салоне:"
+            android:textSize="24sp"
+            android:textColor="@color/text_body" />
+
+        <Switch
+            android:id="@+id/showTemperature"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content" />
+    </LinearLayout>
+
+    <!-- Разрешения: в оригинале строки нет — там службу доступности
+         включали вслепую через настройки головы. Здесь видно, выданы
+         ли права, и кнопка ведёт прямо на нужный экран. -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Необходимые разрешения:"
+            android:textSize="24sp"
+            android:textColor="@color/text_body" />
+
+        <ImageView
+            android:id="@+id/permissionsGranted"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:contentDescription="Разрешения выданы"
+            android:src="@drawable/ic_check"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/enableAutostart"
+            style="@style/PrimaryButton"
+            android:text="Получить" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/startCascade"
+        style="@style/PrimaryButton"
+        android:layout_gravity="end"
+        android:layout_marginTop="24dp"
+        android:text="Запустить каскад сейчас" />
+</LinearLayout>

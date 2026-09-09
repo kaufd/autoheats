@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Вкладка «Управление»: два сиденья, каждое со своими режимами и
+     уровнями. Раскладка оригинала — управление снаружи, сиденья к центру.
+
+     Вынесено из activity_main.xml: одна портянка на четыре вкладки
+     правилась вслепую. Порядок <include> в ViewFlipper обязан совпадать
+     с константами TAB_* в MainActivity — по ним и листаются вкладки. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <!-- Долгое нажатие включает вкладку логов -->
+    <LinearLayout
+        android:id="@+id/temperaturePill"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@drawable/pill_temperature">
+
+        <ImageView
+            android:id="@+id/temperatureIcon"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:contentDescription="Температура в салоне"
+            android:src="@drawable/ic_thermostat" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="Температура в салоне: "
+            android:textSize="16sp"
+            android:textColor="@color/text_body" />
+
+        <TextView
+            android:id="@+id/temperature"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="-- °C"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/temp_warm" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="340dp"
+        android:layout_marginTop="25dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <!-- Водитель: управление слева, сиденье справа -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <LinearLayout
+                    android:id="@+id/driverModes"
+                    android:layout_width="452dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+                <LinearLayout
+                    android:id="@+id/driverLevels"
+                    android:layout_width="220dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="68dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/driverSeat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="24dp"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <ImageView
+                    android:id="@+id/driverSeatImage"
+                    android:layout_width="300dp"
+                    android:layout_height="300dp"
+                    android:contentDescription="Сиденье водителя"
+                    android:src="@drawable/seat" />
+
+                <LinearLayout
+                    android:id="@+id/driverDots"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <View
+            android:layout_width="2dp"
+            android:layout_height="400dp"
+            android:id="@+id/centerDivider" />
+
+        <!-- Пассажир: зеркально — сиденье слева, управление справа -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="horizontal"
+            android:gravity="center">
+
+            <LinearLayout
+                android:id="@+id/passengerSeat"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginEnd="24dp"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <ImageView
+                    android:id="@+id/passengerSeatImage"
+                    android:layout_width="300dp"
+                    android:layout_height="300dp"
+                    android:contentDescription="Сиденье пассажира"
+                    android:src="@drawable/seat" />
+
+                <LinearLayout
+                    android:id="@+id/passengerDots"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <LinearLayout
+                    android:id="@+id/passengerModes"
+                    android:layout_width="452dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+
+                <LinearLayout
+                    android:id="@+id/passengerLevels"
+                    android:layout_width="220dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="68dp"
+                    android:orientation="horizontal" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

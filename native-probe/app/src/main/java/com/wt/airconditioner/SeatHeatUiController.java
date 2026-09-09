@@ -1,7 +1,6 @@
 package com.wt.airconditioner;
 
 import android.app.Activity;
-import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.view.View;
 import android.widget.LinearLayout;
@@ -34,15 +33,15 @@ final class SeatHeatUiController {
     private final HeatSettings settings;
     private final SeatHeatServiceProvider serviceProvider;
     private final Listener listener;
-    private int accent;
+    private ThemePalette palette;
 
     SeatHeatUiController(Activity activity, HeatSettings settings,
-            SeatHeatServiceProvider serviceProvider, Listener listener, int accent) {
+            SeatHeatServiceProvider serviceProvider, Listener listener, ThemePalette palette) {
         this.activity = activity;
         this.settings = settings;
         this.serviceProvider = serviceProvider;
         this.listener = listener;
-        this.accent = accent;
+        this.palette = palette;
     }
 
     void bind() {
@@ -52,8 +51,8 @@ final class SeatHeatUiController {
         }
     }
 
-    void setAccent(int accent) {
-        this.accent = accent;
+    void applyTheme(ThemePalette palette) {
+        this.palette = palette;
         render();
     }
 
@@ -78,7 +77,7 @@ final class SeatHeatUiController {
                 new SegmentedControl.Item(HeatMode.AUTO.title, R.drawable.ic_auto),
         };
         SegmentedControl.build(activity.findViewById(seatView.modesId), modes, mode.ordinal(),
-                accent, MODE_TEXT_SP, MODE_HEIGHT_DP, MODE_PADDING_DP,
+                palette, MODE_TEXT_SP, MODE_HEIGHT_DP, MODE_PADDING_DP,
                 index -> selectMode(seat, HeatMode.values()[index]));
 
         int level = levelOf(seat);
@@ -91,7 +90,7 @@ final class SeatHeatUiController {
             }
         }
         LinearLayout levels = activity.findViewById(seatView.levelsId);
-        SegmentedControl.build(levels, levelItems, selected, accent,
+        SegmentedControl.build(levels, levelItems, selected, palette,
                 LEVEL_TEXT_SP, LEVEL_HEIGHT_DP, LEVEL_PADDING_DP,
                 index -> setLevel(seat, LEVEL_ORDER[index]));
         // В неручных режимах controls остаются невидимыми, но сохраняют место.
@@ -105,14 +104,14 @@ final class SeatHeatUiController {
             View dot = new View(activity);
             GradientDrawable shape = new GradientDrawable();
             shape.setShape(GradientDrawable.OVAL);
-            shape.setColor(level > index ? accent
+            shape.setColor(level > index ? palette.accent
                     : activity.getResources().getColor(R.color.system_grey));
             dot.setBackground(shape);
 
             LinearLayout.LayoutParams params =
-                    new LinearLayout.LayoutParams(dp(20), dp(20));
-            params.setMarginStart(dp(4));
-            params.setMarginEnd(dp(4));
+                    new LinearLayout.LayoutParams(Ui.dp(activity, 20), Ui.dp(activity, 20));
+            params.setMarginStart(Ui.dp(activity, 4));
+            params.setMarginEnd(Ui.dp(activity, 4));
             container.addView(dot, params);
         }
     }
@@ -165,10 +164,6 @@ final class SeatHeatUiController {
             service.setManualLevel(seat, level >= 3 ? 0 : level + 1);
         }
         render();
-    }
-
-    private int dp(float value) {
-        return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }
 
     private static final class SeatView {

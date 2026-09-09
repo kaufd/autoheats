@@ -4,7 +4,7 @@ import android.app.Activity;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
-import android.graphics.Color;
+import android.content.res.ColorStateList;
 import android.graphics.drawable.GradientDrawable;
 import android.view.View;
 import android.widget.CheckBox;
@@ -30,12 +30,12 @@ final class LogUiController {
     private final TextView logView;
     private final TextView counter;
     private final ScrollView logScroll;
-    private int accent;
+    private ThemePalette palette;
 
-    LogUiController(Activity activity, SeatHeatServiceProvider serviceProvider, int accent) {
+    LogUiController(Activity activity, SeatHeatServiceProvider serviceProvider, ThemePalette palette) {
         this.activity = activity;
         this.serviceProvider = serviceProvider;
-        this.accent = accent;
+        this.palette = palette;
         logView = activity.findViewById(R.id.log);
         counter = activity.findViewById(R.id.logCounter);
         logScroll = activity.findViewById(R.id.logScroll);
@@ -60,10 +60,15 @@ final class LogUiController {
         buildQuickTemperatures();
     }
 
-    void setAccent(int accent) {
-        this.accent = accent;
+    void applyTheme(ThemePalette palette) {
+        this.palette = palette;
         paintPanel(activity.findViewById(R.id.logScroll));
         paintPanel(activity.findViewById(R.id.injectPanel));
+        // Системный CheckBox рисуется дефолтным colorAccent платформы и при
+        // смене темы оставался бирюзовым — видно только на запущенном
+        // приложении, в разметке этого нет.
+        ((CheckBox) activity.findViewById(R.id.autoScroll))
+                .setButtonTintList(ColorStateList.valueOf(palette.accent));
         buildQuickTemperatures();
     }
 
@@ -91,13 +96,17 @@ final class LogUiController {
     void onLogLine(String line) {
         activity.runOnUiThread(() -> {
             logLines.addLast(line);
-            if (logLines.size() > SeatHeatService.LOG_CAPACITY + LOG_TRIM_SLACK) {
-                while (logLines.size() > SeatHeatService.LOG_CAPACITY) {
+            if (logLines.size() > LogBuffer.CAPACITY + LOG_TRIM_SLACK) {
+                while (logLines.size() > LogBuffer.CAPACITY) {
                     logLines.removeFirst();
                 }
                 renderLog();
             } else {
                 logView.append(line + "\n");
+                // Счётчик обновляется и на быстром пути: renderLog случается
+                // только при подрезке, и между подрезками цифра показывала бы
+                // размер буфера получасовой давности.
+                renderCounter();
                 scrollLogToBottom();
             }
         });
@@ -122,7 +131,7 @@ final class LogUiController {
                 LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
                         LinearLayout.LayoutParams.WRAP_CONTENT);
-                rowParams.topMargin = dp(6);
+                rowParams.topMargin = Ui.dp(activity, 6);
                 container.addView(row, rowParams);
             }
             row.addView(quickTemperatureButton(QUICK_TEMPERATURES[index], index % 3 > 0));
@@ -133,15 +142,15 @@ final class LogUiController {
         TextView button = new TextView(activity);
         button.setText(celsius + "°C");
         button.setTextSize(14);
-        button.setTextColor(accent);
+        button.setTextColor(palette.accent);
         button.setTypeface(Fonts.regular(activity));
         button.setGravity(android.view.Gravity.CENTER);
 
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(10));
-        shape.setColor(withAlpha(accent, 51));
-        shape.setStroke(dp(1), withAlpha(accent, 120));
+        shape.setCornerRadius(Ui.dp(activity, 10));
+        shape.setColor(palette.chipFill);
+        shape.setStroke(Ui.dp(activity, 1), palette.chipStroke);
         button.setBackground(shape);
         button.setOnClickListener(v -> {
             SeatHeatService service = serviceProvider.get();
@@ -150,9 +159,9 @@ final class LogUiController {
             }
         });
 
-        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(38), 1f);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, Ui.dp(activity, 38), 1f);
         if (withMargin) {
-            params.setMarginStart(dp(6));
+            params.setMarginStart(Ui.dp(activity, 6));
         }
         button.setLayoutParams(params);
         return button;
@@ -192,8 +201,12 @@ final class LogUiController {
 
     private void renderLog() {
         logView.setText(logText());
-        counter.setText(logLines.size() + " / " + SeatHeatService.LOG_CAPACITY);
+        renderCounter();
         scrollLogToBottom();
+    }
+
+    private void renderCounter() {
+        counter.setText(logLines.size() + " / " + LogBuffer.CAPACITY);
     }
 
     private void scrollLogToBottom() {
@@ -207,17 +220,10 @@ final class LogUiController {
     private void paintPanel(View panel) {
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(12));
+        shape.setCornerRadius(Ui.dp(activity, 12));
         shape.setColor(0x99000000);
-        shape.setStroke(dp(1), withAlpha(accent, 90));
+        shape.setStroke(Ui.dp(activity, 1), palette.panelStroke);
         panel.setBackground(shape);
     }
 
-    private int withAlpha(int color, int alpha) {
-        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
-    }
-
-    private int dp(float value) {
-        return Math.round(value * activity.getResources().getDisplayMetrics().density);
-    }
 }

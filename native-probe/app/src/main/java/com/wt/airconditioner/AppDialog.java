@@ -45,7 +45,7 @@ final class AppDialog {
      * Запрос имени. Кнопка подтверждения неактивна, пока поле пустое: пресет
      * без имени не найти в списке.
      */
-    static void prompt(Activity activity, int accent, String title, String hint,
+    static void prompt(Activity activity, ThemePalette palette, String title, String hint,
             String confirmText, OnName listener) {
         Dialog dialog = card(activity);
         LinearLayout content = (LinearLayout) dialog.findViewById(android.R.id.content)
@@ -55,27 +55,32 @@ final class AppDialog {
 
         EditText input = new EditText(activity);
         input.setHint(hint);
+        // Одна строка: перевод строки в имени пресета — единственный символ,
+        // способный разорвать текстовое хранилище (Preset.RECORD). Preset его
+        // всё равно вычищает, но не пускать его с клавиатуры дешевле, чем
+        // чинить потом.
         input.setInputType(InputType.TYPE_CLASS_TEXT);
+        input.setSingleLine(true);
         input.setTextColor(Color.WHITE);
         input.setHintTextColor(0xB3FFFFFF);
         input.setTextSize(18);
         input.setTypeface(Fonts.regular(activity));
-        input.setPadding(dp(activity, 16), dp(activity, 14), dp(activity, 16), dp(activity, 14));
+        input.setPadding(Ui.dp(activity, 16), Ui.dp(activity, 14), Ui.dp(activity, 16), Ui.dp(activity, 14));
 
         GradientDrawable field = new GradientDrawable();
         field.setShape(GradientDrawable.RECTANGLE);
-        field.setCornerRadius(dp(activity, 10));
+        field.setCornerRadius(Ui.dp(activity, 10));
         field.setColor(Color.TRANSPARENT);
-        field.setStroke(dp(activity, 1), accent);
+        field.setStroke(Ui.dp(activity, 1), palette.accent);
         input.setBackground(field);
 
         LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        inputParams.topMargin = dp(activity, 20);
+        inputParams.topMargin = Ui.dp(activity, 20);
         content.addView(input, inputParams);
 
-        TextView cancel = button(activity, "Отмена", accent, false, true);
-        TextView confirm = button(activity, confirmText, accent, true, false);
+        TextView cancel = button(activity, "Отмена", palette, false, true);
+        TextView confirm = button(activity, confirmText, palette, true, false);
         content.addView(buttons(activity, cancel, confirm));
 
         cancel.setOnClickListener(v -> dialog.dismiss());
@@ -91,7 +96,7 @@ final class AppDialog {
 
             @Override
             public void onTextChanged(CharSequence s, int start, int before, int count) {
-                applyFilled(activity, confirm, accent, s.toString().trim().length() > 0);
+                applyFilled(activity, confirm, palette, s.toString().trim().length() > 0);
             }
 
             @Override
@@ -104,7 +109,7 @@ final class AppDialog {
     }
 
     /** Подтверждение необратимого действия — например, удаления пресета. */
-    static void confirm(Activity activity, int accent, String title, String message,
+    static void confirm(Activity activity, ThemePalette palette, String title, String message,
             String confirmText, OnConfirm listener) {
         Dialog dialog = card(activity);
         LinearLayout content = (LinearLayout) dialog.findViewById(android.R.id.content)
@@ -119,11 +124,11 @@ final class AppDialog {
         text.setTypeface(Fonts.regular(activity));
         LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        textParams.topMargin = dp(activity, 16);
+        textParams.topMargin = Ui.dp(activity, 16);
         content.addView(text, textParams);
 
-        TextView cancel = button(activity, "Отмена", accent, false, true);
-        TextView ok = button(activity, confirmText, accent, true, true);
+        TextView cancel = button(activity, "Отмена", palette, false, true);
+        TextView ok = button(activity, confirmText, palette, true, true);
         content.addView(buttons(activity, cancel, ok));
 
         cancel.setOnClickListener(v -> dialog.dismiss());
@@ -141,16 +146,16 @@ final class AppDialog {
         LinearLayout content = new LinearLayout(activity);
         content.setTag("content");
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(dp(activity, 24), dp(activity, 24), dp(activity, 24), dp(activity, 24));
+        content.setPadding(Ui.dp(activity, 24), Ui.dp(activity, 24), Ui.dp(activity, 24), Ui.dp(activity, 24));
 
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(activity, 16));
+        shape.setCornerRadius(Ui.dp(activity, 16));
         shape.setColor(CARD);
         content.setBackground(shape);
 
         dialog.setContentView(content, new ViewGroup.LayoutParams(
-                dp(activity, 520), ViewGroup.LayoutParams.WRAP_CONTENT));
+                Ui.dp(activity, 520), ViewGroup.LayoutParams.WRAP_CONTENT));
         Window window = dialog.getWindow();
         if (window != null) {
             // Прозрачный фон окна: иначе под нашей карточкой видна системная.
@@ -173,21 +178,21 @@ final class AppDialog {
         row.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        rowParams.topMargin = dp(activity, 24);
+        rowParams.topMargin = Ui.dp(activity, 24);
         row.setLayoutParams(rowParams);
 
         LinearLayout.LayoutParams half =
-                new LinearLayout.LayoutParams(0, dp(activity, 48), 1f);
+                new LinearLayout.LayoutParams(0, Ui.dp(activity, 48), 1f);
         row.addView(cancel, half);
 
         LinearLayout.LayoutParams halfWithGap =
-                new LinearLayout.LayoutParams(0, dp(activity, 48), 1f);
-        halfWithGap.setMarginStart(dp(activity, 16));
+                new LinearLayout.LayoutParams(0, Ui.dp(activity, 48), 1f);
+        halfWithGap.setMarginStart(Ui.dp(activity, 16));
         row.addView(confirm, halfWithGap);
         return row;
     }
 
-    private static TextView button(Activity activity, String text, int accent,
+    private static TextView button(Activity activity, String text, ThemePalette palette,
             boolean filled, boolean enabled) {
         TextView button = new TextView(activity);
         button.setText(text);
@@ -196,32 +201,29 @@ final class AppDialog {
         button.setTypeface(Fonts.regular(activity));
 
         if (filled) {
-            applyFilled(activity, button, accent, enabled);
+            applyFilled(activity, button, palette, enabled);
             return button;
         }
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(activity, 30));
+        shape.setCornerRadius(Ui.dp(activity, 30));
         shape.setColor(Color.TRANSPARENT);
-        shape.setStroke(dp(activity, 1), accent);
+        shape.setStroke(Ui.dp(activity, 1), palette.accent);
         button.setBackground(shape);
         button.setTextColor(Color.WHITE);
         return button;
     }
 
     /** Выключенная кнопка подтверждения серая и не нажимается — как в оригинале. */
-    private static void applyFilled(Activity activity, TextView button, int accent,
+    private static void applyFilled(Activity activity, TextView button, ThemePalette palette,
             boolean enabled) {
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(activity, 30));
-        shape.setColor(enabled ? accent : DISABLED);
+        shape.setCornerRadius(Ui.dp(activity, 30));
+        shape.setColor(enabled ? palette.accent : DISABLED);
         button.setBackground(shape);
-        button.setTextColor(enabled ? Palette.textOn(accent) : 0xB3FFFFFF);
+        button.setTextColor(enabled ? palette.textOnAccent : 0xB3FFFFFF);
         button.setEnabled(enabled);
     }
 
-    private static int dp(Activity activity, float value) {
-        return Math.round(value * activity.getResources().getDisplayMetrics().density);
-    }
 }

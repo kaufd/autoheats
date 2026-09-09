@@ -275,6 +275,66 @@ public class AutoHeatEngineTest {
     }
 
     /**
+     * Пустое поле длительности в редакторе — это «пропустить уровень», а не
+     * «держать его вечно». Таймер на ноль минут не заводится, а запущенный
+     * пресет не двигают события температуры, так что без пропуска каскад
+     * застревает на первом же таком уровне до конца поездки.
+     */
+    @Test
+    public void presetSkipsLevelsWithZeroDuration() {
+        PresetSettings settings = new PresetSettings(5.0, 0, 5, 3);
+        engine.setTemperature(4.0);
+        engine.start(Seat.DRIVER, level -> driverLevels.add(level), settings);
+
+        assertEquals("тройка пропущена — стартуем сразу с двойки",
+                Arrays.asList(2), driverLevels);
+        scheduler.elapse(5);
+        assertEquals(Arrays.asList(2, 1), driverLevels);
+        scheduler.elapse(3);
+        assertEquals(Arrays.asList(2, 1, 0), driverLevels);
+        assertEquals(0, scheduler.pendingCount());
+    }
+
+    /** Нулевой последний уровень — каскад заканчивается выключением, а не им. */
+    @Test
+    public void presetWithZeroLastLevelEndsWithOff() {
+        PresetSettings settings = new PresetSettings(5.0, 4, 0, 0);
+        engine.setTemperature(4.0);
+        engine.start(Seat.DRIVER, level -> driverLevels.add(level), settings);
+
+        assertEquals(Arrays.asList(3), driverLevels);
+        scheduler.elapse(4);
+        assertEquals("оба нулевых уровня пропущены", Arrays.asList(3, 0), driverLevels);
+        assertEquals(0, scheduler.pendingCount());
+    }
+
+    /**
+     * Салон прогрелся, греть больше нечего, но выключение не прошло. Ждать
+     * следующего события датчика нельзя: в тёплом неподвижном салоне его может
+     * не быть часами, а сиденье всё это время включено.
+     */
+    @Test
+    public void rejectedOffInWarmCabinIsRetriedByTimer() {
+        List<Integer> attempts = new ArrayList<>();
+        boolean[] rejectNextOff = {true};
+        engine.setTemperature(-3.0);
+        engine.start(Seat.DRIVER, level -> {
+            attempts.add(level);
+            if (level == 0 && rejectNextOff[0]) {
+                rejectNextOff[0] = false;
+                return false;
+            }
+            return true;
+        });
+
+        engine.setTemperature(20.0); // выше OFF_ABOVE_CELSIUS — греть нечего
+        assertEquals(Arrays.asList(3, 0), attempts);
+
+        scheduler.elapse(1);
+        assertEquals(Arrays.asList(3, 0, 0), attempts);
+    }
+
+    /**
      * scenario-11: температура уже на пороге пресета или выше — пресет не
      * стартует вовсе, каким бы ни было расписание внутри него: греть тёплый
      * салон не нужно, даже если пользователь так настроил длительности.
@@ -434,5 +494,57 @@ public class AutoHeatEngineTest {
         scheduler.elapse(20);
         assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
         assertEquals(0, scheduler.pendingCount());
+    }
+
+    /**
+     * Отклонённая запись повторяется тем же уровнем. Проверяется закрывающий
+     * ноль: сиденье при отказе физически остаётся горячим, а событий
+     * температуры, способных повторить переход, в этом диапазоне не будет —
+     * уровень 1 при −3 °C как раз соответствует расписанию.
+     */
+    @Test
+    public void rejectedLevelIsRetriedInsteadOfRestartingCascade() {
+        List<Integer> attempts = new ArrayList<>();
+        boolean[] rejectNextOff = {true};
+        engine.setTemperature(-3.0);
+        engine.start(Seat.DRIVER, level -> {
+            attempts.add(level);
+            if (level == 0 && rejectNextOff[0]) {
+                rejectNextOff[0] = false;
+                return false;
+            }
+            return true;
+        });
+
+        scheduler.elapse(8 + 5 + 7);
+        assertEquals("каскад дошёл до нуля, но его не приняли",
+                Arrays.asList(3, 2, 1, 0), attempts);
+
+        scheduler.elapse(1);
+        assertEquals("повторяется тот же ноль, а не новая тройка",
+                Arrays.asList(3, 2, 1, 0, 0), attempts);
+        assertEquals("после принятого нуля таймеров не остаётся",
+                0, scheduler.pendingCount());
+    }
+
+    /**
+     * Событие температуры между отказом и повтором не должно поднимать уровень:
+     * тройка после неудавшегося выключения — худший из возможных исходов.
+     */
+    @Test
+    public void temperatureEventAfterRejectedLevelDoesNotEscalate() {
+        List<Integer> attempts = new ArrayList<>();
+        engine.setTemperature(-3.0);
+        engine.start(Seat.DRIVER, level -> {
+            attempts.add(level);
+            return level != 0;
+        });
+
+        scheduler.elapse(8 + 5 + 7);
+        assertEquals(Arrays.asList(3, 2, 1, 0), attempts);
+
+        engine.setTemperature(-3.0);
+        assertEquals("уровень не меняется — переход всё ещё ждёт повтора",
+                Arrays.asList(3, 2, 1, 0), attempts);
     }
 }

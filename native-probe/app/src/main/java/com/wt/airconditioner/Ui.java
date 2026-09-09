@@ -1,0 +1,74 @@
+package com.wt.airconditioner;
+
+import android.content.Context;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
+
+/**
+ * Мелкие операции оформления, которые нужны каждому экрану: перевод dp в
+ * пиксели, прозрачность акцентного цвета, вид кнопки.
+ *
+ * Собраны здесь, потому что по одной копии в каждом UI-классе они уже
+ * разъезжались: dp() существовал в шести местах, withAlpha() — в трёх.
+ * Расхождение в таком коде заметно не в диффе, а на экране головы.
+ */
+final class Ui {
+
+    /** Скругление кнопок из Flutter-версии: у всех одинаковое. */
+    private static final int BUTTON_RADIUS_DP = 30;
+
+    /** Значение android:tag из @style/PrimaryButton — метка «красить акцентом». */
+    private static final String BUTTON_TAG = "accentButton";
+
+    private Ui() {
+    }
+
+    static int dp(Context context, float value) {
+        return Math.round(value * context.getResources().getDisplayMetrics().density);
+    }
+
+    /** Тот же цвет с другой прозрачностью — для подложек и рамок. */
+    static int withAlpha(int color, int alpha) {
+        return Color.argb(alpha, Color.red(color), Color.green(color), Color.blue(color));
+    }
+
+    /**
+     * Заливка акцентом, скруглённые углы, контрастный текст. Шрифт ставится
+     * здесь же: кнопки, построенные кодом, не попадают под Fonts.applyTo,
+     * которое проходит по дереву разметки один раз при создании экрана.
+     */
+    static void paintButton(TextView button, ThemePalette palette) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.RECTANGLE);
+        shape.setCornerRadius(dp(button.getContext(), BUTTON_RADIUS_DP));
+        shape.setColor(palette.accent);
+        button.setBackground(shape);
+        button.setTextColor(palette.textOnAccent);
+        button.setTypeface(Fonts.regular(button.getContext()));
+    }
+
+    /**
+     * Красит все кнопки поддерева — их метит тег из @style/PrimaryButton.
+     * Обходом, а не перечислением id: список из девяти findViewById жил в
+     * MainActivity и молча устаревал бы с каждой новой кнопкой, причём
+     * незаметно — кнопка просто оставалась бы в цвете прошлой темы.
+     *
+     * Тем же приёмом работает Fonts.applyTo: на одном экране без фрагментов
+     * обход дерева дешевле любого реестра.
+     */
+    static void paintButtons(View root, ThemePalette palette) {
+        if (BUTTON_TAG.equals(root.getTag()) && root instanceof TextView) {
+            paintButton((TextView) root, palette);
+            return;
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int index = 0; index < group.getChildCount(); index++) {
+                paintButtons(group.getChildAt(index), palette);
+            }
+        }
+    }
+}

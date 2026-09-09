@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Вкладка «Логи»: слева живой лог, справа инжектор температуры.
+     Экран — единственный вывод диагностики, adb к голове нет.
+
+     Вынесено из activity_main.xml: одна портянка на четыре вкладки
+     правилась вслепую. Порядок <include> в ViewFlipper обязан совпадать
+     с константами TAB_* в MainActivity — по ним и листаются вкладки. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/logCounter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="0 / 500"
+                android:textSize="15sp"
+                android:textColor="@color/text_body" />
+
+            <CheckBox
+                android:id="@+id/autoScroll"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="24dp"
+                android:checked="true"
+                android:text="Автопрокрутка"
+                android:textSize="15sp"
+                android:textColor="@color/text_body" />
+
+            <TextView
+                android:id="@+id/readTemp"
+                style="@style/PrimaryButton"
+                android:text="Прочитать" />
+
+            <TextView
+                android:id="@+id/restartCar"
+                style="@style/PrimaryButton"
+                android:layout_marginStart="12dp"
+                android:text="Переподключиться" />
+
+            <TextView
+                android:id="@+id/copyLog"
+                style="@style/PrimaryButton"
+                android:layout_marginStart="12dp"
+                android:text="Скопировать" />
+
+            <TextView
+                android:id="@+id/clearLog"
+                style="@style/PrimaryButton"
+                android:layout_marginStart="12dp"
+                android:text="Очистить" />
+        </LinearLayout>
+
+        <ScrollView
+            android:id="@+id/logScroll"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="12dp"
+            android:padding="12dp">
+
+            <TextView
+                android:id="@+id/log"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:typeface="monospace"
+                android:textColor="#8BC34A" />
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- Сайдбар в прокрутке: на голове экран ниже эмулятора, и
+         нижние кнопки иначе оказываются за краем. -->
+    <ScrollView
+        android:layout_width="320dp"
+        android:layout_height="match_parent"
+        android:layout_marginStart="24dp">
+
+    <LinearLayout
+        android:id="@+id/injectPanel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Подстановка температуры"
+            android:textSize="20sp"
+            android:textColor="@color/text_body" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Тот же путь, что и у события датчика."
+            android:textSize="13sp"
+            android:textColor="@color/text_muted" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:id="@+id/injectThermometer"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="Текущая температура"
+                android:src="@drawable/ic_thermostat" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="Сейчас в салоне"
+                android:textSize="14sp"
+                android:textColor="@color/text_body" />
+
+            <TextView
+                android:id="@+id/injectCurrent"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="-- °C"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/temp_warm" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Быстрые значения"
+            android:textSize="14sp"
+            android:textColor="@color/text_body" />
+
+        <LinearLayout
+            android:id="@+id/quickTemperatures"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="vertical" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Произвольное значение"
+            android:textSize="14sp"
+            android:textColor="@color/text_body" />
+
+        <EditText
+            android:id="@+id/injectValue"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:hint="Например, -2.5"
+            android:inputType="numberSigned|numberDecimal"
+            android:maxLength="6"
+            android:textColor="@color/system_white"
+            android:textColorHint="@color/text_muted"
+            android:importantForAutofill="no" />
+
+        <TextView
+            android:id="@+id/injectTemp"
+            style="@style/PrimaryButton"
+            android:layout_gravity="end"
+            android:layout_marginTop="12dp"
+            android:text="Применить" />
+
+    </LinearLayout>
+    </ScrollView>
+</LinearLayout>

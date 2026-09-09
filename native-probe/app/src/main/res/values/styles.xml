@@ -18,6 +18,10 @@
     </style>
 
     <style name="PrimaryButton">
+        <!-- По этому тегу Ui.paintButtons находит кнопки обходом дерева. Так
+             новая кнопка перекрашивается при смене темы сама, а не после того,
+             как о ней вспомнят в MainActivity. -->
+        <item name="android:tag">accentButton</item>
         <item name="android:layout_width">wrap_content</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:paddingStart">28dp</item>

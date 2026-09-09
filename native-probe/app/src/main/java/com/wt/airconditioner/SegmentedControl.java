@@ -54,14 +54,14 @@ final class SegmentedControl {
     }
 
     static void build(LinearLayout container, Item[] items, int selectedIndex,
-            int accentColor, int textSizeSp, int heightDp, int paddingDp,
+            ThemePalette palette, int textSizeSp, int heightDp, int paddingDp,
             OnSelected listener) {
         Context context = container.getContext();
         container.removeAllViews();
 
         for (int index = 0; index < items.length; index++) {
             boolean selected = index == selectedIndex;
-            int textColor = selected ? Palette.textOn(accentColor) : Color.WHITE;
+            int textColor = selected ? palette.textOnAccent : Color.WHITE;
 
             TextView label = new TextView(context);
             label.setText(items[index].title);
@@ -86,17 +86,17 @@ final class SegmentedControl {
                 ImageView icon = new ImageView(context);
                 icon.setImageResource(items[index].iconRes);
                 icon.setColorFilter(textColor, PorterDuff.Mode.SRC_IN);
-                int size = dp(context, textSizeSp);
+                int size = Ui.dp(context, textSizeSp);
                 LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(size, size);
-                iconParams.setMarginEnd(dp(context, 8));
+                iconParams.setMarginEnd(Ui.dp(context, 8));
                 pair.addView(icon, iconParams);
                 pair.addView(label);
                 content = pair;
             }
 
-            content.setPadding(dp(context, paddingDp), 0, dp(context, paddingDp), 0);
+            content.setPadding(Ui.dp(context, paddingDp), 0, Ui.dp(context, paddingDp), 0);
             content.setBackground(withDivider(context,
-                    background(context, index, items.length, selected, accentColor), index));
+                    background(context, index, items.length, selected, palette), index));
 
             final int position = index;
             if (listener != null) {
@@ -106,7 +106,7 @@ final class SegmentedControl {
             // Сегменты равной ширины: в оригинале переключатель — цельная
             // пилюля, и «Авто» занимает столько же, сколько «Вручную».
             container.addView(content, new LinearLayout.LayoutParams(
-                    0, dp(context, heightDp), 1f));
+                    0, Ui.dp(context, heightDp), 1f));
         }
     }
 
@@ -131,8 +131,8 @@ final class SegmentedControl {
      * соседние кнопки стыкуются встык, как в оригинале.
      */
     private static GradientDrawable background(Context context, int index, int count,
-            boolean selected, int accentColor) {
-        float corner = dp(context, CORNER_DP);
+            boolean selected, ThemePalette palette) {
+        float corner = Ui.dp(context, CORNER_DP);
         boolean first = index == 0;
         boolean last = index == count - 1;
 
@@ -146,11 +146,8 @@ final class SegmentedControl {
         GradientDrawable shape = new GradientDrawable();
         shape.setShape(GradientDrawable.RECTANGLE);
         shape.setCornerRadii(radii);
-        shape.setColor(selected ? accentColor : UNSELECTED);
+        shape.setColor(selected ? palette.accent : UNSELECTED);
         return shape;
     }
 
-    private static int dp(Context context, float value) {
-        return Math.round(value * context.getResources().getDisplayMetrics().density);
-    }
 }

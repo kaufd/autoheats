@@ -5,7 +5,6 @@ import com.wt.airconditioner.TemperatureConstants.HeatSequence;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.EnumSet;
-import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -34,6 +33,13 @@ final class AutoHeatEngine {
     interface LogSink {
         void log(String message);
     }
+
+    /**
+     * Через сколько повторять уровень, который автомобиль не принял. Минута —
+     * наименьший шаг Scheduler и разумная пауза: отказ обычно значит, что HVAC
+     * занят, а не что команда неверна.
+     */
+    private static final int RETRY_MINUTES = 1;
 
     private final Scheduler scheduler;
     private final LogSink logSink;
@@ -72,10 +78,6 @@ final class AutoHeatEngine {
         for (Seat seat : new ArrayList<>(callbacks.keySet())) {
             update(seat);
         }
-    }
-
-    Double currentTemperature() {
-        return currentTemperature;
     }
 
     /** Автоматический режим: расписание выбирается по температуре салона. */
@@ -117,11 +119,6 @@ final class AutoHeatEngine {
         currentTemperature = null;
     }
 
-    boolean isRunning(Seat seat) {
-        Integer level = activeLevels.get(seat);
-        return level != null && level > 0;
-    }
-
     /** Решение о уровне для одного сиденья. Здесь весь смысл класса. */
     private void update(Seat seat) {
         if (currentTemperature == null) {
@@ -147,6 +144,10 @@ final class AutoHeatEngine {
             if (offSent.add(seat)) {
                 if (!callback.onLevel(0)) {
                     offSent.remove(seat);
+                    // Ждать следующего события датчика нельзя: в тёплом
+                    // неподвижном салоне его может не быть часами, а сиденье
+                    // осталось включённым.
+                    scheduleRetry(seat, 0);
                 }
             }
             return;
@@ -186,16 +187,25 @@ final class AutoHeatEngine {
         // Иначе остаёмся на уровне: сработает таймер, если прогрев не случится.
     }
 
-    private void stepDown(Seat seat, int newLevel, HeatSequence sequence,
+    private void stepDown(Seat seat, int requestedLevel, HeatSequence sequence,
             LevelCallback callback) {
+        // Уровень нулевой длительности пропускается — ровно это и значит пустое
+        // поле в редакторе пресетов («сразу с двойки», см. Preset.fromInput).
+        // Иначе каскад на нём застревает навсегда: таймер на ноль минут не
+        // заводится, а температурные события запущенный пресет не двигают.
+        int skipped = requestedLevel;
+        while (skipped > 0 && sequence.minutesFor(skipped) <= 0) {
+            skipped--;
+        }
+        final int newLevel = skipped;
         log(String.format(Locale.US, "%s: уровень %d (в салоне %.1f °C)",
                 seat.title, newLevel, currentTemperature));
         if (!callback.onLevel(newLevel)) {
-            // Не переводим доменное состояние вперёд, если автомобиль не
-            // подтвердил команду. Следующее событие температуры сможет
-            // повторить тот же переход.
-            cancelTimer(seat);
-            activeLevels.remove(seat);
+            // Автомобиль не подтвердил запись. Уровень в activeLevels не
+            // трогаем: забыть его значило бы уйти в ветку «каскад не идёт» и
+            // включить тройку заново — при неудавшемся выключении подогрев не
+            // гаснет, а разгорается.
+            scheduleRetry(seat, newLevel);
             return;
         }
         activeLevels.put(seat, newLevel);
@@ -222,26 +232,61 @@ final class AutoHeatEngine {
     }
 
     private void onMaxTimer(Seat seat, int nextLevel) {
+        if (!callbacks.containsKey(seat)) {
+            return;
+        }
+        log(seat.title + ": время уровня вышло, снижаю до " + nextLevel);
+        applyLevel(seat, nextLevel);
+    }
+
+    /**
+     * Установка уровня по таймеру — и по сроку уровня, и по повтору отклонённой
+     * записи. Расписание берётся заново: пока шёл таймер, температура могла
+     * увести салон в другой диапазон.
+     */
+    private void applyLevel(Seat seat, int level) {
         LevelCallback callback = callbacks.get(seat);
         if (callback == null) {
             return;
         }
-        log(seat.title + ": время уровня вышло, снижаю до " + nextLevel);
 
         PresetSettings preset = presets.get(seat);
         if (preset != null) {
             // Запущенный пресет доводится до конца даже если салон успел
             // прогреться выше порога: прерывать его на полпути нельзя.
-            stepDown(seat, nextLevel, preset.sequence, callback);
+            stepDown(seat, level, preset.sequence, callback);
             return;
         }
 
         HeatSequence sequence = sequenceFor(seat);
         if (sequence == null) {
-            callback.onLevel(0);
+            // Салон прогрелся, пока шёл таймер: расписания больше нет, но
+            // выключить сиденье всё равно надо — и повторить, если автомобиль
+            // команду не принял. Без повтора именно здесь подогрев остаётся
+            // включённым: таймер отработал, а нового расписания нет, и завести
+            // следующий переход некому.
+            if (callback.onLevel(0)) {
+                cancelTimer(seat);
+                activeLevels.remove(seat);
+                offSent.add(seat);
+            } else {
+                scheduleRetry(seat, 0);
+            }
             return;
         }
-        stepDown(seat, nextLevel, sequence, callback);
+        stepDown(seat, level, sequence, callback);
+    }
+
+    /**
+     * Повтор перехода, который автомобиль не подтвердил. Своим таймером, а не
+     * ожиданием события температуры: переход мог быть назначен таймером, и в
+     * диапазоне, где нынешний уровень уместен, ни одно событие его не повторит.
+     */
+    private void scheduleRetry(Seat seat, int level) {
+        log(seat.title + ": уровень " + level + " не подтверждён, повтор через "
+                + RETRY_MINUTES + " мин");
+        cancelTimer(seat);
+        timers.put(seat, scheduler.schedule(RETRY_MINUTES, () -> applyLevel(seat, level)));
     }
 
     /** Уровень, который соответствует нынешней температуре в этом расписании. */
@@ -280,10 +325,5 @@ final class AutoHeatEngine {
         if (logSink != null) {
             logSink.log(message);
         }
-    }
-
-    /** Только для тестов и отладки: какие сиденья сейчас под управлением. */
-    List<Seat> managedSeats() {
-        return new ArrayList<>(callbacks.keySet());
     }
 }
