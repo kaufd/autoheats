@@ -35,6 +35,15 @@ final class PresetsPanel {
         void onApply(Preset preset);
 
         /**
+         * Идёт ли этот пресет на своём сиденье. Знает об этом только сервис:
+         * панель редактирует записи и не следит за тем, что греет в машине.
+         */
+        boolean isRunning(Preset preset);
+
+        /** Снять пресет с сиденья и отдать его ручному управлению. */
+        void onStop(Preset preset);
+
+        /**
          * Запись заменена или удалена (newEncoded == null). Сервис хранит
          * «последний пресет сиденья» строкой самого пресета, и без этого
          * уведомления указатель остался бы на исчезнувшем расписании.
@@ -257,10 +266,26 @@ final class PresetsPanel {
     }
 
     /**
-     * Список показывает пресеты выбранного сиденья: в оригинале переключатель
-     * сверху фильтрует именно его.
+     * Открыть список нужного сиденья. Зовётся, когда человек нажал «Пресеты» на
+     * главной вкладке, а выбирать ещё нечего: попадать при этом в список
+     * водителя, ткнув сегмент пассажира, — потерянный клик.
      */
-    private void render() {
+    void selectSeat(Seat seat) {
+        if (selectedSeat == seat) {
+            return;
+        }
+        selectedSeat = seat;
+        buildSeatSegments();
+        render();
+    }
+
+    /**
+     * Список показывает пресеты выбранного сиденья: в оригинале переключатель
+     * сверху фильтрует именно его. Package-private: перерисовать его снаружи
+     * нужно при каждом показе вкладки — кнопка play/pause зависит от того, что
+     * происходит на сиденьях, а это меняется на другой вкладке.
+     */
+    void render() {
         list.removeAllViews();
         List<Preset> presets = store.load();
 
@@ -319,7 +344,20 @@ final class PresetsPanel {
         card.addView(schedule, scheduleParams);
 
         card.addView(iconButton(R.drawable.ic_edit, palette.accent, v -> loadIntoEditor(preset)));
-        card.addView(iconButton(R.drawable.ic_play, palette.accent, v -> listener.onApply(preset)));
+
+        // Пресет запущен — та же кнопка его снимает. Без этого список не
+        // показывал, что именно сейчас греет, и «отменить» можно было только
+        // через переключатель режима на соседней вкладке.
+        boolean running = listener.isRunning(preset);
+        card.addView(iconButton(running ? R.drawable.ic_pause : R.drawable.ic_play,
+                palette.accent,
+                v -> {
+                    if (running) {
+                        listener.onStop(preset);
+                    } else {
+                        listener.onApply(preset);
+                    }
+                }));
         card.addView(iconButton(R.drawable.ic_delete, 0xFFE53935, v ->
                 AppDialog.confirm(activity, palette, "Удаление пресета",
                         "Удалить пресет «" + preset.name + "»?", "Удалить", () -> {

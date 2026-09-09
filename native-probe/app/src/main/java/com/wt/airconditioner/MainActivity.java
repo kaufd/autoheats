@@ -8,12 +8,15 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.os.Bundle;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.ViewFlipper;
+
+import androidx.viewpager.widget.PagerAdapter;
+import androidx.viewpager.widget.ViewPager;
 
 import java.util.Locale;
 
@@ -67,6 +70,28 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
 
         @Override
+        public boolean isRunning(Preset preset) {
+            SeatHeatService service = serviceBinding.get();
+            return service != null && service.isPresetRunning(preset);
+        }
+
+        @Override
+        public void onStop(Preset preset) {
+            SeatHeatService service = serviceBinding.get();
+            if (service == null) {
+                return;
+            }
+            // Сначала снять каскад, потом гасить: в обратном порядке
+            // ближайший шаг расписания включил бы подогрев обратно.
+            service.setMode(preset.seat, HeatMode.MANUAL);
+            service.setManualLevel(preset.seat, 0);
+            // Остаёмся на вкладке: человек разбирается со списком, а не ждёт
+            // результата — в отличие от запуска, который уводит на сиденья.
+            presetsPanel.render();
+            heatUi.render();
+        }
+
+        @Override
         public void onPresetChanged(String oldEncoded, String newEncoded) {
             SeatHeatService service = serviceBinding.get();
             if (service != null) {
@@ -79,7 +104,8 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private AppTheme theme;
     private ThemePalette palette;
 
-    private ViewFlipper flipper;
+    private ViewPager pager;
+    private PagerAdapter tabsAdapter;
     private TextView[] tabButtons;
     private TextView temperatureView;
 
@@ -97,19 +123,20 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         theme = settings.theme();
         palette = ThemePalette.of(this, theme);
         temperatureView = findViewById(R.id.temperature);
-        flipper = findViewById(R.id.flipper);
+        pager = findViewById(R.id.pager);
 
         serviceBinding = new ServiceBindingController(this, this, bindingListener);
         heatUi = new SeatHeatUiController(this, settings, serviceBinding,
-                () -> showTab(TAB_PRESETS), palette);
+                this::openPresetsFor, palette);
         logUi = new LogUiController(this, serviceBinding, palette);
+        // Панель создаётся до вкладок: на смену страницы отвечает onPageSelected,
+        // и к первому же его вызову она обязана существовать.
+        presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
 
         buildTabs();
         bindSettingsTab();
         heatUi.bind();
         logUi.bind();
-
-        presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
 
         // Слушатели навешаны, динамический UI ещё не собран: его целиком строит
         // applyTheme. Раньше каждая вкладка строилась дважды — сначала здесь,
@@ -252,14 +279,98 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
         tabButtons[TAB_LOG].setVisibility(
                 settings.debugMode() ? View.VISIBLE : View.GONE);
-        showTab(TAB_HEAT);
+
+        // Страницы приходят из разметки уже видимыми, а показывать их решает
+        // адаптер: без этого выключенная вкладка логов осталась бы VISIBLE и
+        // держалась бы в дереве нерасположенной — то есть невидимой случайно,
+        // а не по правилу.
+        for (int index = 0; index < pager.getChildCount(); index++) {
+            pager.getChildAt(index).setVisibility(View.GONE);
+        }
+
+        tabsAdapter = new TabsAdapter();
+        pager.setAdapter(tabsAdapter);
+        // Четыре статических экрана: держим все разложенными, чтобы
+        // activity.findViewById находил их в любой момент, а не только пока
+        // вкладка рядом с текущей.
+        pager.setOffscreenPageLimit(TAB_LOG);
+        pager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
+            @Override
+            public void onPageSelected(int position) {
+                onTabShown(position);
+            }
+        });
+        renderTabs();
     }
 
+    /**
+     * Переход на вкладку. Кламп по числу страниц делает сам ViewPager, поэтому
+     * сюда можно звать с любым индексом.
+     */
     private void showTab(int index) {
-        flipper.setDisplayedChild(index);
+        pager.setCurrentItem(index, true);
+    }
+
+    /**
+     * Вкладка стала видимой — неважно, по кнопке или смахиванием. Всё, что надо
+     * освежить при показе, живёт здесь: у ViewPager это единственная точка, куда
+     * приходят оба пути.
+     */
+    private void onTabShown(int index) {
         renderTabs();
+        if (index == TAB_PRESETS) {
+            // Кнопка play/pause зависит от того, что сейчас на сиденьях, а меняют
+            // это на соседней вкладке: список должен свериться на каждом показе.
+            presetsPanel.render();
+        }
         if (index == TAB_LOG) {
             logUi.onTabShown();
+        }
+    }
+
+    /** Пресеты того сиденья, чей сегмент нажали, а не всегда водительские. */
+    private void openPresetsFor(Seat seat) {
+        presetsPanel.selectSeat(seat);
+        showTab(TAB_PRESETS);
+    }
+
+    /**
+     * Страницы уже лежат в разметке, адаптер их не создаёт и не выбрасывает:
+     * контроллеры вкладок ищут свои View через activity.findViewById, и
+     * страница, вынутая из дерева, стала бы для них null. Поэтому «удаление»
+     * страницы — это GONE: скрытая вкладка логов пропадает из листания,
+     * оставаясь и в дереве, и под своим контроллером.
+     */
+    private final class TabsAdapter extends PagerAdapter {
+
+        @Override
+        public int getCount() {
+            return (settings.debugMode() ? TAB_LOG : TAB_SETTINGS) + 1;
+        }
+
+        @Override
+        public Object instantiateItem(ViewGroup container, int position) {
+            View page = container.getChildAt(position);
+            page.setVisibility(View.VISIBLE);
+            return page;
+        }
+
+        @Override
+        public void destroyItem(ViewGroup container, int position, Object object) {
+            ((View) object).setVisibility(View.GONE);
+        }
+
+        @Override
+        public int getItemPosition(Object object) {
+            int index = pager.indexOfChild((View) object);
+            // Страница выпала за пределы списка — только так ViewPager узнает,
+            // что её пора убрать, когда отладку выключили.
+            return index >= 0 && index < getCount() ? index : POSITION_NONE;
+        }
+
+        @Override
+        public boolean isViewFromObject(View view, Object object) {
+            return view == object;
         }
     }
 
@@ -267,7 +378,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         if (tabButtons == null) {
             return;
         }
-        int current = flipper.getDisplayedChild();
+        int current = pager.getCurrentItem();
         for (int index = 0; index < tabButtons.length; index++) {
             boolean selected = index == current;
             tabButtons[index].setBackground(Ui.roundRect(this, Ui.BUTTON_RADIUS_DP,
@@ -278,9 +389,13 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private void toggleDebugMode() {
         boolean enabled = !settings.debugMode();
+        // Запоминаем до notifyDataSetChanged: убрав страницу, ViewPager сам
+        // сдвинет текущую позицию, и спрашивать её потом уже поздно.
+        boolean wasOnLog = pager.getCurrentItem() == TAB_LOG;
         settings.setDebugMode(enabled);
         tabButtons[TAB_LOG].setVisibility(enabled ? View.VISIBLE : View.GONE);
-        if (!enabled && flipper.getDisplayedChild() == TAB_LOG) {
+        tabsAdapter.notifyDataSetChanged();
+        if (!enabled && wasOnLog) {
             showTab(TAB_HEAT);
         }
         Toast.makeText(this, enabled

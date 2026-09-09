@@ -281,6 +281,17 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     }
 
     /**
+     * Ведёт ли этот пресет своё сиденье прямо сейчас. Именно пара «режим +
+     * активный пресет», а не наличие таймера в движке: дошедший до нуля каскад
+     * пресет с сиденья не снимает — по следующему зажиганию ON он запустится
+     * снова, и предлагать в списке «запустить» было бы неправдой.
+     */
+    public boolean isPresetRunning(Preset preset) {
+        return settings.mode(preset.seat) == HeatMode.PRESETS
+                && preset.encode().equals(settings.activePreset(preset.seat));
+    }
+
+    /**
      * Повторяет последний пресет сиденья. false — повторять нечего: пресет ещё
      * не выбирали или его удалили, и тогда человека нужно отправить выбирать.
      */

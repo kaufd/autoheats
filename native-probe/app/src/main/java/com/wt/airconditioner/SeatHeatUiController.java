@@ -10,20 +10,30 @@ import android.widget.LinearLayout;
 final class SeatHeatUiController {
 
     interface Listener {
-        void onPresetsRequested();
+        /** Пресетов у сиденья нет — человека надо отправить их выбирать. */
+        void onPresetsRequested(Seat seat);
     }
 
     private static final int[] LEVEL_ORDER = {1, 2, 3, 0};
     private static final String[] LEVEL_TITLES = {"1", "2", "3", "OFF"};
 
+    /** Переключатель режима — размеры сняты со скриншотов Flutter-версии. */
     private static final int MODE_TEXT_SP = 19;
     private static final int MODE_HEIGHT_DP = 46;
     private static final int MODE_PADDING_DP = 20;
-    private static final int LEVEL_TEXT_SP = 14;
-    private static final int LEVEL_HEIGHT_DP = 29;
-    private static final int LEVEL_PADDING_DP = 4;
+
+    /**
+     * Уровень подогрева жмут на ходу и чаще всего, а в замерах Flutter-версии
+     * это была самая мелкая цель экрана (14sp / 29dp, четыре сегмента на
+     * 220dp — по 55×29 на палец). Здесь он крупнее оригинала намеренно.
+     */
+    private static final int LEVEL_TEXT_SP = 20;
+    private static final int LEVEL_HEIGHT_DP = 50;
+    private static final int LEVEL_PADDING_DP = 8;
     /** Индикатор уровня — три точки, как в оригинале. */
     private static final int DOTS = 3;
+    /** Толщина кольца выключенной точки. */
+    private static final int DOT_RING_DP = 2;
 
     private static final SeatView[] SEAT_VIEWS = {
             new SeatView(Seat.DRIVER, R.id.driverSeat, R.id.driverModes,
@@ -97,7 +107,12 @@ final class SeatHeatUiController {
 
     /**
      * Точки уровня. Как и переключатели, собираются один раз: меняется только
-     * цвет заливки, а render() зовётся на каждый шаг каскада.
+     * заливка, а render() зовётся на каждый шаг каскада.
+     *
+     * Выключенная точка — кольцо, а не серый кружок, как было во Flutter-версии.
+     * Там выключенный цвет (#ACACAC) отличался от акцента, но в белой теме акцент
+     * сам светло-серый (#CDD5D3): три включённые точки выглядели ровно как три
+     * выключенные. Форма темы не касается и потому надёжнее любого оттенка.
      */
     private void renderDots(LinearLayout container, int level) {
         if (container.getChildCount() != DOTS) {
@@ -113,10 +128,15 @@ final class SeatHeatUiController {
             }
         }
         int off = activity.getResources().getColor(R.color.system_grey);
+        int ring = Ui.dp(activity, DOT_RING_DP);
         for (int index = 0; index < DOTS; index++) {
             GradientDrawable shape =
                     (GradientDrawable) container.getChildAt(index).getBackground();
-            shape.setColor(level > index ? palette.accent : off);
+            boolean on = level > index;
+            shape.setColor(on ? palette.accent : Color.TRANSPARENT);
+            // Ширина обводки постоянна: у включённой точки она того же цвета,
+            // что и заливка, и потому не видна.
+            shape.setStroke(ring, on ? palette.accent : off);
         }
     }
 
@@ -137,7 +157,7 @@ final class SeatHeatUiController {
         }
         if (mode == HeatMode.PRESETS) {
             if (!service.applyActivePreset(seat)) {
-                listener.onPresetsRequested();
+                listener.onPresetsRequested(seat);
             }
             render();
             return;

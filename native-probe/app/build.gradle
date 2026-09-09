@@ -53,5 +53,12 @@ dependencies {
     // На голове классы приходят из BOOTCLASSPATH, стаб в APK не мешает.
     implementation files('libs/android.car.jar')
 
+    // Листание вкладок пальцем. Именно v1, а не viewpager2: страницы здесь —
+    // четыре статических экрана, живущих всё время работы приложения, и
+    // PagerAdapter умеет отдавать готовую View как есть. ViewPager2 построен на
+    // RecyclerView, и тот же результат потребовал бы отключить рециклинг
+    // уникальным viewType на страницу, притащив за собой recyclerview и fragment.
+    implementation 'androidx.viewpager:viewpager:1.0.0'
+
     testImplementation 'junit:junit:4.13.2'
 }

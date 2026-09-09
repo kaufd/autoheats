@@ -66,8 +66,12 @@
         android:layout_height="0dp"
         android:layout_weight="1">
 
-        <ViewFlipper
-            android:id="@+id/flipper"
+        <!-- Вкладки листаются пальцем, как TabBarView во Flutter-версии.
+             Страницы лежат прямо здесь, а не создаются адаптером: контроллеры
+             вкладок ищут свои View через activity.findViewById, и страница,
+             вынутая из дерева, стала бы для них невидимой. -->
+        <androidx.viewpager.widget.ViewPager
+            android:id="@+id/pager"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:paddingStart="32dp"
@@ -80,6 +84,6 @@
             <include layout="@layout/tab_settings" />
             <include layout="@layout/tab_logs" />
 
-        </ViewFlipper>
+        </androidx.viewpager.widget.ViewPager>
     </FrameLayout>
 </LinearLayout>

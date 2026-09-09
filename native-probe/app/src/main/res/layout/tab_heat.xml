@@ -72,7 +72,7 @@
 
                 <LinearLayout
                     android:id="@+id/driverLevels"
-                    android:layout_width="220dp"
+                    android:layout_width="340dp"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="68dp"
                     android:orientation="horizontal" />
@@ -152,7 +152,7 @@
 
                 <LinearLayout
                     android:id="@+id/passengerLevels"
-                    android:layout_width="220dp"
+                    android:layout_width="340dp"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="68dp"
                     android:orientation="horizontal" />
