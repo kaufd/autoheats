@@ -38,6 +38,15 @@ final class LogUiController {
     private final CheckBox autoScroll;
     private ThemePalette palette;
 
+    /**
+     * Показана ли сейчас вкладка логов. Страницы ViewPager держатся
+     * разложенными все сразу, поэтому невидимый лог — по-прежнему размеченный
+     * TextView: append пересобирал бы его StaticLayout целиком на каждую
+     * строку, а строки идут на каждое событие датчика и каждый шаг каскада.
+     * Пока вкладка не на экране, копится только текст; вид догоняет при показе.
+     */
+    private boolean visible;
+
     LogUiController(Activity activity, ServiceBindingController serviceProvider, ThemePalette palette) {
         this.activity = activity;
         this.serviceProvider = serviceProvider;
@@ -91,8 +100,14 @@ final class LogUiController {
         renderLog();
     }
 
+    /** Вкладка на экране: показываем накопленное целиком, а не по строке. */
     void onTabShown() {
-        scrollLogToBottom();
+        visible = true;
+        renderLog();
+    }
+
+    void onTabHidden() {
+        visible = false;
     }
 
     /** Текущая температура рядом с инжектором — тем же текстом, что в шапке. */
@@ -114,10 +129,16 @@ final class LogUiController {
     void onLogLine(String line) {
         activity.runOnUiThread(() -> {
             logLines.addLast(line);
-            if (logLines.size() > LogBuffer.CAPACITY + LOG_TRIM_SLACK) {
+            boolean trimmed = logLines.size() > LogBuffer.CAPACITY + LOG_TRIM_SLACK;
+            if (trimmed) {
                 while (logLines.size() > LogBuffer.CAPACITY) {
                     logLines.removeFirst();
                 }
+            }
+            if (!visible) {
+                return;
+            }
+            if (trimmed) {
                 renderLog();
             } else {
                 logView.append(line + "\n");
@@ -214,6 +235,9 @@ final class LogUiController {
     }
 
     private void renderLog() {
+        if (!visible) {
+            return;
+        }
         logView.setText(logText());
         renderCounter();
         scrollLogToBottom();

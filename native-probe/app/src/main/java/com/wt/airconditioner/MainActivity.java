@@ -50,11 +50,15 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                         java.util.List<String> logSnapshot) {
                     logUi.setInitialSnapshot(logSnapshot);
                     heatUi.render();
+                    // Без сервиса список нарисован с «запустить» на всех
+                    // карточках: спросить, что греет, было не у кого.
+                    presetsPanel.render();
                 }
 
                 @Override
                 public void onDisconnected() {
                     heatUi.render();
+                    presetsPanel.render();
                 }
             };
 
@@ -81,10 +85,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             if (service == null) {
                 return;
             }
-            // Сначала снять каскад, потом гасить: в обратном порядке
-            // ближайший шаг расписания включил бы подогрев обратно.
-            service.setMode(preset.seat, HeatMode.MANUAL);
-            service.setManualLevel(preset.seat, 0);
+            if (!service.stopPreset(preset.seat)) {
+                Toast.makeText(MainActivity.this, "Подогрев не выключился — снимите его вручную",
+                        Toast.LENGTH_LONG).show();
+            }
             // Остаёмся на вкладке: человек разбирается со списком, а не ждёт
             // результата — в отличие от запуска, который уводит на сиденья.
             presetsPanel.render();
@@ -308,6 +312,13 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
      * сюда можно звать с любым индексом.
      */
     private void showTab(int index) {
+        if (pager.getCurrentItem() == index) {
+            // На текущей странице setCurrentItem выходит сразу, и onPageSelected
+            // не придёт. Повторное нажатие всё равно должно освежать вкладку:
+            // им возвращают лог к последней строке, промотав его вверх.
+            onTabShown(index);
+            return;
+        }
         pager.setCurrentItem(index, true);
     }
 
@@ -325,6 +336,11 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
         if (index == TAB_LOG) {
             logUi.onTabShown();
+        } else {
+            // Лог продолжает копиться, но в свой TextView не пишет: страница
+            // остаётся разложенной, и каждая строка стоила бы пересборки
+            // разметки на пятистах строках.
+            logUi.onTabHidden();
         }
     }
 
@@ -340,6 +356,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
      * страница, вынутая из дерева, стала бы для них null. Поэтому «удаление»
      * страницы — это GONE: скрытая вкладка логов пропадает из листания,
      * оставаясь и в дереве, и под своим контроллером.
+     *
+     * Отсюда ограничение: прятать можно только последнюю страницу. Позиция в
+     * пейджере здесь равна индексу ребёнка, а GONE его не сдвигает — скрытая
+     * середина увела бы все страницы правее на одну позицию.
      */
     private final class TabsAdapter extends PagerAdapter {
 

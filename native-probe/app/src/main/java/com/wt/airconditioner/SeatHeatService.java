@@ -174,13 +174,33 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      * Ручная установка уровня: запоминается в настройках, чтобы экран после
      * перезапуска показывал то же, что греет в машине.
      */
-    public void setManualLevel(Seat seat, int level) {
+    public boolean setManualLevel(Seat seat, int level) {
         // Сначала запись в автомобиль: сохранённый уровень — это то, что экран
         // покажет после перезапуска вместо забытого levels. Запомнить
         // непринятую команду значило бы обещать тепло, которого нет.
-        if (setSeatHeat(seat, level)) {
-            settings.setManualLevel(seat, level);
+        if (!setSeatHeat(seat, level)) {
+            return false;
         }
+        settings.setManualLevel(seat, level);
+        return true;
+    }
+
+    /**
+     * Снять пресет с сиденья. Сначала каскад, потом нагрев: в обратном порядке
+     * ближайший шаг расписания включил бы подогрев обратно.
+     *
+     * false — режим уже ручной, но выключение автомобиль не принял: сиденье
+     * осталось тёплым, а список пресетов с этого момента показывает «запустить».
+     * Молчать об этом нельзя — человек нажал паузу и ушёл бы уверенным, что
+     * подогрев снят.
+     */
+    public boolean stopPreset(Seat seat) {
+        setMode(seat, HeatMode.MANUAL);
+        if (setManualLevel(seat, 0)) {
+            return true;
+        }
+        onLog("ВНИМАНИЕ: " + seat.title + " не выключен — пресет снят, тепло могло остаться");
+        return false;
     }
 
     /** Очищает источник лога, а не только его текущее представление в Activity. */

@@ -133,11 +133,8 @@ final class PresetsPanel {
                 new SegmentedControl.Item[]{
                         new SegmentedControl.Item(Seat.DRIVER.label),
                         new SegmentedControl.Item(Seat.PASSENGER.label)},
-                selectedSeat.ordinal(), palette, 18, 50, 24, index -> {
-                    selectedSeat = Seat.values()[index];
-                    buildSeatSegments();
-                    render();
-                });
+                selectedSeat.ordinal(), palette, 18, 50, 24,
+                index -> selectSeat(Seat.values()[index]));
     }
 
     /** Три строки «номер уровня — слайдер — длительность», как в оригинале. */
@@ -266,15 +263,20 @@ final class PresetsPanel {
     }
 
     /**
-     * Открыть список нужного сиденья. Зовётся, когда человек нажал «Пресеты» на
-     * главной вкладке, а выбирать ещё нечего: попадать при этом в список
+     * Единственная смена сиденья — и по сегменту сверху, и по кнопке «Пресеты»
+     * на главной вкладке, где выбирать ещё нечего: попадать при этом в список
      * водителя, ткнув сегмент пассажира, — потерянный клик.
+     *
+     * Черновик принадлежит сиденью и уезжает вместе с ним: сохранение после
+     * переключения записало бы правку в пресет соседнего сиденья, заодно
+     * подменив ему активное расписание.
      */
     void selectSeat(Seat seat) {
         if (selectedSeat == seat) {
             return;
         }
         selectedSeat = seat;
+        resetEditor();
         buildSeatSegments();
         render();
     }
