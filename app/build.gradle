@@ -30,8 +30,8 @@ android {
         // Приложение предназначено только для головы Changan на Android 9.
         minSdk 28
         targetSdk 33
-        versionCode 260
-        versionName "0.6.0"
+        versionCode 2000
+        versionName "2.0.0"
     }
 
     compileOptions {
