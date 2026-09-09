@@ -10,9 +10,8 @@ import android.graphics.RectF;
 import android.graphics.drawable.Drawable;
 
 /**
- * Трек слайдера как во Flutter-версии: толстая полоса со скруглением, пройденная
- * часть залита акцентом, остальная — полупрозрачная белая, а по делениям идут
- * точки.
+ * Трек слайдера: толстая полоса со скруглением, пройденная часть залита
+ * акцентом, остальная — полупрозрачная белая, а по делениям идут точки.
  *
  * Стандартный SeekBar рисует тонкую линию без делений, поэтому трек свой:
  * пользователь ставит минуты пальцем, и точки показывают, куда он попадёт.
@@ -33,7 +32,9 @@ final class SliderTrack extends Drawable {
 
     SliderTrack(int activeColor, int divisions, float thicknessPx, float tickRadiusPx) {
         this.activeColor = activeColor;
-        // sliderInactiveTrack из темы оригинала: белый с прозрачностью.
+        /**
+         * Непройденная часть трека: белый с прозрачностью.
+         */
         this.inactiveColor = Color.argb(153, 255, 255, 255);
         this.divisions = divisions;
         this.thickness = thicknessPx;
@@ -60,7 +61,9 @@ final class SliderTrack extends Drawable {
         if (divisions > 0) {
             for (int index = 0; index <= divisions; index++) {
                 float x = bounds.left + bounds.width() * index / (float) divisions;
-                // Точка на пройденной части должна быть видна поверх заливки.
+                /**
+                 * Точка на пройденной части должна быть видна поверх заливки.
+                 */
                 paint.setColor(x <= progressX ? inactiveColor : Color.argb(90, 0, 0, 0));
                 canvas.drawCircle(x, centerY, tickRadius, paint);
             }

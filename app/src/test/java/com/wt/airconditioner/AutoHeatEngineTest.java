@@ -67,11 +67,11 @@ public class AutoHeatEngineTest {
         assertEquals(Arrays.asList(3), driverLevels);
 
         scheduler.elapse(3);
-        engine.setTemperature(-1.0); // выше cold.level3StepDown (-2 °C)
+        engine.setTemperature(-1.0); /** выше cold.level3StepDown (-2 °C) */
         assertEquals("прогрелся до порога — сразу на 2", Arrays.asList(3, 2), driverLevels);
 
         scheduler.elapse(2);
-        engine.setTemperature(9.0); // warm-диапазон, level2StepDown = 8 °C
+        engine.setTemperature(9.0); /** warm-диапазон, level2StepDown = 8 °C */
         assertEquals("тёплый салон — сразу на 1", Arrays.asList(3, 2, 1), driverLevels);
 
         scheduler.elapse(10);
@@ -92,8 +92,10 @@ public class AutoHeatEngineTest {
         startDriver();
         assertEquals(Arrays.asList(3), driverLevels);
 
-        // 8 °C — warm-диапазон, где уровню 3 соответствует порог 6 °C, а
-        // температуре 8 °C — уже уровень 1 (порог уровня 2 равен 8 °C).
+        /**
+         * 8 °C — warm-диапазон, где уровню 3 соответствует порог 6 °C, а
+         * температуре 8 °C — уже уровень 1 (порог уровня 2 равен 8 °C).
+         */
         engine.setTemperature(8.0);
         assertEquals("салон прогрет — двойка пропускается", Arrays.asList(3, 1), driverLevels);
     }
@@ -349,7 +351,7 @@ public class AutoHeatEngineTest {
             return true;
         });
 
-        engine.setTemperature(20.0); // выше OFF_ABOVE_CELSIUS — греть нечего
+        engine.setTemperature(20.0); /** выше OFF_ABOVE_CELSIUS — греть нечего */
         assertEquals(Arrays.asList(3, 0), attempts);
 
         scheduler.elapse(1);
@@ -384,7 +386,7 @@ public class AutoHeatEngineTest {
         assertEquals(Arrays.asList(3), driverLevels);
 
         scheduler.elapse(3);
-        engine.setTemperature(-2.5); // всё ещё ниже cold.level3StepDown (-2 °C)
+        engine.setTemperature(-2.5); /** всё ещё ниже cold.level3StepDown (-2 °C) */
         assertEquals("порог не пройден — уровень не меняется", Arrays.asList(3), driverLevels);
 
         scheduler.elapse(5);
@@ -409,10 +411,10 @@ public class AutoHeatEngineTest {
         assertEquals(Arrays.asList(3), driverLevels);
 
         scheduler.elapse(3);
-        engine.setTemperature(1.0); // cool-диапазон, но ниже level3StepDown (2 °C)
+        engine.setTemperature(1.0); /** cool-диапазон, но ниже level3StepDown (2 °C) */
         assertEquals("порог cool ещё не пройден — без step-down", Arrays.asList(3), driverLevels);
 
-        engine.setTemperature(3.0); // выше level3StepDown (2 °C)
+        engine.setTemperature(3.0); /** выше level3StepDown (2 °C) */
         assertEquals("step-down 3→2, НЕ перезапуск с тройки", Arrays.asList(3, 2), driverLevels);
 
         scheduler.elapse(12);
@@ -472,7 +474,7 @@ public class AutoHeatEngineTest {
         scheduler.elapse(20);
         assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
 
-        engine.setTemperature(-15.0); // extreme вместо cold — другое расписание
+        engine.setTemperature(-15.0); /** extreme вместо cold — другое расписание */
         assertEquals("сменилось расписание — снова тройка",
                 Arrays.asList(3, 2, 1, 0, 3), driverLevels);
     }
@@ -489,7 +491,7 @@ public class AutoHeatEngineTest {
         engine.start(Seat.DRIVER, level -> driverLevels.add(level), settings);
         assertEquals(Arrays.asList(3), driverLevels);
 
-        engine.setTemperature(20.0); // намного выше порога пресета
+        engine.setTemperature(20.0); /** намного выше порога пресета */
         assertEquals("пресет не прерывается", Arrays.asList(3), driverLevels);
 
         scheduler.elapse(3);
@@ -506,11 +508,11 @@ public class AutoHeatEngineTest {
      */
     @Test
     public void offEventBeforeStartIsDiscardedThenColdCascadeRuns() {
-        engine.setTemperature(50.0); // известное off-состояние, callback ещё не зарегистрирован
+        engine.setTemperature(50.0); /** известное off-состояние, callback ещё не зарегистрирован */
         startDriver();
-        driverLevels.clear(); // отбросить стартовый шум (callback(0) на temp=50)
+        driverLevels.clear(); /** отбросить стартовый шум (callback(0) на temp=50) */
 
-        engine.setTemperature(-3.0); // реальное событие датчика
+        engine.setTemperature(-3.0); /** реальное событие датчика */
         assertEquals(Arrays.asList(3), driverLevels);
 
         scheduler.elapse(20);

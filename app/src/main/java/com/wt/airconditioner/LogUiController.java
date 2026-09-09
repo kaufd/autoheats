@@ -36,11 +36,7 @@ final class LogUiController implements TabController {
     private final Deque<String> logLines = new ArrayDeque<>();
     private ThemePalette palette;
 
-    /**
-     * Страница вкладки или null, пока её нет. С выключенной отладкой адаптер
-     * страницу не создаёт, поэтому лог продолжает копиться в logLines, а рисует
-     * его только тот, у кого есть куда.
-     */
+    /** null, пока страницы нет: с выключенной отладкой адаптер её не создаёт. */
     private View page;
     private TextView logView;
     private TextView counter;
@@ -52,11 +48,9 @@ final class LogUiController implements TabController {
     private LinearLayout quickTemperatures;
 
     /**
-     * Показана ли сейчас вкладка логов. Страницы ViewPager держатся
-     * разложенными все сразу, поэтому невидимый лог — по-прежнему размеченный
-     * TextView: append пересобирал бы его StaticLayout целиком на каждую
-     * строку, а строки идут на каждое событие датчика и каждый шаг каскада.
-     * Пока вкладка не на экране, копится только текст; вид догоняет при показе.
+     * Страницы ViewPager разложены все сразу, поэтому невидимый лог — всё ещё
+     * размеченный TextView, и append пересобирал бы его StaticLayout на каждую
+     * строку. Пока вкладка скрыта, копится только текст; вид догоняет при показе.
      */
     private boolean visible;
 
@@ -117,9 +111,10 @@ final class LogUiController implements TabController {
         paintPanel(page.findViewById(R.id.injectPanel));
         ((ImageView) page.findViewById(R.id.injectThermometer))
                 .setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
-        // Системный CheckBox рисуется дефолтным colorAccent платформы и при
-        // смене темы оставался бирюзовым — видно только на запущенном
-        // приложении, в разметке этого нет.
+        /**
+         * Системный CheckBox рисуется дефолтным colorAccent платформы и при
+         * смене темы оставался бирюзовым.
+         */
         autoScroll.setButtonTintList(ColorStateList.valueOf(palette.accent));
         buildQuickTemperatures();
     }
@@ -133,9 +128,8 @@ final class LogUiController implements TabController {
     }
 
     /**
-     * Вкладка на экране или ушла с него. На показе рисуем накопленное целиком:
-     * и то, что пришло, пока вкладка была скрыта, и прокрутку к последней
-     * строке — ею же пользуются, повторно нажав кнопку «Логи».
+     * На показе рисуем накопленное целиком и прокручиваем к последней строке —
+     * этим же пользуются, повторно нажав кнопку «Логи».
      */
     @Override
     public void onTabVisible(boolean visible) {
@@ -171,9 +165,10 @@ final class LogUiController implements TabController {
                 renderLog();
             } else if (visible) {
                 logView.append(line + "\n");
-                // Счётчик обновляется и на быстром пути: renderLog случается
-                // только при подрезке, и между подрезками цифра показывала бы
-                // размер буфера получасовой давности.
+                /**
+                 * Счётчик обновляется и на быстром пути: renderLog случается
+                 * только при подрезке, а между ними цифра устаревала бы.
+                 */
                 renderCounter();
                 scrollLogToBottom();
             }

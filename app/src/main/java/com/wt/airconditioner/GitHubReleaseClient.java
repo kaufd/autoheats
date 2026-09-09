@@ -26,8 +26,8 @@ final class GitHubReleaseClient {
 
     /**
      * null означает успешный ответ без versioned native APK. Так выглядит
-     * прежний Flutter-релиз AutoHeat-v3.apk: предлагать его как обновление
-     * нельзя, потому что из имени невозможно безопасно узнать versionCode.
+     * старый релиз AutoHeat-v3.apk: предлагать его как обновление нельзя,
+     * потому что из имени невозможно безопасно узнать versionCode.
      */
     UpdateRelease latest() throws IOException {
         HttpURLConnection connection =

@@ -16,27 +16,23 @@ final class SeatHeatUiController implements TabController {
         /** Пресетов у сиденья нет — человека надо отправить их выбирать. */
         void onPresetsRequested(Seat seat);
 
-        /** Длинный тап по температуре — тот же скрытый жест, что во Flutter-версии. */
+        /** Длинный тап по температуре — скрытый жест включения отладки. */
         void onDebugToggleRequested();
     }
 
     private static final int[] LEVEL_ORDER = {1, 2, 3, 0};
     private static final String[] LEVEL_TITLES = {"1", "2", "3", "OFF"};
 
-    /** Переключатель режима — размеры сняты со скриншотов Flutter-версии. */
+    /** Размеры переключателя режима. */
     private static final int MODE_TEXT_SP = 19;
     private static final int MODE_HEIGHT_DP = 46;
     private static final int MODE_PADDING_DP = 20;
 
-    /**
-     * Уровень подогрева жмут на ходу и чаще всего, а в замерах Flutter-версии
-     * это была самая мелкая цель экрана (14sp / 29dp, четыре сегмента на
-     * 220dp — по 55×29 на палец). Здесь он крупнее оригинала намеренно.
-     */
+    /** Крупнее переключателя режима намеренно: уровень жмут на ходу и чаще всего. */
     private static final int LEVEL_TEXT_SP = 20;
     private static final int LEVEL_HEIGHT_DP = 50;
     private static final int LEVEL_PADDING_DP = 8;
-    /** Индикатор уровня — три точки, как в оригинале. */
+    /** Индикатор уровня — три точки. */
     private static final int DOTS = 3;
     /** Толщина кольца выключенной точки. */
     private static final int DOT_RING_DP = 2;
@@ -87,8 +83,9 @@ final class SeatHeatUiController implements TabController {
     public void applyTheme(ThemePalette palette) {
         this.palette = palette;
         page.findViewById(R.id.centerDivider).setBackgroundColor(palette.divider);
-        // Плашка температуры бледнее чипов: своя пара значений, и она здесь
-        // единственная — роли в ThemePalette заведены только для повторяющихся.
+        /**
+         * Плашка бледнее чипов: своя пара значений, здесь единственная.
+         */
         temperaturePill.setBackground(Ui.roundRect(activity, 50,
                 Ui.withAlpha(palette.accent, 30), Ui.withAlpha(palette.accent, 100)));
         ((ImageView) page.findViewById(R.id.temperatureIcon))
@@ -151,19 +148,20 @@ final class SeatHeatUiController implements TabController {
         SegmentedControl.render(levels, levelItems, selected, palette,
                 LEVEL_TEXT_SP, LEVEL_HEIGHT_DP, LEVEL_PADDING_DP,
                 index -> setLevel(seat, LEVEL_ORDER[index]));
-        // В неручных режимах controls остаются невидимыми, но сохраняют место.
+        /**
+         * В неручных режимах controls остаются невидимыми, но сохраняют место.
+         */
         levels.setVisibility(mode == HeatMode.MANUAL ? View.VISIBLE : View.INVISIBLE);
         renderDots(page.findViewById(seatView.dotsId), level);
     }
 
     /**
-     * Точки уровня. Как и переключатели, собираются один раз: меняется только
-     * заливка, а render() зовётся на каждый шаг каскада.
+     * Точки собираются один раз: меняется только заливка, а render() зовётся на
+     * каждый шаг каскада.
      *
-     * Выключенная точка — кольцо, а не серый кружок, как было во Flutter-версии.
-     * Там выключенный цвет (#ACACAC) отличался от акцента, но в белой теме акцент
-     * сам светло-серый (#CDD5D3): три включённые точки выглядели ровно как три
-     * выключенные. Форма темы не касается и потому надёжнее любого оттенка.
+     * Выключенная точка — кольцо, а не серый кружок: в белой теме акцент сам
+     * светло-серый, и три включённые точки выглядели ровно как три выключенные.
+     * Форма темы не касается и надёжнее любого оттенка.
      */
     private void renderDots(LinearLayout container, int level) {
         if (container.getChildCount() != DOTS) {
@@ -185,8 +183,10 @@ final class SeatHeatUiController implements TabController {
                     (GradientDrawable) container.getChildAt(index).getBackground();
             boolean on = level > index;
             shape.setColor(on ? palette.accent : Color.TRANSPARENT);
-            // Ширина обводки постоянна: у включённой точки она того же цвета,
-            // что и заливка, и потому не видна.
+            /**
+             * Ширина обводки постоянна: у включённой точки она того же цвета,
+             * что и заливка, и потому не видна.
+             */
             shape.setStroke(ring, on ? palette.accent : off);
         }
     }

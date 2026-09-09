@@ -114,8 +114,10 @@ final class AppUpdateController {
                 showError("Разрешите AutoHeat устанавливать приложения");
             }
         } else if (state == State.OPENING_INSTALLER) {
-            // Установщик закрыли — принял человек обновление или нет, отсюда не
-            // видно: предлагаем ту же кнопку «Обновить».
+            /**
+             * Установщик закрыли — принял человек обновление или нет, отсюда не
+             * видно: предлагаем ту же кнопку «Обновить».
+             */
             state = State.AVAILABLE;
             render();
         }
@@ -177,8 +179,10 @@ final class AppUpdateController {
         try {
             activity.startActivity(permission);
         } catch (ActivityNotFoundException error) {
-            // Экран не открылся — ждать возвращения неоткуда, showError уводит
-            // state из WAITING_FOR_PERMISSION, и ближайший onResume это увидит.
+            /**
+             * Экран не открылся — ждать возвращения неоткуда, showError уводит
+             * state из WAITING_FOR_PERMISSION, и ближайший onResume это увидит.
+             */
             showError("Откройте разрешение на установку APK в настройках Android");
         }
     }

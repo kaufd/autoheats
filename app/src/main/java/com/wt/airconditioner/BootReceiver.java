@@ -9,10 +9,9 @@ import android.content.Intent;
  * работало без ручного запуска приложения.
  *
  * Кроме штатного BOOT_COMPLETED слушаем vendor-действия MediaTek: на MTK-головах
- * (а голова Changan — MT8666) быстрый старт из псевдо-выключения рассылает
- * ACTION_BOOT_IPO / QUICKBOOT_POWERON вместо BOOT_COMPLETED. Прецедента у нас
- * нет — во Flutter-версии boot-ресивера не было, — а лишний фильтр не стоит
- * ничего и экономит цикл ручной прошивки, если штатное действие не придёт.
+ * (голова Changan — MT8666) быстрый старт из псевдо-выключения рассылает
+ * ACTION_BOOT_IPO / QUICKBOOT_POWERON вместо BOOT_COMPLETED. Лишний фильтр не
+ * стоит ничего и экономит цикл ручной прошивки, если штатное не придёт.
  */
 public class BootReceiver extends BroadcastReceiver {
 

@@ -115,7 +115,9 @@ final class AccessibilityToggle {
                 context.startActivity(intent);
                 return true;
             } catch (ActivityNotFoundException ignored) {
-                // пробуем следующий вариант
+                /**
+                 * пробуем следующий вариант
+                 */
             }
         }
         return false;

@@ -40,8 +40,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                 public void onConnected(SeatHeatService service, List<String> logSnapshot) {
                     logUi.setInitialSnapshot(logSnapshot);
                     heatUi.render();
-                    // Без сервиса список нарисован с «запустить» на всех
-                    // карточках: спросить, что греет, было не у кого.
+                    /**
+                     * До сервиса список нарисован с «запустить» на всех
+                     * карточках: спросить, что греет, было не у кого.
+                     */
                     presetsPanel.render();
                 }
 
@@ -92,8 +94,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                 Toast.makeText(MainActivity.this, "Подогрев не выключился — снимите его вручную",
                         Toast.LENGTH_LONG).show();
             }
-            // Остаёмся на вкладке: человек разбирается со списком, а не ждёт
-            // результата — в отличие от запуска, который уводит на сиденья.
+            /**
+             * Остаёмся на вкладке: человек разбирается со списком, а не ждёт
+             * результата — в отличие от запуска, который уводит на сиденья.
+             */
             presetsPanel.render();
             heatUi.render();
         }
@@ -111,8 +115,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             new SettingsUiController.Listener() {
                 @Override
                 public void onThemeSelected(AppTheme theme) {
-                    // Сохраняем до applyTheme: палитра собирается по настройке,
-                    // и другого хранилища выбранной темы больше нет.
+                    /**
+                     * Сохраняем до applyTheme: палитра собирается по настройке.
+                     */
                     settings.setTheme(theme);
                     applyTheme();
                 }
@@ -134,11 +139,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private ViewPager pager;
     private TextView[] tabButtons;
 
-    /**
-     * Живые страницы вкладок, по позиции. null — страницы сейчас нет: так
-     * выглядит вкладка логов с выключенной отладкой. Заполняет и чистит
-     * TabsAdapter, а читают те, кто красит и обновляет вкладки.
-     */
+    /** Живые страницы по позиции; null — страницы нет (лог без отладки). */
     private final View[] pages = new View[TAB_COUNT];
 
     private ServiceBindingController serviceBinding;
@@ -148,11 +149,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private SettingsUiController settingsUi;
     private AppUpdateController updateController;
 
-    /**
-     * Те же контроллеры, но по позиции вкладки — порядок обязан совпадать с
-     * TAB_LAYOUTS и константами TAB_*. Отдельные поля выше остались потому, что
-     * у каждой вкладки есть и свои вызовы, которых нет в TabController.
-     */
+    /** Те же контроллеры по позиции; порядок обязан совпадать с TAB_LAYOUTS. */
     private TabController[] tabs;
 
     @Override
@@ -165,8 +162,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         pager = findViewById(R.id.pager);
 
         serviceBinding = new ServiceBindingController(this, this, bindingListener);
-        // Контроллеры заводятся без своих View: страницы им раздаст адаптер,
-        // как только пейджер их создаст.
+        /**
+         * Контроллеры заводятся без своих View: страницы им раздаст адаптер.
+         */
         heatUi = new SeatHeatUiController(this, settings, serviceBinding, heatListener, palette);
         logUi = new LogUiController(this, serviceBinding, palette);
         presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
@@ -175,9 +173,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                 settingsListener, palette);
         tabs = new TabController[]{heatUi, presetsPanel, settingsUi, logUi};
 
-        // Страницы создаются, разбираются контроллерами и красятся внутри
-        // setAdapter — снаружи остаются только шапка и фон. Раньше каждая
-        // вкладка собиралась дважды: сначала здесь, потом ещё раз из applyTheme.
+        /**
+         * Страницы создаются, разбираются контроллерами и красятся внутри
+         * setAdapter — снаружи остаются только шапка и фон.
+         */
         buildTabs();
         paintChrome();
         Fonts.applyTo(findViewById(R.id.appBar));
@@ -188,7 +187,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     @Override
     protected void onResume() {
         super.onResume();
-        // Доступ могли выдать в системных настройках и вернуться сюда.
         settingsUi.renderPermissions();
         updateController.onResume();
     }
@@ -197,17 +195,18 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     protected void onDestroy() {
         updateController.destroy();
         serviceBinding.destroy();
-        // Сервис намеренно не останавливаем: он должен пережить закрытие
-        // экрана, иначе автовыключение по зажиганию перестанет работать.
+        /**
+         * Сервис намеренно не останавливаем: он должен пережить закрытие
+         * экрана, иначе автовыключение по зажиганию перестанет работать.
+         */
         super.onDestroy();
     }
 
-    // --- оформление ---
-
     /**
-     * Единственная точка смены оформления: палитра собирается один раз и уходит
-     * всем, кто рисует, — шапке и каждой живой странице.
+     * --- оформление ---
      */
+
+    /** Единственная точка смены оформления: палитра собирается один раз. */
     private void applyTheme() {
         palette = ThemePalette.of(this, settings.theme());
         paintChrome();
@@ -216,18 +215,12 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
     }
 
-    /** Всё, что живёт вне пейджера и потому не принадлежит ни одной вкладке. */
+    /** Всё, что живёт вне пейджера и не принадлежит ни одной вкладке. */
     private void paintChrome() {
         findViewById(R.id.background).setBackgroundResource(palette.backgroundRes);
         renderTabs();
     }
 
-    /**
-     * Красит одну страницу: сначала кнопки, потом её контроллер. Кнопки не
-     * перечисляются поимённо — их находит обход страницы по тегу из
-     * @style/PrimaryButton, поэтому новая кнопка в разметке перекрашивается
-     * сама.
-     */
     private void paintPage(int position) {
         View page = pages[position];
         if (page == null) {
@@ -237,7 +230,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         tabs[position].applyTheme(palette);
     }
 
-    // --- вкладки ---
+    /**
+     * --- вкладки ---
+     */
 
     private void buildTabs() {
         tabButtons = new TextView[]{
@@ -252,9 +247,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
         renderDebugTab();
 
-        // Четыре статических экрана: держим все разложенными. Так страница
-        // живёт ровно столько же, сколько её контроллер, и пересобирать её при
-        // каждом листании не приходится.
+        /**
+         * Держим все страницы разложенными: страница живёт столько же, сколько
+         * её контроллер, и не пересобирается при каждом листании.
+         */
         pager.setOffscreenPageLimit(TAB_COUNT - 1);
         pager.setAdapter(new TabsAdapter());
         pager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
@@ -265,29 +261,21 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         });
     }
 
-    /**
-     * Переход на вкладку. Кламп по числу страниц делает сам ViewPager, поэтому
-     * сюда можно звать с любым индексом.
-     */
+    /** Кламп по числу страниц делает сам ViewPager: индекс может быть любым. */
     private void showTab(int index) {
         if (pager.getCurrentItem() == index) {
-            // На текущей странице setCurrentItem выходит сразу, и onPageSelected
-            // не придёт. Повторное нажатие всё равно должно освежать вкладку:
-            // им возвращают лог к последней строке, промотав его вверх.
+            /**
+             * setCurrentItem на текущей странице выходит сразу, onPageSelected не
+             * придёт — а повторное нажатие возвращает лог к последней строке.
+             */
             onTabShown(index);
             return;
         }
         pager.setCurrentItem(index, true);
     }
 
-    /**
-     * Вкладка стала видимой — неважно, по кнопке или смахиванием. Всё, что надо
-     * освежить при показе, живёт здесь: у ViewPager это единственная точка, куда
-     * приходят оба пути.
-     */
+    /** Единственная точка, куда приходят оба пути — кнопка и смахивание. */
     private void onTabShown(int index) {
-        // Кнопки вкладок живут вне пейджера и потому остаются за Activity;
-        // что делать самой вкладке, знает её контроллер.
         renderTabs();
         for (int position = 0; position < tabs.length; position++) {
             tabs[position].onTabVisible(position == index);
@@ -301,10 +289,8 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     }
 
     /**
-     * Создаёт страницы вкладок и раздаёт их контроллерам. Каждая страница —
-     * отдельная разметка: контроллер получает её корень и ищет свои View
-     * внутри него, поэтому активити не обязана держать все вкладки в дереве
-     * ради чужих findViewById.
+     * Каждая вкладка — отдельная разметка: контроллер получает её корень и ищет
+     * свои View внутри него, а не через findViewById по всему экрану.
      */
     private final class TabsAdapter extends PagerAdapter {
 
@@ -338,8 +324,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                     return position;
                 }
             }
-            // Страница выпала за пределы списка — только так ViewPager узнает,
-            // что её пора убрать, когда отладку выключили.
+            /**
+             * Страница выпала за пределы списка — только так ViewPager узнает,
+             * что её пора убрать, когда отладку выключили.
+             */
             return POSITION_NONE;
         }
 
@@ -349,10 +337,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
     }
 
-    /**
-     * Свежая страница уходит своему контроллеру и сразу красится: вкладка логов
-     * появляется по ходу работы, и ждать следующей смены темы ей нельзя.
-     */
+    /** Красим сразу: вкладка логов появляется по ходу работы. */
     private void bindPage(int position, View page) {
         tabs[position].bind(page);
         Fonts.applyTo(page);
@@ -372,10 +357,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
     }
 
-    /**
-     * Кнопка вкладки логов и число страниц у адаптера — одно правило, поэтому
-     * читают его тут вдвоём: разъехавшись, они дали бы кнопку без страницы.
-     */
+    /** Кнопка логов и число страниц адаптера — одно правило: иначе кнопка без страницы. */
     private void renderDebugTab() {
         tabButtons[TAB_LOG].setVisibility(settings.debugMode() ? View.VISIBLE : View.GONE);
         PagerAdapter adapter = pager.getAdapter();
@@ -386,8 +368,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private void toggleDebugMode() {
         boolean enabled = !settings.debugMode();
-        // Запоминаем до notifyDataSetChanged: убрав страницу, ViewPager сам
-        // сдвинет текущую позицию, и спрашивать её потом уже поздно.
+        /**
+         * Запоминаем до notifyDataSetChanged: убрав страницу, ViewPager сам
+         * сдвинет текущую позицию, и спрашивать её потом уже поздно.
+         */
         boolean wasOnLog = pager.getCurrentItem() == TAB_LOG;
         settings.setDebugMode(enabled);
         renderDebugTab();
@@ -399,7 +383,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                 : "Отладка выключена", Toast.LENGTH_SHORT).show();
     }
 
-    // --- SeatHeatService.UiListener ---
+    /**
+     * --- SeatHeatService.UiListener ---
+     */
 
     @Override
     public void onLogLine(String line) {
@@ -408,7 +394,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     @Override
     public void onHvacReady(boolean ready) {
-        // UI намеренно не показывает отдельный индикатор связи.
+        /**
+         * UI намеренно не показывает отдельный индикатор связи.
+         */
     }
 
     @Override
@@ -416,8 +404,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         runOnUiThread(() -> {
             String text = TemperatureConstants.celsiusText(celsius);
             int color = Ui.temperatureColor(this, celsius);
-            // Обе подписи рисуют контроллеры своих вкладок: Activity раздаёт
-            // событие, а не лезет в чужие View по id.
             heatUi.onCabinTemperature(text, color);
             logUi.onCabinTemperature(text, color);
         });
@@ -425,8 +411,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     @Override
     public void onSeatLevel(Seat seat, int level) {
-        // Уровень не передаём: сервис уже записал подтверждённое состояние, и
-        // контроллер перечитывает у него оба сиденья, а не хранит свою копию.
+        /**
+         * Уровень не передаём: сервис уже записал подтверждённое состояние, и
+         * контроллер перечитывает у него оба сиденья, а не хранит свою копию.
+         */
         runOnUiThread(heatUi::render);
     }
 

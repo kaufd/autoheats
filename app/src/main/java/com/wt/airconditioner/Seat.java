@@ -1,6 +1,6 @@
 package com.wt.airconditioner;
 
-/** Сиденье с подогревом. Порт UserType из lib/src/app_enums.dart. */
+/** Сиденье с подогревом. */
 enum Seat {
     DRIVER("водитель", "Водитель"),
     PASSENGER("пассажир", "Пассажир");

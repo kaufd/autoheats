@@ -16,8 +16,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * Диалоги в оформлении Flutter-версии (CustomAlertDialog): тёмная карточка со
- * скруглением 16, заголовок, содержимое и пара кнопок — «Отмена» обведена
+ * Тёмная карточка: заголовок, содержимое и пара кнопок — «Отмена» обведена
  * акцентом, подтверждение залито им.
  *
  * Системный AlertDialog выглядит чужеродно на фоне остального экрана, поэтому
@@ -25,7 +24,7 @@ import android.widget.TextView;
  */
 final class AppDialog {
 
-    /** Colors.grey[900] из оригинала. */
+    /** Подложка карточки диалога. */
     private static final int CARD = 0xFF212121;
     private static final int CARD_RADIUS_DP = 16;
     private static final int FIELD_RADIUS_DP = 10;
@@ -55,10 +54,12 @@ final class AppDialog {
 
         EditText input = new EditText(activity);
         input.setHint(hint);
-        // Одна строка: перевод строки в имени пресета — единственный символ,
-        // способный разорвать текстовое хранилище (Preset.RECORD). Preset его
-        // всё равно вычищает, но не пускать его с клавиатуры дешевле, чем
-        // чинить потом.
+        /**
+         * Одна строка: перевод строки в имени пресета — единственный символ,
+         * способный разорвать текстовое хранилище (Preset.RECORD). Preset его
+         * всё равно вычищает, но не пускать его с клавиатуры дешевле, чем
+         * чинить потом.
+         */
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setSingleLine(true);
         input.setTextColor(Color.WHITE);
@@ -150,7 +151,9 @@ final class AppDialog {
                 Ui.dp(activity, 520), ViewGroup.LayoutParams.WRAP_CONTENT));
         Window window = dialog.getWindow();
         if (window != null) {
-            // Прозрачный фон окна: иначе под нашей карточкой видна системная.
+            /**
+             * Прозрачный фон окна: иначе под нашей карточкой видна системная.
+             */
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         }
         return dialog;
@@ -200,13 +203,14 @@ final class AppDialog {
         return button;
     }
 
-    /** Выключенная кнопка подтверждения серая и не нажимается — как в оригинале. */
+    /** Выключенная кнопка подтверждения серая и не нажимается. */
     private static void applyFilled(Activity activity, TextView button, ThemePalette palette,
             boolean enabled) {
         if (enabled) {
-            // Включённая кнопка — обычная кнопка экрана: держать здесь вторую
-            // копию её формы значило бы, что смена скругления пройдёт мимо
-            // диалогов и они молча останутся в старом виде.
+            /**
+             * Включённая кнопка — обычная кнопка экрана: своя копия её формы
+             * разъехалась бы с остальными при смене скругления.
+             */
             Ui.paintButton(button, palette);
         } else {
             button.setBackground(Ui.roundRect(activity, Ui.BUTTON_RADIUS_DP,

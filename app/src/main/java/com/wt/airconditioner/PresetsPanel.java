@@ -17,28 +17,22 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Вкладка пресетов — порт PresetsTab из Flutter-версии: сверху выбор сиденья,
- * слева редактор со слайдерами длительностей и порога, справа список
- * сохранённых расписаний.
+ * Вкладка пресетов: сверху выбор сиденья, слева редактор со слайдерами
+ * длительностей и порога, справа список сохранённых расписаний.
  *
- * Длительности задаются слайдерами 0…15 минут, как в оригинале: цифры пальцем
- * на сенсорном экране головы не набирают.
+ * Длительности задаются слайдерами, а не полями ввода: цифры пальцем на
+ * сенсорном экране головы не набирают.
  */
 final class PresetsPanel implements TabController {
 
     /**
-     * Что панель просит сделать со своим пресетом. Всё, что переживает экран,
-     * решает сервис: панель редактирует записи, но не знает, какая из них
-     * сейчас работает на сиденье.
+     * Всё, что переживает экран, решает сервис: панель редактирует записи, но не
+     * знает, какая из них сейчас работает на сиденье.
      */
     interface Listener {
         void onApply(Preset preset);
 
-        /**
-         * Пресет, который сейчас ведёт это сиденье, или null. Знает об этом
-         * только сервис: панель редактирует записи и не следит за тем, что
-         * греет в машине.
-         */
+        /** Пресет, который ведёт это сиденье, или null: знает только сервис. */
         String runningPreset(Seat seat);
 
         /** Снять пресет с сиденья и отдать его ручному управлению. */
@@ -46,23 +40,21 @@ final class PresetsPanel implements TabController {
 
         /**
          * Запись заменена или удалена (newEncoded == null). Сервис хранит
-         * «последний пресет сиденья» строкой самого пресета, и без этого
-         * уведомления указатель остался бы на исчезнувшем расписании.
+         * «последний пресет сиденья» строкой самого пресета: без уведомления
+         * указатель остался бы на исчезнувшем расписании.
          */
         void onPresetChanged(String oldEncoded, String newEncoded);
     }
 
-    /** Значения слайдера порога — те же, что в TemperatureConstants оригинала. */
+    /** Значения слайдера порога — те же, что в TemperatureConstants. */
     private static final int[] THRESHOLDS = {-5, 0, 5, 10, 15};
     private static final int DEFAULT_THRESHOLD_INDEX = 2;
     private static final int MAX_MINUTES = 15;
 
     /**
-     * Стартовые длительности нового пресета — ManualHeatSettings.defaultFor из
-     * Flutter-версии: уровень 1 держится 2 минуты, второй 5, третий 10. Это не
-     * расписание из TemperatureConstants: у пресета своя логика, и дефолт у
-     * него всегда был свой. Порядок здесь — как в массиве minutes, от первого
-     * уровня.
+     * Стартовые длительности нового пресета — не расписание из
+     * TemperatureConstants: у пресета своя логика. Порядок как в массиве
+     * minutes, от первого уровня.
      */
     private static final int[] DEFAULT_MINUTES = {2, 5, 10};
 
@@ -104,13 +96,8 @@ final class PresetsPanel implements TabController {
     }
 
     /**
-     * Страница создана адаптером. Здесь только разовая привязка: всё, что
-     * зависит от палитры, рисует applyTheme — его зовут сразу следом, поэтому
-     * собирать редактор и читать пресеты тут значило бы делать это дважды.
-     *
-     * Кнопки не красим: их находит Ui.paintButtons обходом по тегу из
-     * @style/PrimaryButton — у покраски должен быть один владелец, иначе при
-     * добавлении кнопки снова придётся гадать, кто про неё вспомнит.
+     * Только разовая привязка: всё, что зависит от палитры, рисует applyTheme —
+     * его зовут сразу следом. Кнопки не красим, их находит Ui.paintButtons.
      */
     @Override
     public void bind(View page) {
@@ -128,9 +115,8 @@ final class PresetsPanel implements TabController {
     }
 
     /**
-     * Перерисовывает динамический UI. Выбранный порог переживает смену темы сам:
-     * слайдер только перекрашивается, а не пересобирается, поэтому сохранять и
-     * восстанавливать его прогресс вокруг этого вызова больше не нужно.
+     * Выбранный порог переживает смену темы сам: слайдер перекрашивается, а не
+     * пересобирается, поэтому его прогресс сохранять не нужно.
      */
     @Override
     public void applyTheme(ThemePalette palette) {
@@ -143,10 +129,7 @@ final class PresetsPanel implements TabController {
         render();
     }
 
-    /**
-     * Кнопка play/pause у каждой записи зависит от того, что сейчас греет, а
-     * меняют это на соседней вкладке: список обязан свериться на каждом показе.
-     */
+    /** Кнопка play/pause зависит от того, что греет, а меняют это на соседней вкладке. */
     @Override
     public void onTabVisible(boolean visible) {
         if (visible) {
@@ -163,7 +146,7 @@ final class PresetsPanel implements TabController {
                 index -> selectSeat(Seat.values()[index]));
     }
 
-    /** Три строки «номер уровня — слайдер — длительность», как в оригинале. */
+    /** Три строки «номер уровня — слайдер — длительность». */
     private void buildLevelSliders() {
         levelsContainer.removeAllViews();
         for (int index = 0; index < minutes.length; index++) {
@@ -253,7 +236,7 @@ final class PresetsPanel implements TabController {
         }
     }
 
-    /** Имя спрашиваем при сохранении, как в SavePresetDialog оригинала. */
+    /** Имя спрашиваем при сохранении, а не в редакторе. */
     private void askNameAndSave() {
         AppDialog.prompt(activity, palette, "Сохранение пресета", "Название пресета",
                 "Сохранить", this::save);
@@ -288,9 +271,8 @@ final class PresetsPanel implements TabController {
     }
 
     /**
-     * Единственная смена сиденья — и по сегменту сверху, и по кнопке «Пресеты»
-     * на главной вкладке, где выбирать ещё нечего: попадать при этом в список
-     * водителя, ткнув сегмент пассажира, — потерянный клик.
+     * Единственная смена сиденья — и по сегменту сверху, и по кнопке «Пресеты» с
+     * главной вкладки.
      *
      * Черновик принадлежит сиденью и уезжает вместе с ним: сохранение после
      * переключения записало бы правку в пресет соседнего сиденья, заодно
@@ -306,12 +288,7 @@ final class PresetsPanel implements TabController {
         render();
     }
 
-    /**
-     * Список показывает пресеты выбранного сиденья: в оригинале переключатель
-     * сверху фильтрует именно его. Package-private: перерисовать его снаружи
-     * нужно при каждом показе вкладки — кнопка play/pause зависит от того, что
-     * происходит на сиденьях, а это меняется на другой вкладке.
-     */
+    /** Список показывает пресеты выбранного сиденья. */
     void render() {
         list.removeAllViews();
         List<Preset> presets = store.load();
@@ -367,15 +344,17 @@ final class PresetsPanel implements TabController {
         LinearLayout.LayoutParams scheduleParams = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT);
-        // Отступ до кнопок действий: иначе расписание липнет к карандашу.
+        /**
+         * Отступ до кнопок действий: иначе расписание липнет к карандашу.
+         */
         scheduleParams.setMarginEnd(Ui.dp(activity, 28));
         card.addView(schedule, scheduleParams);
 
         card.addView(iconButton(R.drawable.ic_edit, palette.accent, v -> loadIntoEditor(preset)));
 
-        // Пресет запущен — та же кнопка его снимает. Без этого список не
-        // показывал, что именно сейчас греет, и «отменить» можно было только
-        // через переключатель режима на соседней вкладке.
+        /**
+         * Пресет запущен — та же кнопка его снимает.
+         */
         card.addView(iconButton(running ? R.drawable.ic_pause : R.drawable.ic_play,
                 palette.accent,
                 v -> {
@@ -404,7 +383,7 @@ final class PresetsPanel implements TabController {
         return card;
     }
 
-    /** Правка пресета: значения уезжают в редактор, как по карандашу в оригинале. */
+    /** Правка пресета: значения уезжают в редактор. */
     private void loadIntoEditor(Preset preset) {
         editing = preset.encode();
         minutes[0] = preset.settings.sequence.level1Minutes;
@@ -464,13 +443,14 @@ final class PresetsPanel implements TabController {
     }
 
     /**
-     * Слайдер как в оригинале: толстый трек с делениями и круглый ползунок
-     * радиусом 10. Системный SeekBar рисует тонкую линию, поэтому и трек, и
-     * ползунок задаются свои.
+     * Толстый трек с делениями и круглый ползунок: системный SeekBar рисует
+     * тонкую линию, поэтому и трек, и ползунок задаются свои.
      */
     private void paintSeekBar(SeekBar bar, int divisions) {
-        // Слой обязан иметь id «progress»: иначе SeekBar сбросит уровень трека
-        // в ноль, обновляя вторичный прогресс, и заливка не появится.
+        /**
+         * Слой обязан иметь id «progress»: иначе SeekBar сбросит уровень трека
+         * в ноль, обновляя вторичный прогресс, и заливка не появится.
+         */
         LayerDrawable track = new LayerDrawable(
                 new Drawable[]{new SliderTrack(palette.accent, divisions, Ui.dp(activity, 8), Ui.dp(activity, 2))});
         track.setId(0, android.R.id.progress);

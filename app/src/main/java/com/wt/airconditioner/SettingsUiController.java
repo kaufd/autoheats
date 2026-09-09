@@ -11,24 +11,17 @@ import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
-/**
- * Управляет только вкладкой настроек: выбор темы, показ температуры,
- * разрешения и строка обновления.
- *
- * Три остальные вкладки давно живут в своих контроллерах, а настройки
- * оставались в Activity: из-за этого bindPage и paintPage держали для них
- * особый случай вместо такого же вызова, как у соседей.
- */
+/** Вкладка настроек: выбор темы, показ температуры, разрешения, обновление. */
 final class SettingsUiController implements TabController {
 
     interface Listener {
-        /** Выбрана тема: перекрасить надо весь экран, а не одну вкладку. */
+        /** Перекрасить надо весь экран, а не одну вкладку. */
         void onThemeSelected(AppTheme theme);
 
         /** Плашка температуры принадлежит вкладке сидений. */
         void onTemperatureVisibilityChanged();
 
-        /** Включение службы доступности пишется в лог — он на соседней вкладке. */
+        /** Лог живёт на соседней вкладке. */
         void onLog(String message);
     }
 
@@ -49,14 +42,13 @@ final class SettingsUiController implements TabController {
         this.palette = palette;
     }
 
-    /** Разовая привязка: слушатели и стартовое состояние, ничего от палитры. */
     @Override
     public void bind(View page) {
         this.page = page;
         Switch showTemperature = page.findViewById(R.id.showTemperature);
-        // Слушателя ещё нет, поэтому setChecked никого не дёргает и снимать его
-        // на время не нужно: раньше это приходилось делать только потому, что
-        // вкладка пересобиралась при каждой смене темы.
+        /**
+         * Слушателя ещё нет, поэтому setChecked никого не дёргает.
+         */
         showTemperature.setChecked(settings.showCabinTemperature());
         showTemperature.setOnCheckedChangeListener((button, checked) -> {
             settings.setShowCabinTemperature(checked);
@@ -67,7 +59,6 @@ final class SettingsUiController implements TabController {
         updateController.bind(page);
     }
 
-    /** Всё, что зависит от темы: витрина тем, переключатель, галочка доступа. */
     @Override
     public void applyTheme(ThemePalette palette) {
         this.palette = palette;
@@ -80,11 +71,7 @@ final class SettingsUiController implements TabController {
         renderPermissions();
     }
 
-    /**
-     * Один раз за запуск проверяем обновление молча, при первом открытии
-     * настроек. При ошибке сети кнопка остаётся и позволяет повторить вручную —
-     * повторной автопроверки не будет, её гейт живёт в AppUpdateController.
-     */
+    /** Автопроверка обновления один раз за запуск; её гейт — в AppUpdateController. */
     @Override
     public void onTabVisible(boolean visible) {
         if (visible) {
@@ -93,9 +80,8 @@ final class SettingsUiController implements TabController {
     }
 
     /**
-     * Галочка разрешений. Зовётся ещё и из onResume — человек мог выдать доступ
-     * в системных настройках и вернуться, — а туда мы попадаем раньше, чем
-     * ViewPager разложит страницы: до первого bind рисовать нечего.
+     * Зовётся ещё и из onResume — доступ могли выдать в системных настройках и
+     * вернуться, — а туда мы попадаем раньше, чем ViewPager разложит страницы.
      */
     void renderPermissions() {
         if (page == null) {
@@ -116,8 +102,9 @@ final class SettingsUiController implements TabController {
         button.setTypeface(Fonts.regular(activity));
         button.setPadding(Ui.dp(activity, 28), 0, Ui.dp(activity, 28), 0);
 
-        // Каждая кнопка показывает цвет своей темы, а не текущей: это витрина,
-        // поэтому палитра берётся по опции, а не берётся поле palette.
+        /**
+         * Витрина: каждая кнопка показывает цвет своей темы, а не текущей.
+         */
         boolean selected = option == settings.theme();
         ThemePalette optionPalette = ThemePalette.of(activity, option);
         button.setBackground(Ui.roundRect(activity, Ui.BUTTON_RADIUS_DP,
