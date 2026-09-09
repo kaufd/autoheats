@@ -6,11 +6,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
-/**
- * NotoSans из Flutter-версии. Шрифт лежит в assets, а не в res/font, потому
- * что res/font требует API 26, а minSdk здесь 23 — и без androidx подложить
- * совместимую загрузку нечем.
- */
+/** NotoSans: единственный шрифт экрана, кэшируется на процесс. */
 final class Fonts {
 
     private static Typeface regular;
@@ -21,22 +17,22 @@ final class Fonts {
 
     static Typeface regular(Context context) {
         if (regular == null) {
-            regular = load(context, "fonts/NotoSans-Regular.ttf");
+            regular = load(context, R.font.noto_sans_regular);
         }
         return regular;
     }
 
     static Typeface bold(Context context) {
         if (bold == null) {
-            bold = load(context, "fonts/NotoSans-Bold.ttf");
+            bold = load(context, R.font.noto_sans_bold);
         }
         return bold;
     }
 
     /** Шрифт — оформление: если он не прочитался, экран должен остаться рабочим. */
-    private static Typeface load(Context context, String path) {
+    private static Typeface load(Context context, int fontRes) {
         try {
-            return Typeface.createFromAsset(context.getAssets(), path);
+            return context.getResources().getFont(fontRes);
         } catch (RuntimeException e) {
             return Typeface.DEFAULT;
         }

@@ -12,8 +12,9 @@ import android.os.Build;
 import android.os.IBinder;
 
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.List;
-import java.util.Locale;
+import java.util.Map;
 
 /**
  * Foreground-сервис: владеет соединением с Car и выключает подогрев при
@@ -85,7 +86,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     private PendingIntent contentIntent;
 
     /** Что сейчас выставлено на каждом сиденье — для экрана и для реплея. */
-    private final java.util.Map<Seat, Integer> levels = new java.util.EnumMap<>(Seat.class);
+    private final Map<Seat, Integer> levels = new EnumMap<>(Seat.class);
 
     /** Была ли поездка и выключены ли сиденья — решения о зажигании живут там. */
     private final IgnitionSession session = new IgnitionSession();
@@ -257,8 +258,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      * проверяется вся цепочка до записи уровня в автомобиль.
      */
     public void injectTemperature(double celsius) {
-        onLog("ОТЛАДКА: подставлена температура " + String.format(Locale.US, "%.1f", celsius)
-                + " °C");
+        onLog("ОТЛАДКА: подставлена температура " + TemperatureConstants.celsiusText(celsius));
         lastCelsius = celsius;
         UiListener listener = uiListener;
         if (listener != null) {
@@ -407,7 +407,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     @Override
     public void onCabinTemperature(double celsius, int raw) {
         lastCelsius = celsius;
-        onLog("температура: raw=" + raw + " → " + String.format(Locale.US, "%.1f", celsius) + " °C");
+        onLog("температура: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius));
         autoHeat.setTemperature(celsius);
         UiListener listener = uiListener;
         if (listener != null) {

@@ -10,7 +10,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /** Управляет только главной вкладкой: два фиксированных сиденья и их controls. */
-final class SeatHeatUiController {
+final class SeatHeatUiController implements TabController {
 
     interface Listener {
         /** Пресетов у сиденья нет — человека надо отправить их выбирать. */
@@ -67,7 +67,8 @@ final class SeatHeatUiController {
         this.palette = palette;
     }
 
-    void bind(View page) {
+    @Override
+    public void bind(View page) {
         this.page = page;
         temperaturePill = page.findViewById(R.id.temperaturePill);
         temperatureView = page.findViewById(R.id.temperature);
@@ -82,7 +83,8 @@ final class SeatHeatUiController {
         applyTemperatureVisibility();
     }
 
-    void applyTheme(ThemePalette palette) {
+    @Override
+    public void applyTheme(ThemePalette palette) {
         this.palette = palette;
         page.findViewById(R.id.centerDivider).setBackgroundColor(palette.divider);
         // Плашка температуры бледнее чипов: своя пара значений, и она здесь
@@ -92,6 +94,14 @@ final class SeatHeatUiController {
         ((ImageView) page.findViewById(R.id.temperatureIcon))
                 .setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
         render();
+    }
+
+    /**
+     * Главной вкладке показ ничего не даёт: её содержимое обновляют события
+     * сервиса — уровень сиденья и температура, — а они приходят и на скрытой.
+     */
+    @Override
+    public void onTabVisible(boolean visible) {
     }
 
     /** Температура в салоне — тем же текстом, что и рядом с инжектором логов. */
@@ -168,7 +178,7 @@ final class SeatHeatUiController {
                 container.addView(dot, params);
             }
         }
-        int off = activity.getResources().getColor(R.color.system_grey);
+        int off = Ui.color(activity, R.color.system_grey);
         int ring = Ui.dp(activity, DOT_RING_DP);
         for (int index = 0; index < DOTS; index++) {
             GradientDrawable shape =

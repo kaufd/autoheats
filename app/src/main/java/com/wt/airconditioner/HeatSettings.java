@@ -13,7 +13,13 @@ import android.content.SharedPreferences;
  */
 final class HeatSettings {
 
-    private static final String FILE = "autoheat";
+    /**
+     * Общий файл хранилища: PresetStore пишет пресеты в него же. Разъехавшись,
+     * эти две строки развели бы по разным файлам связанные данные — активный
+     * пресет сиденья хранится здесь строкой самого пресета из PresetStore.
+     */
+    static final String FILE = "autoheat";
+
     private static final String KEY_MODE_PREFIX = "mode_";
     private static final String KEY_LEVEL_PREFIX = "level_";
     private static final String KEY_THEME = "theme";

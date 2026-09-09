@@ -6,6 +6,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.PorterDuff;
+import android.view.Gravity;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -20,7 +21,7 @@ import java.util.Deque;
 import java.util.List;
 
 /** Локальное представление диагностического лога и debug-инжектора. */
-final class LogUiController {
+final class LogUiController implements TabController {
 
     private static final int[] QUICK_TEMPERATURES = {-15, -10, -5, 0, 5, 10};
     private static final int LOG_TRIM_SLACK = 100;
@@ -66,7 +67,8 @@ final class LogUiController {
     }
 
     /** Страница создана адаптером: разбираем её и вешаем слушателей. */
-    void bind(View page) {
+    @Override
+    public void bind(View page) {
         this.page = page;
         logView = page.findViewById(R.id.log);
         counter = page.findViewById(R.id.logCounter);
@@ -105,7 +107,8 @@ final class LogUiController {
         visible = false;
     }
 
-    void applyTheme(ThemePalette palette) {
+    @Override
+    public void applyTheme(ThemePalette palette) {
         this.palette = palette;
         if (page == null) {
             return;
@@ -134,7 +137,8 @@ final class LogUiController {
      * и то, что пришло, пока вкладка была скрыта, и прокрутку к последней
      * строке — ею же пользуются, повторно нажав кнопку «Логи».
      */
-    void setTabVisible(boolean visible) {
+    @Override
+    public void onTabVisible(boolean visible) {
         this.visible = visible && page != null;
         renderLog();
     }
@@ -208,7 +212,7 @@ final class LogUiController {
         button.setTextSize(14);
         button.setTextColor(palette.accent);
         button.setTypeface(Fonts.regular(activity));
-        button.setGravity(android.view.Gravity.CENTER);
+        button.setGravity(Gravity.CENTER);
 
         button.setBackground(Ui.roundRect(activity, CHIP_RADIUS_DP,
                 palette.chipFill, palette.chipStroke));

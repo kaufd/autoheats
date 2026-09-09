@@ -61,8 +61,6 @@ final class AppUpdateController {
     private UpdateRelease availableRelease;
     private String errorMessage;
     private boolean automaticCheckStarted;
-    private boolean waitingForPermission;
-    private boolean waitingForInstaller;
     private boolean destroyed;
     private long downloadId = NO_DOWNLOAD;
     private File downloadedApk;
@@ -101,16 +99,23 @@ final class AppUpdateController {
         checkForUpdate();
     }
 
+    /**
+     * Экран вернулся из системного: с выдачи разрешения на установку или от
+     * установщика APK. Куда именно уходили, говорит state — отдельных флагов
+     * для этого больше нет. Они дублировали два его значения и могли с ними
+     * разъехаться: сброшенный флаг при непереключённом state оставлял flow
+     * обновления в состоянии, из которого его уже никто не двигал.
+     */
     void onResume() {
-        if (waitingForPermission) {
-            waitingForPermission = false;
+        if (state == State.WAITING_FOR_PERMISSION) {
             if (activity.getPackageManager().canRequestPackageInstalls()) {
                 beginDownload();
             } else {
                 showError("Разрешите AutoHeat устанавливать приложения");
             }
-        } else if (waitingForInstaller) {
-            waitingForInstaller = false;
+        } else if (state == State.OPENING_INSTALLER) {
+            // Установщик закрыли — принял человек обновление или нет, отсюда не
+            // видно: предлагаем ту же кнопку «Обновить».
             state = State.AVAILABLE;
             render();
         }
@@ -165,7 +170,6 @@ final class AppUpdateController {
             return;
         }
 
-        waitingForPermission = true;
         state = State.WAITING_FOR_PERMISSION;
         render();
         Intent permission = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
@@ -173,7 +177,8 @@ final class AppUpdateController {
         try {
             activity.startActivity(permission);
         } catch (ActivityNotFoundException error) {
-            waitingForPermission = false;
+            // Экран не открылся — ждать возвращения неоткуда, showError уводит
+            // state из WAITING_FOR_PERMISSION, и ближайший onResume это увидит.
             showError("Откройте разрешение на установку APK в настройках Android");
         }
     }
@@ -242,12 +247,10 @@ final class AppUpdateController {
                 .setDataAndType(apk, APK_MIME)
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
-            waitingForInstaller = true;
             state = State.OPENING_INSTALLER;
             render();
             activity.startActivity(install);
         } catch (ActivityNotFoundException error) {
-            waitingForInstaller = false;
             showError("Системный установщик APK не найден");
         }
     }

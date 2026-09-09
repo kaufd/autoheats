@@ -1,5 +1,7 @@
 package com.wt.airconditioner;
 
+import java.util.Locale;
+
 /**
  * Расписания подогрева по температуре салона. Порт
  * lib/src/constants/temperature_constants.dart — значения перенесены дословно,
@@ -15,6 +17,16 @@ final class TemperatureConstants {
     static final double OFF_ABOVE_CELSIUS = 10.0;
 
     private TemperatureConstants() {
+    }
+
+    /**
+     * Температура одним видом для экрана и лога. Locale.US здесь обязателен:
+     * в русской локали разделителем стала бы запятая, и «12,3 °C» разъехалось
+     * бы с остальными строками. Собрано в одном месте затем, чтобы четвёртый
+     * вызывающий не забыл про локаль — форматированием заняты три.
+     */
+    static String celsiusText(double celsius) {
+        return String.format(Locale.US, "%.1f °C", celsius);
     }
 
     /**

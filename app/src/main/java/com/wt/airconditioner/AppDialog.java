@@ -62,7 +62,7 @@ final class AppDialog {
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setSingleLine(true);
         input.setTextColor(Color.WHITE);
-        input.setHintTextColor(color(activity, R.color.text_muted));
+        input.setHintTextColor(Ui.color(activity, R.color.text_muted));
         input.setTextSize(18);
         input.setTypeface(Fonts.regular(activity));
         input.setPadding(Ui.dp(activity, 16), Ui.dp(activity, 14), Ui.dp(activity, 16), Ui.dp(activity, 14));
@@ -210,14 +210,10 @@ final class AppDialog {
             Ui.paintButton(button, palette);
         } else {
             button.setBackground(Ui.roundRect(activity, Ui.BUTTON_RADIUS_DP,
-                    color(activity, R.color.system_grey)));
-            button.setTextColor(color(activity, R.color.text_muted));
+                    Ui.color(activity, R.color.system_grey)));
+            button.setTextColor(Ui.color(activity, R.color.text_muted));
         }
         button.setEnabled(enabled);
-    }
-
-    private static int color(Activity activity, int colorRes) {
-        return activity.getResources().getColor(colorRes);
     }
 
 }

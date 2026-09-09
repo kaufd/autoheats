@@ -11,13 +11,13 @@ import java.util.Set;
 /** Список пресетов в SharedPreferences. Порядок сохраняется — он же порядок на экране. */
 final class PresetStore {
 
-    private static final String FILE = "autoheat";
     private static final String KEY = "presets";
 
     private final SharedPreferences preferences;
 
     PresetStore(Context context) {
-        this.preferences = context.getSharedPreferences(FILE, Context.MODE_PRIVATE);
+        // Тот же файл, что у HeatSettings, — см. HeatSettings.FILE.
+        this.preferences = context.getSharedPreferences(HeatSettings.FILE, Context.MODE_PRIVATE);
     }
 
     /**

@@ -24,7 +24,7 @@ import java.util.Locale;
  * Длительности задаются слайдерами 0…15 минут, как в оригинале: цифры пальцем
  * на сенсорном экране головы не набирают.
  */
-final class PresetsPanel {
+final class PresetsPanel implements TabController {
 
     /**
      * Что панель просит сделать со своим пресетом. Всё, что переживает экран,
@@ -112,7 +112,8 @@ final class PresetsPanel {
      * @style/PrimaryButton — у покраски должен быть один владелец, иначе при
      * добавлении кнопки снова придётся гадать, кто про неё вспомнит.
      */
-    void bind(View page) {
+    @Override
+    public void bind(View page) {
         this.page = page;
         list = page.findViewById(R.id.presetList);
         levelsContainer = page.findViewById(R.id.presetLevels);
@@ -131,7 +132,8 @@ final class PresetsPanel {
      * слайдер только перекрашивается, а не пересобирается, поэтому сохранять и
      * восстанавливать его прогресс вокруг этого вызова больше не нужно.
      */
-    void applyTheme(ThemePalette palette) {
+    @Override
+    public void applyTheme(ThemePalette palette) {
         this.palette = palette;
         buildSeatSegments();
         buildLevelSliders();
@@ -139,6 +141,17 @@ final class PresetsPanel {
         buildThresholdLabels();
         page.findViewById(R.id.presetDivider).setBackgroundColor(palette.divider);
         render();
+    }
+
+    /**
+     * Кнопка play/pause у каждой записи зависит от того, что сейчас греет, а
+     * меняют это на соседней вкладке: список обязан свериться на каждом показе.
+     */
+    @Override
+    public void onTabVisible(boolean visible) {
+        if (visible) {
+            render();
+        }
     }
 
     private void buildSeatSegments() {
@@ -231,7 +244,7 @@ final class PresetsPanel {
             TextView label = new TextView(activity);
             label.setText(THRESHOLDS[index] + "°C");
             label.setTextSize(13);
-            label.setTextColor(color(R.color.text_body));
+            label.setTextColor(Ui.color(activity, R.color.text_body));
             label.setTypeface(Fonts.regular(activity));
             label.setGravity(index == 0 ? Gravity.START
                     : index == THRESHOLDS.length - 1 ? Gravity.END : Gravity.CENTER);
@@ -317,7 +330,7 @@ final class PresetsPanel {
         if (empty) {
             TextView placeholder = new TextView(activity);
             placeholder.setText("Пока нет сохранённых пресетов");
-            placeholder.setTextColor(color(R.color.text_secondary));
+            placeholder.setTextColor(Ui.color(activity, R.color.text_secondary));
             placeholder.setTextSize(16);
             placeholder.setTypeface(Fonts.regular(activity));
             placeholder.setGravity(Gravity.CENTER);
@@ -336,7 +349,7 @@ final class PresetsPanel {
 
         TextView title = new TextView(activity);
         title.setText(preset.name);
-        title.setTextColor(color(R.color.text_body));
+        title.setTextColor(Ui.color(activity, R.color.text_body));
         title.setTextSize(18);
         title.setTypeface(Fonts.regular(activity));
         card.addView(title, new LinearLayout.LayoutParams(
@@ -348,7 +361,7 @@ final class PresetsPanel {
                 preset.settings.sequence.level2Minutes,
                 preset.settings.sequence.level1Minutes,
                 preset.settings.thresholdCelsius));
-        schedule.setTextColor(color(R.color.text_secondary));
+        schedule.setTextColor(Ui.color(activity, R.color.text_secondary));
         schedule.setTextSize(17);
         schedule.setTypeface(Fonts.regular(activity));
         LinearLayout.LayoutParams scheduleParams = new LinearLayout.LayoutParams(
@@ -448,10 +461,6 @@ final class PresetsPanel {
 
     private String minutesText(int value) {
         return value + " мин.";
-    }
-
-    private int color(int colorRes) {
-        return activity.getResources().getColor(colorRes);
     }
 
     /**
