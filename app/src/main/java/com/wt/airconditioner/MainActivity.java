@@ -145,6 +145,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private SeatHeatUiController heatUi;
     private LogUiController logUi;
     private PresetsPanel presetsPanel;
+    private AppUpdateController updateController;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -162,6 +163,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         heatUi = new SeatHeatUiController(this, settings, serviceBinding, heatListener, palette);
         logUi = new LogUiController(this, serviceBinding, palette);
         presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
+        updateController = new AppUpdateController(this);
 
         // Страницы создаются, разбираются контроллерами и красятся внутри
         // setAdapter — снаружи остаются только шапка и фон. Раньше каждая
@@ -177,10 +179,12 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     protected void onResume() {
         super.onResume();
         renderPermissions();
+        updateController.onResume();
     }
 
     @Override
     protected void onDestroy() {
+        updateController.destroy();
         serviceBinding.destroy();
         // Сервис намеренно не останавливаем: он должен пережить закрытие
         // экрана, иначе автовыключение по зажиганию перестанет работать.
@@ -358,6 +362,11 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             // это на соседней вкладке: список должен свериться на каждом показе.
             presetsPanel.render();
         }
+        if (index == TAB_SETTINGS) {
+            // Один раз за запуск проверяем молча при первом открытии настроек.
+            // При ошибке сети кнопка остаётся и позволяет повторить вручную.
+            updateController.checkAutomatically();
+        }
         // Скрытый лог продолжает копиться, но в свой TextView не пишет:
         // страница остаётся разложенной, и каждая строка стоила бы пересборки
         // разметки на пятистах строках.
@@ -500,6 +509,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         });
 
         page.findViewById(R.id.enableAutostart).setOnClickListener(v -> requestPermissions());
+        updateController.bind(page);
     }
 
     /** Всё, что зависит от темы: витрина тем, переключатель, галочка доступа. */

@@ -5,7 +5,7 @@ AutoHeat — native Android-приложение на Java для Android Automo
 ## Технологии и структура
 
 - Android Gradle Plugin 8.5.2, Gradle 8.9, JDK 17;
-- Java 8 source/target compatibility, `compileSdk`/`targetSdk` 33, `minSdk` 23;
+- Java 8 source/target compatibility, `compileSdk`/`targetSdk` 33, `minSdk` 28;
 - `android.car` подключён через `app/libs/android.car.jar`;
 - приложение и тесты: `app/src/main/` и `app/src/test/`;
 - package/application ID: `com.wt.airconditioner`.

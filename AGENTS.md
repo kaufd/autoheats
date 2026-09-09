@@ -2,6 +2,8 @@
 
 AutoHeat — native Android Gradle-проект на Java. Исходники приложения находятся в `app/src/main/`, unit-тесты — в `app/src/test/`, Gradle wrapper — в корне.
 
+Целевая среда проекта — головное устройство Changan на Android 9 (API 28). Совместимость с другими версиями Android не требуется, если задача явно не говорит обратного.
+
 Перед изменением Java или Android-ресурсов сначала прочитайте затрагиваемый класс/ресурс и соответствующий тест. Не меняйте поведение `android.car.*`, package ID `com.wt.airconditioner`, manifest permissions или ignition-логику без явной задачи и проверки на физической голове Changan.
 
 Обычная проверка из корня:

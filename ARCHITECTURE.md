@@ -2,6 +2,8 @@
 
 ```text
 MainActivity / XML tabs
+        ├── AppUpdateController ── GitHub Releases / DownloadManager / установщик APK
+        │
         │ команды и отображение
         ▼
 SeatHeatService ── CarHvacProbe ── android.car.* / CarService

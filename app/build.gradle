@@ -27,7 +27,8 @@ android {
         // Имя обязано совпадать с whitelisted-пакетом головы: с любым другим
         // CarService не отдаёт CarHvacManager (SecurityException "not in white list").
         applicationId "com.wt.airconditioner"
-        minSdk 23
+        // Приложение предназначено только для головы Changan на Android 9.
+        minSdk 28
         targetSdk 33
         versionCode 260
         versionName "0.6.0"
@@ -36,6 +37,12 @@ android {
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // Экран обновления показывает VERSION_NAME/VERSION_CODE и сравнивает
+    // опубликованную сборку с установленной.
+    buildFeatures {
+        buildConfig true
     }
 
     signingConfigs {
@@ -89,4 +96,7 @@ dependencies {
     implementation 'androidx.viewpager:viewpager:1.0.0'
 
     testImplementation 'junit:junit:4.13.2'
+    // Android предоставляет org.json во время работы, JVM-тестам нужна его
+    // обычная реализация для проверки разбора ответа GitHub Releases.
+    testImplementation 'org.json:json:20240303'
 }

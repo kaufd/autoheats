@@ -58,6 +58,11 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!-- Обновление загружается из GitHub Releases и передаётся штатному
+         установщику Android 9. Разрешение пользователь включает один раз в
+         системном экране «Установка неизвестных приложений». -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+
     <!-- Замер, а не рабочий путь: даёт ли голова whitelisted-пакету право
          включить службу доступности без похода в настройки. Обычному APK не
          выдаётся никогда (signature|privileged), но com.wt.airconditioner эта
