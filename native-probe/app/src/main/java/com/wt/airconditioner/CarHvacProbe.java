@@ -141,16 +141,27 @@ public class CarHvacProbe {
                             || event.sensorType != CarSensorManager.SENSOR_TYPE_IGNITION_STATE) {
                         return;
                     }
-                    Boolean on = ignitionOn(event.intValues);
-                    if (on == null) {
-                        log("зажигание: пропущено — " + skipReason(event.intValues));
-                        return;
-                    }
-                    final boolean ignitionOn = on;
-                    log("зажигание: " + (ignitionOn ? "ON" : "не ON (" + event.intValues[0] + ")"));
-                    mainHandler.post(() -> listener.onIgnition(ignitionOn));
+                    publishIgnition("зажигание", event.intValues);
                 }
             };
+
+    /**
+     * Разбирает событие зажигания и отдаёт его слушателю. Правило «что считать
+     * включённым» вынесено в ignitionOn и проверяется тестом, а обвязка к нему
+     * нужна двум путям — подписке и разовому чтению после неё. Разные строки в
+     * логе у этих путей — единственное отличие, и именно по ним на голове (где
+     * нет adb) разбирают автовыключение.
+     */
+    private void publishIgnition(String prefix, int[] intValues) {
+        Boolean on = ignitionOn(intValues);
+        if (on == null) {
+            log(prefix + ": пропущено — " + skipReason(intValues));
+            return;
+        }
+        final boolean ignitionOn = on;
+        log(prefix + ": " + (ignitionOn ? "ON" : "не ON (" + intValues[0] + ")"));
+        mainHandler.post(() -> listener.onIgnition(ignitionOn));
+    }
 
     /**
      * Зажигание включено только в состоянии ON; ACC, LOCK, OFF и UNDEFINED
@@ -200,26 +211,10 @@ public class CarHvacProbe {
         public void onServiceDisconnected(ComponentName name) {
             log("onServiceDisconnected: жду автоматического переподключения");
             serviceConnected = false;
-            // Оба менеджера принадлежат умершему CarService: если оставить
-            // ссылки, повторная подписка молча перезапишет их, а старый
-            // listener так и останется зарегистрированным на мёртвом инстансе.
-            if (hvacManager != null) {
-                try {
-                    hvacManager.unregisterCallback(hvacCallback);
-                } catch (Exception e) {
-                    log("unregisterCallback error: " + e);
-                }
-                hvacManager = null;
-            }
-            if (sensorManager != null) {
-                try {
-                    sensorManager.unregisterListener(sensorListener);
-                } catch (Exception e) {
-                    log("unregisterListener error: " + e);
-                }
-                sensorManager = null;
-            }
-            powerManager = null;
+            // Менеджеры принадлежат умершему CarService: если оставить ссылки,
+            // повторная подписка молча перезапишет их, а старый listener так и
+            // останется зарегистрированным на мёртвом инстансе.
+            releaseManagers();
             notifyReady(false);
             // Своего реконнекта здесь намеренно нет. Car.createCar биндится с
             // BIND_AUTO_CREATE, поэтому систему держит наш же биндинг: она сама
@@ -362,14 +357,7 @@ public class CarHvacProbe {
                 log("текущее зажигание неизвестно: getLatestSensorEvent вернул null");
                 return;
             }
-            Boolean on = ignitionOn(event.intValues);
-            if (on == null) {
-                log("текущее зажигание не определено: " + skipReason(event.intValues));
-                return;
-            }
-            final boolean ignitionOn = on;
-            log("текущее зажигание: " + (ignitionOn ? "ON" : "не ON (" + event.intValues[0] + ")"));
-            mainHandler.post(() -> listener.onIgnition(ignitionOn));
+            publishIgnition("текущее зажигание", event.intValues);
         } catch (Throwable t) {
             log("текущее зажигание прочитать не удалось: " + t);
         }
@@ -447,8 +435,15 @@ public class CarHvacProbe {
         }
     }
 
-    public boolean isHvacReady() {
+    private boolean isHvacReady() {
         return car != null && car.isConnected() && hvacManager != null;
+    }
+
+    /** Зона HVAC сиденья — единственное место, где Seat переводится в area id. */
+    private static int areaOf(Seat seat) {
+        return seat == Seat.DRIVER
+                ? VehicleAreaSeat.SEAT_MAIN_DRIVER
+                : VehicleAreaSeat.SEAT_PASSENGER;
     }
 
     /** Разовое чтение температуры салона; результат уходит в listener. */
@@ -470,19 +465,18 @@ public class CarHvacProbe {
      * состоялось, — молчаливая потеря этой команды оставляет подогрев
      * включённым до следующей поездки.
      */
-    public boolean setSeatHeat(boolean isDriver, int level) {
-        String seat = isDriver ? "водитель" : "пассажир";
+    public boolean setSeatHeat(Seat seat, int level) {
         if (!isHvacReady()) {
-            log("setSeatHeat(" + seat + ", " + level + ") пропущено: HVAC не готов");
+            log("setSeatHeat(" + seat.title + ", " + level + ") пропущено: HVAC не готов");
             return false;
         }
-        int area = isDriver ? VehicleAreaSeat.SEAT_MAIN_DRIVER : VehicleAreaSeat.SEAT_PASSENGER;
         try {
-            hvacManager.setIntProperty(VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, area, level);
-            log("setSeatHeat OK: " + seat + " → " + level);
+            hvacManager.setIntProperty(
+                    VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, areaOf(seat), level);
+            log("setSeatHeat OK: " + seat.title + " → " + level);
             return true;
         } catch (Exception e) {
-            log("ОШИБКА setSeatHeat(" + seat + ", " + level + "): " + e);
+            log("ОШИБКА setSeatHeat(" + seat.title + ", " + level + "): " + e);
             return false;
         }
     }
@@ -492,34 +486,33 @@ public class CarHvacProbe {
      * свойство может оказаться доступным только на запись, и тогда вызывающий
      * остаётся при своём представлении, а не при выдуманном нуле.
      */
-    public Integer readSeatHeat(boolean isDriver) {
-        String seat = isDriver ? "водитель" : "пассажир";
+    public Integer readSeatHeat(Seat seat) {
         if (!isHvacReady()) {
             return null;
         }
-        int area = isDriver ? VehicleAreaSeat.SEAT_MAIN_DRIVER : VehicleAreaSeat.SEAT_PASSENGER;
         try {
             int level = hvacManager.getIntProperty(
-                    VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, area);
+                    VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, areaOf(seat));
             if (level < 0 || level > 3) {
-                log("уровень подогрева (" + seat + ") вне диапазона: " + level);
+                log("уровень подогрева (" + seat.title + ") вне диапазона: " + level);
                 return null;
             }
             return level;
         } catch (Exception e) {
-            log("уровень подогрева (" + seat + ") прочитать не удалось: " + e);
+            log("уровень подогрева (" + seat.title + ") прочитать не удалось: " + e);
             return null;
         }
     }
 
-    public void disconnect() {
-        mainHandler.removeCallbacks(connectTimeout);
-        // Отложенный повтор подписки принадлежит этому соединению: после
-        // restartCarConnection он полез бы к менеджерам, которых уже нет.
-        mainHandler.removeCallbacks(sensorRetry);
-        serviceConnected = false;
-        // Каждый шаг под своим catch: падение первого unregister не должно
-        // оставить car соединённым, а callback — зарегистрированным.
+    /**
+     * Единственный путь отпускания менеджеров Car — нужен и при разрыве связи,
+     * и при явном disconnect. Двумя копиями он уже успел разъехаться: одна
+     * забывала clearListener у CarPowerManager.
+     *
+     * Каждый шаг под своим catch: падение первого unregister не должно оставить
+     * остальные callback'и зарегистрированными.
+     */
+    private void releaseManagers() {
         if (sensorManager != null) {
             try {
                 sensorManager.unregisterListener(sensorListener);
@@ -544,6 +537,15 @@ public class CarHvacProbe {
             }
             powerManager = null;
         }
+    }
+
+    public void disconnect() {
+        mainHandler.removeCallbacks(connectTimeout);
+        // Отложенный повтор подписки принадлежит этому соединению: после
+        // restartCarConnection он полез бы к менеджерам, которых уже нет.
+        mainHandler.removeCallbacks(sensorRetry);
+        serviceConnected = false;
+        releaseManagers();
         if (car != null) {
             try {
                 car.disconnect();

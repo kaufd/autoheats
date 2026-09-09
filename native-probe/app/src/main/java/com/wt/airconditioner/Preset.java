@@ -59,15 +59,20 @@ final class Preset {
     }
 
     /**
-     * Разбор того, что человек набрал в форме. null — форма не годится, и
-     * пресет сохранять нельзя: пустое имя не найти в списке, а расписание из
-     * одних нулей ничего не греет и молча «не работало бы».
+     * Сборка пресета из формы редактора. null — форма не годится, и пресет
+     * сохранять нельзя: пустое имя не найти в списке, а расписание из одних
+     * нулей ничего не греет и молча «не работало бы».
      *
-     * Пустое поле длительности считается нулём: уровень просто пропускается —
-     * это осмысленный пресет («сразу с двойки»), а не ошибка ввода.
+     * Числа приходят типами, а не строками: длительности и порог задаются
+     * слайдерами, и разбирать их обратно из текста было бы нечего — текстовые
+     * поля остались во Flutter-версии. Имя разбирать по-прежнему нужно: это
+     * единственное, что человек здесь набирает.
+     *
+     * Нулевая длительность уровня — не ошибка, а осмысленный пресет («сразу с
+     * двойки»); отвергается только расписание, где нули везде.
      */
-    static Preset fromInput(String name, Seat seat, String level3, String level2,
-            String level1, String threshold) {
+    static Preset fromInput(String name, Seat seat, int level3, int level2,
+            int level1, double threshold) {
         // Перевод строки в имени разорвал бы запись надвое: RECORD — это \n.
         // С экранной клавиатуры головы его не ввести, но вставка из буфера и
         // подключённая USB-клавиатура — вполне, а цена ошибки в том, что
@@ -76,41 +81,11 @@ final class Preset {
         if (trimmedName.isEmpty()) {
             return null;
         }
-        int minutes3 = minutesOrZero(level3);
-        int minutes2 = minutesOrZero(level2);
-        int minutes1 = minutesOrZero(level1);
-        if (minutes3 + minutes2 + minutes1 <= 0) {
-            return null;
-        }
-        Double celsius = celsiusOrNull(threshold);
-        if (celsius == null) {
+        if (level3 + level2 + level1 <= 0) {
             return null;
         }
         return new Preset(trimmedName, seat,
-                new PresetSettings(celsius, minutes3, minutes2, minutes1));
-    }
-
-    private static int minutesOrZero(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return 0;
-        }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException e) {
-            return 0;
-        }
-    }
-
-    /** Порог по умолчанию — 5 °C, как в Flutter-версии. */
-    private static Double celsiusOrNull(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return 5.0;
-        }
-        try {
-            return Double.parseDouble(value.trim().replace(',', '.'));
-        } catch (NumberFormatException e) {
-            return null;
-        }
+                new PresetSettings(threshold, level3, level2, level1));
     }
 
     static String encodeAll(List<Preset> presets) {

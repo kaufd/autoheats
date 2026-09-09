@@ -56,6 +56,12 @@ final class PresetsPanel {
      */
     private static final int[] DEFAULT_MINUTES = {2, 5, 10};
 
+    private static final int CARD_RADIUS_DP = 12;
+    private static final int BADGE_RADIUS_DP = 12;
+    private static final int PILL_RADIUS_DP = 16;
+    /** Подложка карточки пресета — темнее фона списка, но не глухая. */
+    private static final int CARD_FILL = 0x66000000;
+
     private final Activity activity;
     private final PresetStore store;
     private final Listener listener;
@@ -86,32 +92,30 @@ final class PresetsPanel {
         levelsContainer = activity.findViewById(R.id.presetLevels);
         thresholdBar = activity.findViewById(R.id.presetThreshold);
 
-        buildSeatSegments();
-        buildLevelSliders();
-        buildThreshold();
-        buildThresholdLabels();
-
+        // Разовая привязка. Всё, что зависит от палитры, рисует applyTheme —
+        // MainActivity зовёт его сразу после конструктора, поэтому собирать
+        // редактор и читать пресеты здесь значило бы делать это дважды подряд.
+        //
         // Кнопки не красим: их находит Ui.paintButtons обходом по тегу из
         // @style/PrimaryButton — у покраски должен быть один владелец, иначе
         // при добавлении кнопки снова придётся гадать, кто про неё вспомнит.
-        activity.findViewById(R.id.presetDivider).setBackgroundColor(palette.divider);
+        bindThreshold();
         activity.findViewById(R.id.presetSave).setOnClickListener(v -> askNameAndSave());
         activity.findViewById(R.id.presetNew).setOnClickListener(v -> resetEditor());
-
-        render();
     }
 
-    /** Перерисовывает динамический UI, сохраняя выбранное расписание. */
+    /**
+     * Перерисовывает динамический UI. Выбранный порог переживает смену темы сам:
+     * слайдер только перекрашивается, а не пересобирается, поэтому сохранять и
+     * восстанавливать его прогресс вокруг этого вызова больше не нужно.
+     */
     void applyTheme(ThemePalette palette) {
-        int thresholdIndex = thresholdBar.getProgress();
         this.palette = palette;
         buildSeatSegments();
         buildLevelSliders();
-        buildThreshold();
-        thresholdBar.setProgress(thresholdIndex);
+        paintSeekBar(thresholdBar, THRESHOLDS.length - 1);
         buildThresholdLabels();
-        activity.findViewById(R.id.presetDivider)
-                .setBackgroundColor(palette.divider);
+        activity.findViewById(R.id.presetDivider).setBackgroundColor(palette.divider);
         render();
     }
 
@@ -175,10 +179,9 @@ final class PresetsPanel {
         return row;
     }
 
-    private void buildThreshold() {
+    private void bindThreshold() {
         thresholdBar.setMax(THRESHOLDS.length - 1);
         thresholdBar.setProgress(DEFAULT_THRESHOLD_INDEX);
-        paintSeekBar(thresholdBar, THRESHOLDS.length - 1);
         thresholdBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override
             public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
@@ -210,7 +213,7 @@ final class PresetsPanel {
             TextView label = new TextView(activity);
             label.setText(THRESHOLDS[index] + "°C");
             label.setTextSize(13);
-            label.setTextColor(0xFFFFFFFF);
+            label.setTextColor(color(R.color.text_body));
             label.setTypeface(Fonts.regular(activity));
             label.setGravity(index == 0 ? Gravity.START
                     : index == THRESHOLDS.length - 1 ? Gravity.END : Gravity.CENTER);
@@ -227,9 +230,8 @@ final class PresetsPanel {
 
     private void save(String name) {
         Preset preset = Preset.fromInput(name, selectedSeat,
-                String.valueOf(minutes[2]), String.valueOf(minutes[1]),
-                String.valueOf(minutes[0]),
-                String.valueOf(THRESHOLDS[thresholdBar.getProgress()]));
+                minutes[2], minutes[1], minutes[0],
+                THRESHOLDS[thresholdBar.getProgress()]);
 
         if (preset == null) {
             Toast.makeText(activity,
@@ -275,7 +277,7 @@ final class PresetsPanel {
         if (empty) {
             TextView placeholder = new TextView(activity);
             placeholder.setText("Пока нет сохранённых пресетов");
-            placeholder.setTextColor(0xFFB0BEC5);
+            placeholder.setTextColor(color(R.color.text_secondary));
             placeholder.setTextSize(16);
             placeholder.setTypeface(Fonts.regular(activity));
             placeholder.setGravity(Gravity.CENTER);
@@ -290,16 +292,11 @@ final class PresetsPanel {
         card.setGravity(Gravity.CENTER_VERTICAL);
         card.setPadding(Ui.dp(activity, 16), Ui.dp(activity, 10), Ui.dp(activity, 10), Ui.dp(activity, 10));
 
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 12));
-        shape.setColor(0x66000000);
-        shape.setStroke(Ui.dp(activity, 1), palette.chipStroke);
-        card.setBackground(shape);
+        card.setBackground(Ui.roundRect(activity, CARD_RADIUS_DP, CARD_FILL, palette.chipStroke));
 
         TextView title = new TextView(activity);
         title.setText(preset.name);
-        title.setTextColor(0xFFFFFFFF);
+        title.setTextColor(color(R.color.text_body));
         title.setTextSize(18);
         title.setTypeface(Fonts.regular(activity));
         card.addView(title, new LinearLayout.LayoutParams(
@@ -311,7 +308,7 @@ final class PresetsPanel {
                 preset.settings.sequence.level2Minutes,
                 preset.settings.sequence.level1Minutes,
                 preset.settings.thresholdCelsius));
-        schedule.setTextColor(0xFFB0BEC5);
+        schedule.setTextColor(color(R.color.text_secondary));
         schedule.setTextSize(17);
         schedule.setTypeface(Fonts.regular(activity));
         LinearLayout.LayoutParams scheduleParams = new LinearLayout.LayoutParams(
@@ -378,12 +375,8 @@ final class PresetsPanel {
         badge.setGravity(Gravity.CENTER);
         badge.setPadding(Ui.dp(activity, 8), Ui.dp(activity, 4), Ui.dp(activity, 8), Ui.dp(activity, 4));
 
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 12));
-        shape.setColor(palette.chipFill);
-        shape.setStroke(Ui.dp(activity, 1), palette.accent);
-        badge.setBackground(shape);
+        badge.setBackground(Ui.roundRect(activity, BADGE_RADIUS_DP, palette.chipFill,
+                palette.accent));
         return badge;
     }
 
@@ -395,18 +388,18 @@ final class PresetsPanel {
         pill.setTypeface(Fonts.regular(activity));
         pill.setGravity(Gravity.CENTER);
 
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 16));
-        shape.setColor(palette.chipFill);
-        shape.setStroke(Ui.dp(activity, 1), palette.chipStroke);
-        pill.setBackground(shape);
+        pill.setBackground(Ui.roundRect(activity, PILL_RADIUS_DP, palette.chipFill,
+                palette.chipStroke));
         pill.setLayoutParams(new LinearLayout.LayoutParams(Ui.dp(activity, 90), Ui.dp(activity, 32)));
         return pill;
     }
 
     private String minutesText(int value) {
         return value + " мин.";
+    }
+
+    private int color(int colorRes) {
+        return activity.getResources().getColor(colorRes);
     }
 
     /**
@@ -422,9 +415,7 @@ final class PresetsPanel {
         track.setId(0, android.R.id.progress);
         bar.setProgressDrawable(track);
 
-        GradientDrawable thumb = new GradientDrawable();
-        thumb.setShape(GradientDrawable.OVAL);
-        thumb.setColor(palette.accent);
+        GradientDrawable thumb = Ui.oval(palette.accent);
         thumb.setSize(Ui.dp(activity, 20), Ui.dp(activity, 20));
         bar.setThumb(thumb);
         bar.setThumbOffset(0);

@@ -19,5 +19,6 @@
 
     <color name="text_body">#FFFFFFFF</color>
     <color name="text_muted">#B3FFFFFF</color>
-    <color name="transparent">#00000000</color>
+    <!-- Blue Grey 200: расписание пресета и заглушка пустого списка. -->
+    <color name="text_secondary">#FFB0BEC5</color>
 </resources>

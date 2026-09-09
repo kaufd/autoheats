@@ -38,8 +38,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
         void onHvacReady(boolean ready);
 
-        /** raw может быть null для температуры, введённой в debug-инжекторе. */
-        void onCabinTemperature(double celsius, Integer raw);
+        /** Сырое показание сюда не идёт: оно нужно только логу, внутри сервиса. */
+        void onCabinTemperature(double celsius);
 
         /** Уровень изменился — не важно, вручную, каскадом или выключением. */
         void onSeatLevel(Seat seat, int level);
@@ -48,6 +48,25 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     public class LocalBinder extends Binder {
         public SeatHeatService getService() {
             return SeatHeatService.this;
+        }
+    }
+
+    /**
+     * Единственная точка запуска. Поднимают сервис три независимых пути —
+     * экран, служба доступности и загрузка головы, — и гейт по версии Android
+     * жил в каждом своей копией: правка запуска делалась бы трижды или
+     * забывалась в двух.
+     */
+    static Intent intentFor(Context context) {
+        return new Intent(context, SeatHeatService.class);
+    }
+
+    static void start(Context context) {
+        Intent intent = intentFor(context);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
         }
     }
 
@@ -63,7 +82,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     /** null — готовность ещё не известна; реплеить такое в UI нельзя. */
     private Boolean hvacReady;
     private Double lastCelsius;
-    private Integer lastRaw;
+    private PendingIntent contentIntent;
 
     /** Что сейчас выставлено на каждом сиденье — для экрана и для реплея. */
     private final java.util.Map<Seat, Integer> levels = new java.util.EnumMap<>(Seat.class);
@@ -74,6 +93,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     @Override
     public void onCreate() {
         super.onCreate();
+        createNotificationChannel();
         startForeground(NOTIFICATION_ID, buildNotification("Подключение к автомобилю…"));
         onLog("сервис запущен");
         settings = new HeatSettings(this);
@@ -96,6 +116,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
     @Override
     public void onDestroy() {
+        // Единственный метод, который может застать поля незаполненными:
+        // остальные пути идут после успешного onCreate и проверок не требуют.
         if (autoHeat != null) {
             autoHeat.stopAll();
         }
@@ -126,7 +148,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
             listener.onHvacReady(hvacReady);
         }
         if (lastCelsius != null) {
-            listener.onCabinTemperature(lastCelsius, lastRaw);
+            listener.onCabinTemperature(lastCelsius);
         }
         for (Seat seat : Seat.values()) {
             listener.onSeatLevel(seat, levelOf(seat));
@@ -135,7 +157,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     }
 
     public boolean setSeatHeat(Seat seat, int level) {
-        if (probe == null || !probe.setSeatHeat(seat == Seat.DRIVER, level)) {
+        if (!probe.setSeatHeat(seat, level)) {
             // `levels` содержит только подтверждённое состояние автомобиля.
             // Иначе UI и engine могли бы перейти вперёд после потерянной записи.
             return false;
@@ -218,13 +240,9 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         onLog("ОТЛАДКА: подставлена температура " + String.format(Locale.US, "%.1f", celsius)
                 + " °C");
         lastCelsius = celsius;
-        lastRaw = null;
         UiListener listener = uiListener;
         if (listener != null) {
-            // raw = null, как и в реплее после переподписки: у подставленного
-            // значения нет сырого показания. Ноль здесь означал бы −42 °C —
-            // вполне правдоподобное показание датчика.
-            listener.onCabinTemperature(celsius, null);
+            listener.onCabinTemperature(celsius);
         }
         autoHeat.setTemperature(celsius);
     }
@@ -295,9 +313,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      */
     public void restartCarConnection() {
         onLog("--- ручное переподключение к Car ---");
-        if (probe != null) {
-            probe.disconnect();
-        }
+        probe.disconnect();
         // Готовность снова неизвестна: реплей старого значения соврал бы
         // экрану, который откроют после переподключения.
         hvacReady = null;
@@ -340,7 +356,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      */
     private void syncSeatLevels() {
         for (Seat seat : Seat.values()) {
-            Integer level = probe.readSeatHeat(seat == Seat.DRIVER);
+            Integer level = probe.readSeatHeat(seat);
             if (level == null) {
                 onLog("уровень " + seat.title + " не прочитан — остаётся прежняя оценка: "
                         + levelOf(seat));
@@ -357,12 +373,11 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     @Override
     public void onCabinTemperature(double celsius, int raw) {
         lastCelsius = celsius;
-        lastRaw = raw;
         onLog("температура: raw=" + raw + " → " + String.format(Locale.US, "%.1f", celsius) + " °C");
         autoHeat.setTemperature(celsius);
         UiListener listener = uiListener;
         if (listener != null) {
-            listener.onCabinTemperature(celsius, raw);
+            listener.onCabinTemperature(celsius);
         }
     }
 
@@ -407,9 +422,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         // чтения запуск упирается в «жду температуру» и стоит до тех пор, пока
         // датчик сам не сообщит об изменении, — в холодном неподвижном салоне
         // это минуты.
-        if (probe != null) {
-            probe.readCabinTemperature();
-        }
+        probe.readCabinTemperature();
         for (Seat seat : Seat.values()) {
             HeatMode mode = settings.mode(seat);
             if (mode == HeatMode.AUTO) {
@@ -433,17 +446,12 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      * событие зажигания попробует ещё раз.
      */
     private void shutdownSeats() {
-        boolean driver = probe.setSeatHeat(true, 0);
-        boolean passenger = probe.setSeatHeat(false, 0);
-        if (driver) {
-            levels.put(Seat.DRIVER, 0);
-            notifySeatLevel(Seat.DRIVER, 0);
+        boolean confirmed = true;
+        for (Seat seat : Seat.values()) {
+            // Именно `&`, а не `&&`: выключить нужно оба сиденья, даже если
+            // запись в первое не прошла.
+            confirmed &= setSeatHeat(seat, 0);
         }
-        if (passenger) {
-            levels.put(Seat.PASSENGER, 0);
-            notifySeatLevel(Seat.PASSENGER, 0);
-        }
-        boolean confirmed = driver && passenger;
         session.shutdownResult(confirmed);
         if (!confirmed) {
             onLog("ВНИМАНИЕ: выключение сидений не подтверждено");
@@ -459,22 +467,29 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
     // --- уведомление ---
 
-    private Notification buildNotification(String text) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    CHANNEL_ID, "Подогрев сидений", NotificationManager.IMPORTANCE_LOW);
-            channel.setShowBadge(false);
-            NotificationManager manager = getSystemService(NotificationManager.class);
-            if (manager != null) {
-                manager.createNotificationChannel(channel);
-            }
+    /** Канал и PendingIntent живут сколько сервис: заводятся один раз в onCreate. */
+    private void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return;
         }
+        NotificationChannel channel = new NotificationChannel(
+                CHANNEL_ID, "Подогрев сидений", NotificationManager.IMPORTANCE_LOW);
+        channel.setShowBadge(false);
+        NotificationManager manager = getSystemService(NotificationManager.class);
+        if (manager != null) {
+            manager.createNotificationChannel(channel);
+        }
+    }
 
-        PendingIntent content = PendingIntent.getActivity(
-                this, 0, new Intent(this, MainActivity.class),
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-                        ? PendingIntent.FLAG_IMMUTABLE
-                        : 0);
+    private Notification buildNotification(String text) {
+        if (contentIntent == null) {
+            contentIntent = PendingIntent.getActivity(
+                    this, 0, new Intent(this, MainActivity.class),
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                            ? PendingIntent.FLAG_IMMUTABLE
+                            : 0);
+        }
+        PendingIntent content = contentIntent;
 
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL_ID)

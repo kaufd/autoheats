@@ -23,6 +23,8 @@ final class SliderTrack extends Drawable {
     private static final float LEVEL_MAX = 10000f;
 
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Переиспользуется: draw() зовётся на каждый кадр перетаскивания. */
+    private final RectF bar = new RectF();
     private final int activeColor;
     private final int inactiveColor;
     private final int divisions;
@@ -48,12 +50,12 @@ final class SliderTrack extends Drawable {
         float progressX = bounds.left + bounds.width() * (getLevel() / LEVEL_MAX);
 
         paint.setColor(inactiveColor);
-        canvas.drawRoundRect(new RectF(bounds.left, top, bounds.right, bottom),
-                radius, radius, paint);
+        bar.set(bounds.left, top, bounds.right, bottom);
+        canvas.drawRoundRect(bar, radius, radius, paint);
 
         paint.setColor(activeColor);
-        canvas.drawRoundRect(new RectF(bounds.left, top, progressX, bottom),
-                radius, radius, paint);
+        bar.set(bounds.left, top, progressX, bottom);
+        canvas.drawRoundRect(bar, radius, radius, paint);
 
         if (divisions > 0) {
             for (int index = 0; index <= divisions; index++) {

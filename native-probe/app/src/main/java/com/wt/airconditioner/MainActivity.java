@@ -105,12 +105,15 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         logUi = new LogUiController(this, serviceBinding, palette);
 
         buildTabs();
-        buildSettingsTab();
+        bindSettingsTab();
         heatUi.bind();
         logUi.bind();
 
         presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
 
+        // Слушатели навешаны, динамический UI ещё не собран: его целиком строит
+        // applyTheme. Раньше каждая вкладка строилась дважды — сначала здесь,
+        // потом ещё раз отсюда же, вместе с чтением всех пресетов из хранилища.
         applyTheme();
         Fonts.applyTo(findViewById(android.R.id.content));
 
@@ -150,15 +153,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         findViewById(R.id.background).setBackgroundResource(palette.backgroundRes);
         findViewById(R.id.centerDivider).setBackgroundColor(palette.divider);
 
-        View pill = findViewById(R.id.temperaturePill);
-        GradientDrawable pillShape = new GradientDrawable();
-        pillShape.setShape(GradientDrawable.RECTANGLE);
-        pillShape.setCornerRadius(Ui.dp(this, 50));
         // Плашка температуры бледнее чипов: своя пара значений, и она здесь
         // единственная — роли в ThemePalette заведены только для повторяющихся.
-        pillShape.setColor(Ui.withAlpha(palette.accent, 30));
-        pillShape.setStroke(Ui.dp(this, 1), Ui.withAlpha(palette.accent, 100));
-        pill.setBackground(pillShape);
+        findViewById(R.id.temperaturePill).setBackground(Ui.roundRect(this, 50,
+                Ui.withAlpha(palette.accent, 30), Ui.withAlpha(palette.accent, 100)));
 
         ImageView icon = findViewById(R.id.temperatureIcon);
         icon.setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
@@ -166,7 +164,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                 .setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
 
         renderTabs();
-        buildSettingsTab();
+        paintSettingsTab();
         heatUi.applyTheme(palette);
         presetsPanel.applyTheme(palette);
         logUi.applyTheme(palette);
@@ -232,12 +230,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     }
 
     private GradientDrawable switchShape(int color, int widthDp, int heightDp, int form) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(form);
-        if (form == GradientDrawable.RECTANGLE) {
-            shape.setCornerRadius(Ui.dp(this, heightDp / 2f));
-        }
-        shape.setColor(color);
+        GradientDrawable shape = form == GradientDrawable.RECTANGLE
+                ? Ui.roundRect(this, heightDp / 2f, color)
+                : Ui.oval(color);
         shape.setSize(Ui.dp(this, widthDp), Ui.dp(this, heightDp));
         return shape;
     }
@@ -274,13 +269,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
         int current = flipper.getDisplayedChild();
         for (int index = 0; index < tabButtons.length; index++) {
-            GradientDrawable shape = new GradientDrawable();
-            shape.setShape(GradientDrawable.RECTANGLE);
-            shape.setCornerRadius(Ui.dp(this, 30));
-            shape.setColor(index == current ? palette.accent : Color.TRANSPARENT);
-            tabButtons[index].setBackground(shape);
-            tabButtons[index].setTextColor(
-                    index == current ? palette.textOnAccent : Color.WHITE);
+            boolean selected = index == current;
+            tabButtons[index].setBackground(Ui.roundRect(this, Ui.BUTTON_RADIUS_DP,
+                    selected ? palette.accent : Color.TRANSPARENT));
+            tabButtons[index].setTextColor(selected ? palette.textOnAccent : Color.WHITE);
         }
     }
 
@@ -298,16 +290,12 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     // --- вкладка настроек ---
 
-    private void buildSettingsTab() {
-        LinearLayout themes = findViewById(R.id.themeSegments);
-        themes.removeAllViews();
-        for (AppTheme option : AppTheme.values()) {
-            themes.addView(themeButton(option));
-        }
-
+    /** Разовая привязка: слушатели и стартовое состояние, ничего от палитры. */
+    private void bindSettingsTab() {
         Switch showTemperature = findViewById(R.id.showTemperature);
-        paintSwitch(showTemperature);
-        showTemperature.setOnCheckedChangeListener(null);
+        // Слушателя ещё нет, поэтому setChecked никого не дёргает и снимать его
+        // на время не нужно: раньше это приходилось делать только потому, что
+        // вкладка пересобиралась при каждой смене темы.
         showTemperature.setChecked(settings.showCabinTemperature());
         showTemperature.setOnCheckedChangeListener((button, checked) -> {
             settings.setShowCabinTemperature(checked);
@@ -316,6 +304,16 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         applyTemperatureVisibility();
 
         findViewById(R.id.enableAutostart).setOnClickListener(v -> requestPermissions());
+    }
+
+    /** Всё, что зависит от темы: витрина тем, переключатель, галочка доступа. */
+    private void paintSettingsTab() {
+        LinearLayout themes = findViewById(R.id.themeSegments);
+        themes.removeAllViews();
+        for (AppTheme option : AppTheme.values()) {
+            themes.addView(themeButton(option));
+        }
+        paintSwitch(findViewById(R.id.showTemperature));
         renderPermissions();
     }
 
@@ -331,12 +329,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         // поэтому палитра берётся по опции, а не берётся поле palette.
         boolean selected = option == theme;
         ThemePalette optionPalette = ThemePalette.of(this, option);
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(this, 30));
-        shape.setColor(selected ? optionPalette.accent : Color.TRANSPARENT);
-        shape.setStroke(Ui.dp(this, 1), selected ? optionPalette.accent : Color.WHITE);
-        button.setBackground(shape);
+        button.setBackground(Ui.roundRect(this, Ui.BUTTON_RADIUS_DP,
+                selected ? optionPalette.accent : Color.TRANSPARENT,
+                selected ? optionPalette.accent : Color.WHITE));
         button.setTextColor(selected ? optionPalette.textOnAccent : Color.WHITE);
 
         button.setOnClickListener(v -> {
@@ -398,22 +393,23 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     }
 
     @Override
-    public void onCabinTemperature(double celsius, Integer raw) {
+    public void onCabinTemperature(double celsius) {
         runOnUiThread(() -> {
             String text = String.format(Locale.US, "%.1f °C", celsius);
             int color = temperatureColor(celsius);
             temperatureView.setText(text);
             temperatureView.setTextColor(color);
-
-            TextView current = findViewById(R.id.injectCurrent);
-            current.setText(text);
-            current.setTextColor(color);
+            // Вторую подпись на вкладке логов рисует её собственный контроллер:
+            // Activity раздаёт событие, а не лезет в чужие View по id.
+            logUi.onCabinTemperature(text, color);
         });
     }
 
     @Override
     public void onSeatLevel(Seat seat, int level) {
-        runOnUiThread(() -> heatUi.onSeatLevel(seat, level));
+        // Уровень не передаём: сервис уже записал подтверждённое состояние, и
+        // контроллер перечитывает у него оба сиденья, а не хранит свою копию.
+        runOnUiThread(heatUi::render);
     }
 
     private int temperatureColor(double celsius) {

@@ -5,7 +5,6 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.res.ColorStateList;
-import android.graphics.drawable.GradientDrawable;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
@@ -24,21 +23,29 @@ final class LogUiController {
     private static final int[] QUICK_TEMPERATURES = {-15, -10, -5, 0, 5, 10};
     private static final int LOG_TRIM_SLACK = 100;
 
+    private static final int CHIP_RADIUS_DP = 10;
+    private static final int PANEL_RADIUS_DP = 12;
+    /** Подложка панелей: почти чёрная, чтобы лог читался поверх фона головы. */
+    private static final int PANEL_FILL = 0x99000000;
+
     private final Activity activity;
-    private final SeatHeatServiceProvider serviceProvider;
+    private final ServiceBindingController serviceProvider;
     private final Deque<String> logLines = new ArrayDeque<>();
     private final TextView logView;
     private final TextView counter;
     private final ScrollView logScroll;
+    /** Полем, а не поиском по id: его читает каждая строка лога. */
+    private final CheckBox autoScroll;
     private ThemePalette palette;
 
-    LogUiController(Activity activity, SeatHeatServiceProvider serviceProvider, ThemePalette palette) {
+    LogUiController(Activity activity, ServiceBindingController serviceProvider, ThemePalette palette) {
         this.activity = activity;
         this.serviceProvider = serviceProvider;
         this.palette = palette;
         logView = activity.findViewById(R.id.log);
         counter = activity.findViewById(R.id.logCounter);
         logScroll = activity.findViewById(R.id.logScroll);
+        autoScroll = activity.findViewById(R.id.autoScroll);
     }
 
     void bind() {
@@ -63,7 +70,6 @@ final class LogUiController {
                 service.restartCarConnection();
             }
         });
-        buildQuickTemperatures();
     }
 
     void applyTheme(ThemePalette palette) {
@@ -73,8 +79,7 @@ final class LogUiController {
         // Системный CheckBox рисуется дефолтным colorAccent платформы и при
         // смене темы оставался бирюзовым — видно только на запущенном
         // приложении, в разметке этого нет.
-        ((CheckBox) activity.findViewById(R.id.autoScroll))
-                .setButtonTintList(ColorStateList.valueOf(palette.accent));
+        autoScroll.setButtonTintList(ColorStateList.valueOf(palette.accent));
         buildQuickTemperatures();
     }
 
@@ -88,6 +93,13 @@ final class LogUiController {
 
     void onTabShown() {
         scrollLogToBottom();
+    }
+
+    /** Текущая температура рядом с инжектором — тем же текстом, что в шапке. */
+    void onCabinTemperature(String text, int color) {
+        TextView current = activity.findViewById(R.id.injectCurrent);
+        current.setText(text);
+        current.setTextColor(color);
     }
 
     void clearLog() {
@@ -152,12 +164,8 @@ final class LogUiController {
         button.setTypeface(Fonts.regular(activity));
         button.setGravity(android.view.Gravity.CENTER);
 
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 10));
-        shape.setColor(palette.chipFill);
-        shape.setStroke(Ui.dp(activity, 1), palette.chipStroke);
-        button.setBackground(shape);
+        button.setBackground(Ui.roundRect(activity, CHIP_RADIUS_DP,
+                palette.chipFill, palette.chipStroke));
         button.setOnClickListener(v -> {
             SeatHeatService service = serviceProvider.get();
             if (service != null) {
@@ -216,7 +224,6 @@ final class LogUiController {
     }
 
     private void scrollLogToBottom() {
-        CheckBox autoScroll = activity.findViewById(R.id.autoScroll);
         if (autoScroll != null && !autoScroll.isChecked()) {
             return;
         }
@@ -224,12 +231,8 @@ final class LogUiController {
     }
 
     private void paintPanel(View panel) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 12));
-        shape.setColor(0x99000000);
-        shape.setStroke(Ui.dp(activity, 1), palette.panelStroke);
-        panel.setBackground(shape);
+        panel.setBackground(Ui.roundRect(activity, PANEL_RADIUS_DP, PANEL_FILL,
+                palette.panelStroke));
     }
 
 }

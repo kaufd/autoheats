@@ -1,7 +1,6 @@
 package com.wt.airconditioner;
 
 import android.app.Activity;
-import android.graphics.drawable.GradientDrawable;
 import android.view.View;
 import android.widget.LinearLayout;
 
@@ -31,12 +30,12 @@ final class SeatHeatUiController {
 
     private final Activity activity;
     private final HeatSettings settings;
-    private final SeatHeatServiceProvider serviceProvider;
+    private final ServiceBindingController serviceProvider;
     private final Listener listener;
     private ThemePalette palette;
 
     SeatHeatUiController(Activity activity, HeatSettings settings,
-            SeatHeatServiceProvider serviceProvider, Listener listener, ThemePalette palette) {
+            ServiceBindingController serviceProvider, Listener listener, ThemePalette palette) {
         this.activity = activity;
         this.settings = settings;
         this.serviceProvider = serviceProvider;
@@ -60,12 +59,6 @@ final class SeatHeatUiController {
         for (SeatView seatView : SEAT_VIEWS) {
             renderSeat(seatView);
         }
-    }
-
-    void onSeatLevel(Seat seat, int level) {
-        // Сервис уже записал подтверждённое состояние; Activity не хранит
-        // вторую копию уровня и только синхронно обновляет оба seat-view.
-        render();
     }
 
     private void renderSeat(SeatView seatView) {
@@ -102,11 +95,8 @@ final class SeatHeatUiController {
         container.removeAllViews();
         for (int index = 0; index < 3; index++) {
             View dot = new View(activity);
-            GradientDrawable shape = new GradientDrawable();
-            shape.setShape(GradientDrawable.OVAL);
-            shape.setColor(level > index ? palette.accent
-                    : activity.getResources().getColor(R.color.system_grey));
-            dot.setBackground(shape);
+            dot.setBackground(Ui.oval(level > index ? palette.accent
+                    : activity.getResources().getColor(R.color.system_grey)));
 
             LinearLayout.LayoutParams params =
                     new LinearLayout.LayoutParams(Ui.dp(activity, 20), Ui.dp(activity, 20));

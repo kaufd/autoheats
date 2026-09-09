@@ -84,31 +84,29 @@ public class PresetTest {
     }
 
     /**
-     * Форма — граница доверия: значения набирает человек за рулём, на
-     * сенсорном экране головы. Пресет без имени не найти в списке, а пресет из
-     * одних нулей выглядел бы сохранённым и ничего не грел.
+     * Имя — граница доверия: его набирает человек за рулём, на сенсорном экране
+     * головы. Пресет без имени не найти в списке, а пресет из одних нулей
+     * выглядел бы сохранённым и ничего не грел. Длительности и порог приходят
+     * слайдерами и негодными быть не могут.
      */
     @Test
     public void rejectsUnusableForm() {
-        assertNull("без имени", Preset.fromInput("", Seat.DRIVER, "3", "2", "1", "5"));
-        assertNull("имя из пробелов", Preset.fromInput("   ", Seat.DRIVER, "3", "2", "1", "5"));
+        assertNull("без имени", Preset.fromInput("", Seat.DRIVER, 3, 2, 1, 5));
+        assertNull("имя из пробелов", Preset.fromInput("   ", Seat.DRIVER, 3, 2, 1, 5));
         assertNull("нулевое расписание",
-                Preset.fromInput("Пустой", Seat.DRIVER, "0", "", "0", "5"));
-        assertNull("порог не число",
-                Preset.fromInput("Утро", Seat.DRIVER, "3", "2", "1", "тепло"));
+                Preset.fromInput("Пустой", Seat.DRIVER, 0, 0, 0, 5));
     }
 
+    /** Нулевой верхний уровень — осмысленный пресет «сразу с двойки», не отказ. */
     @Test
-    public void acceptsFormWithGapsAndDefaults() {
-        Preset skipped = Preset.fromInput("Со двойки", Seat.PASSENGER, "", "5", "3", "-2,5");
+    public void acceptsScheduleStartingBelowTopLevel() {
+        Preset skipped = Preset.fromInput("Со двойки", Seat.PASSENGER, 0, 5, 3, -2.5);
         assertEquals(0, skipped.settings.sequence.level3Minutes);
         assertEquals(5, skipped.settings.sequence.level2Minutes);
-        assertEquals("запятая как разделитель — обычный ввод на голове",
-                -2.5, skipped.settings.thresholdCelsius, 0.001);
+        assertEquals(-2.5, skipped.settings.thresholdCelsius, 0.001);
 
-        Preset defaulted = Preset.fromInput(" Утро ", Seat.DRIVER, "3", "2", "1", "");
-        assertEquals("имя обрезается", "Утро", defaulted.name);
-        assertEquals("порог по умолчанию", 5.0, defaulted.settings.thresholdCelsius, 0.001);
+        Preset trimmed = Preset.fromInput(" Утро ", Seat.DRIVER, 3, 2, 1, 5);
+        assertEquals("имя обрезается", "Утро", trimmed.name);
     }
 
     /**
@@ -118,8 +116,8 @@ public class PresetTest {
      */
     @Test
     public void nameWithNewlineStaysOneRecord() {
-        Preset broken = Preset.fromInput("Утро\nв гараже", Seat.DRIVER, "3", "2", "1", "5");
-        Preset neighbour = Preset.fromInput("Вечер", Seat.PASSENGER, "3", "2", "1", "5");
+        Preset broken = Preset.fromInput("Утро\nв гараже", Seat.DRIVER, 3, 2, 1, 5);
+        Preset neighbour = Preset.fromInput("Вечер", Seat.PASSENGER, 3, 2, 1, 5);
 
         assertEquals("Утро в гараже", broken.name);
         assertEquals("обе записи читаются обратно", 2,

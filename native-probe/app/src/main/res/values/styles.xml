@@ -12,7 +12,6 @@
         <item name="android:paddingEnd">43dp</item>
         <item name="android:textSize">21sp</item>
         <item name="android:textColor">@color/system_white</item>
-        <item name="android:background">@drawable/tab_button</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
     </style>
@@ -31,7 +30,6 @@
         <item name="android:gravity">center</item>
         <item name="android:textSize">16sp</item>
         <item name="android:textColor">@color/system_white</item>
-        <item name="android:background">@drawable/tab_button</item>
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
     </style>

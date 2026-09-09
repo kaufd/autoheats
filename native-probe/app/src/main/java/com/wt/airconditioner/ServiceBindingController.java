@@ -2,9 +2,7 @@ package com.wt.airconditioner;
 
 import android.app.Activity;
 import android.content.ComponentName;
-import android.content.Intent;
 import android.content.ServiceConnection;
-import android.os.Build;
 import android.os.IBinder;
 import android.widget.Toast;
 
@@ -14,7 +12,7 @@ import java.util.List;
  * Жизненный цикл binding отделён от Activity: закрытие экрана не останавливает
  * сервис, а Activity не хранит собственную копию его runtime-состояния.
  */
-final class ServiceBindingController implements SeatHeatServiceProvider {
+final class ServiceBindingController {
 
     interface Listener {
         void onConnected(SeatHeatService service, List<String> logSnapshot);
@@ -52,20 +50,15 @@ final class ServiceBindingController implements SeatHeatServiceProvider {
     }
 
     void start() {
-        Intent intent = new Intent(activity, SeatHeatService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            activity.startForegroundService(intent);
-        } else {
-            activity.startService(intent);
-        }
-        bound = activity.bindService(intent, connection, 0);
+        SeatHeatService.start(activity);
+        bound = activity.bindService(SeatHeatService.intentFor(activity), connection, 0);
         if (!bound) {
             Toast.makeText(activity, "Сервис не привязался", Toast.LENGTH_LONG).show();
         }
     }
 
-    @Override
-    public SeatHeatService get() {
+    /** Сервис или null, пока binding не состоялся: экран открывается раньше него. */
+    SeatHeatService get() {
         return service;
     }
 

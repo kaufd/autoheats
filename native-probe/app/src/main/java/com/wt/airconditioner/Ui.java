@@ -17,8 +17,12 @@ import android.widget.TextView;
  */
 final class Ui {
 
-    /** Скругление кнопок из Flutter-версии: у всех одинаковое. */
-    private static final int BUTTON_RADIUS_DP = 30;
+    /**
+     * Скругление кнопок из Flutter-версии: у всех одинаковое. Видно и снаружи —
+     * вкладки и кнопки выбора темы рисуются здесь же по форме кнопки, и до
+     * этого держали четвёртую и пятую копию числа 30.
+     */
+    static final int BUTTON_RADIUS_DP = 30;
 
     /** Значения android:tag из styles.xml — чем красить найденную кнопку. */
     private static final String BUTTON_TAG = "accentButton";
@@ -37,16 +41,41 @@ final class Ui {
     }
 
     /**
+     * Скруглённый прямоугольник — форма почти всего, что этот экран рисует
+     * кодом: кнопок, чипов, бейджей, карточек и панелей. Собиралась она в
+     * полутора десятках мест одними и теми же четырьмя строками, и радиусы у
+     * одной и той же роли уже начали расходиться.
+     */
+    static GradientDrawable roundRect(Context context, float radiusDp, int fill) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.RECTANGLE);
+        shape.setCornerRadius(dp(context, radiusDp));
+        shape.setColor(fill);
+        return shape;
+    }
+
+    /** То же с обводкой: она везде в один dp, меняется только цвет. */
+    static GradientDrawable roundRect(Context context, float radiusDp, int fill, int strokeColor) {
+        GradientDrawable shape = roundRect(context, radiusDp, fill);
+        shape.setStroke(dp(context, 1), strokeColor);
+        return shape;
+    }
+
+    /** Круг: точки уровня и ползунки слайдеров. */
+    static GradientDrawable oval(int fill) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.OVAL);
+        shape.setColor(fill);
+        return shape;
+    }
+
+    /**
      * Заливка акцентом, скруглённые углы, контрастный текст. Шрифт ставится
      * здесь же: кнопки, построенные кодом, не попадают под Fonts.applyTo,
      * которое проходит по дереву разметки один раз при создании экрана.
      */
     static void paintButton(TextView button, ThemePalette palette) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(button.getContext(), BUTTON_RADIUS_DP));
-        shape.setColor(palette.accent);
-        button.setBackground(shape);
+        button.setBackground(roundRect(button.getContext(), BUTTON_RADIUS_DP, palette.accent));
         button.setTextColor(palette.textOnAccent);
         button.setTypeface(Fonts.regular(button.getContext()));
     }
@@ -57,12 +86,8 @@ final class Ui {
      * плохо, а обводки хватает, чтобы кнопка принадлежала теме.
      */
     static void paintOutlineButton(TextView button, ThemePalette palette) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(dp(button.getContext(), BUTTON_RADIUS_DP));
-        shape.setColor(Color.TRANSPARENT);
-        shape.setStroke(dp(button.getContext(), 1), palette.accent);
-        button.setBackground(shape);
+        button.setBackground(roundRect(button.getContext(), BUTTON_RADIUS_DP,
+                Color.TRANSPARENT, palette.accent));
         button.setTextColor(Color.WHITE);
         button.setTypeface(Fonts.regular(button.getContext()));
     }

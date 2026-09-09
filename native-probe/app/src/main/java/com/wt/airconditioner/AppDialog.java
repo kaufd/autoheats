@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
-import android.graphics.drawable.GradientDrawable;
 import android.text.Editable;
 import android.text.InputType;
 import android.text.TextWatcher;
@@ -28,7 +27,8 @@ final class AppDialog {
 
     /** Colors.grey[900] из оригинала. */
     private static final int CARD = 0xFF212121;
-    private static final int DISABLED = 0xFFACACAC;
+    private static final int CARD_RADIUS_DP = 16;
+    private static final int FIELD_RADIUS_DP = 10;
 
     interface OnName {
         void onName(String name);
@@ -62,17 +62,13 @@ final class AppDialog {
         input.setInputType(InputType.TYPE_CLASS_TEXT);
         input.setSingleLine(true);
         input.setTextColor(Color.WHITE);
-        input.setHintTextColor(0xB3FFFFFF);
+        input.setHintTextColor(color(activity, R.color.text_muted));
         input.setTextSize(18);
         input.setTypeface(Fonts.regular(activity));
         input.setPadding(Ui.dp(activity, 16), Ui.dp(activity, 14), Ui.dp(activity, 16), Ui.dp(activity, 14));
 
-        GradientDrawable field = new GradientDrawable();
-        field.setShape(GradientDrawable.RECTANGLE);
-        field.setCornerRadius(Ui.dp(activity, 10));
-        field.setColor(Color.TRANSPARENT);
-        field.setStroke(Ui.dp(activity, 1), palette.accent);
-        input.setBackground(field);
+        input.setBackground(Ui.roundRect(activity, FIELD_RADIUS_DP, Color.TRANSPARENT,
+                palette.accent));
 
         LinearLayout.LayoutParams inputParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -148,11 +144,7 @@ final class AppDialog {
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(Ui.dp(activity, 24), Ui.dp(activity, 24), Ui.dp(activity, 24), Ui.dp(activity, 24));
 
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 16));
-        shape.setColor(CARD);
-        content.setBackground(shape);
+        content.setBackground(Ui.roundRect(activity, CARD_RADIUS_DP, CARD));
 
         dialog.setContentView(content, new ViewGroup.LayoutParams(
                 Ui.dp(activity, 520), ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -211,13 +203,21 @@ final class AppDialog {
     /** Выключенная кнопка подтверждения серая и не нажимается — как в оригинале. */
     private static void applyFilled(Activity activity, TextView button, ThemePalette palette,
             boolean enabled) {
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 30));
-        shape.setColor(enabled ? palette.accent : DISABLED);
-        button.setBackground(shape);
-        button.setTextColor(enabled ? palette.textOnAccent : 0xB3FFFFFF);
+        if (enabled) {
+            // Включённая кнопка — обычная кнопка экрана: держать здесь вторую
+            // копию её формы значило бы, что смена скругления пройдёт мимо
+            // диалогов и они молча останутся в старом виде.
+            Ui.paintButton(button, palette);
+        } else {
+            button.setBackground(Ui.roundRect(activity, Ui.BUTTON_RADIUS_DP,
+                    color(activity, R.color.system_grey)));
+            button.setTextColor(color(activity, R.color.text_muted));
+        }
         button.setEnabled(enabled);
+    }
+
+    private static int color(Activity activity, int colorRes) {
+        return activity.getResources().getColor(colorRes);
     }
 
 }

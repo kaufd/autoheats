@@ -1,8 +1,6 @@
 package com.wt.airconditioner;
 
 import android.accessibilityservice.AccessibilityService;
-import android.content.Intent;
-import android.os.Build;
 import android.view.accessibility.AccessibilityEvent;
 
 /**
@@ -24,12 +22,7 @@ public class HeatAccessibilityService extends AccessibilityService {
     @Override
     protected void onServiceConnected() {
         super.onServiceConnected();
-        Intent service = new Intent(this, SeatHeatService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(service);
-        } else {
-            startService(service);
-        }
+        SeatHeatService.start(this);
     }
 
     @Override
