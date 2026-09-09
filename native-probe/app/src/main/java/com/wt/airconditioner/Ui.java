@@ -20,8 +20,9 @@ final class Ui {
     /** Скругление кнопок из Flutter-версии: у всех одинаковое. */
     private static final int BUTTON_RADIUS_DP = 30;
 
-    /** Значение android:tag из @style/PrimaryButton — метка «красить акцентом». */
+    /** Значения android:tag из styles.xml — чем красить найденную кнопку. */
     private static final String BUTTON_TAG = "accentButton";
+    private static final String OUTLINE_TAG = "outlineButton";
 
     private Ui() {
     }
@@ -51,6 +52,22 @@ final class Ui {
     }
 
     /**
+     * Кнопка без заливки: прозрачный фон, обводка акцентом, белый текст. Белый,
+     * а не акцентный: красный акцент #951019 на чёрном фоне головы читается
+     * плохо, а обводки хватает, чтобы кнопка принадлежала теме.
+     */
+    static void paintOutlineButton(TextView button, ThemePalette palette) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setShape(GradientDrawable.RECTANGLE);
+        shape.setCornerRadius(dp(button.getContext(), BUTTON_RADIUS_DP));
+        shape.setColor(Color.TRANSPARENT);
+        shape.setStroke(dp(button.getContext(), 1), palette.accent);
+        button.setBackground(shape);
+        button.setTextColor(Color.WHITE);
+        button.setTypeface(Fonts.regular(button.getContext()));
+    }
+
+    /**
      * Красит все кнопки поддерева — их метит тег из @style/PrimaryButton.
      * Обходом, а не перечислением id: список из девяти findViewById жил в
      * MainActivity и молча устаревал бы с каждой новой кнопкой, причём
@@ -60,9 +77,15 @@ final class Ui {
      * обход дерева дешевле любого реестра.
      */
     static void paintButtons(View root, ThemePalette palette) {
-        if (BUTTON_TAG.equals(root.getTag()) && root instanceof TextView) {
-            paintButton((TextView) root, palette);
-            return;
+        if (root instanceof TextView) {
+            if (BUTTON_TAG.equals(root.getTag())) {
+                paintButton((TextView) root, palette);
+                return;
+            }
+            if (OUTLINE_TAG.equals(root.getTag())) {
+                paintOutlineButton((TextView) root, palette);
+                return;
+            }
         }
         if (root instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) root;

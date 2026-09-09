@@ -42,6 +42,12 @@ final class LogUiController {
     }
 
     void bind() {
+        activity.findViewById(R.id.startCascade).setOnClickListener(v -> {
+            SeatHeatService service = serviceProvider.get();
+            if (service != null) {
+                service.startAutoHeatNow();
+            }
+        });
         activity.findViewById(R.id.readTemp).setOnClickListener(v -> {
             SeatHeatService service = serviceProvider.get();
             if (service != null) {

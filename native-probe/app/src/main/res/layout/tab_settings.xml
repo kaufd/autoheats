@@ -82,11 +82,4 @@
             style="@style/PrimaryButton"
             android:text="Получить" />
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/startCascade"
-        style="@style/PrimaryButton"
-        android:layout_gravity="end"
-        android:layout_marginTop="24dp"
-        android:text="Запустить каскад сейчас" />
 </LinearLayout>

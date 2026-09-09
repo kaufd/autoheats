@@ -35,4 +35,11 @@
         <item name="android:clickable">true</item>
         <item name="android:focusable">true</item>
     </style>
+
+    <!-- Кнопка без заливки: прозрачный фон, обводка акцентом, белый текст.
+         Так выглядят невыбранные кнопки тем и «Отмена» в диалогах — вариант
+         для действий, которые не должны спорить за внимание с основными. -->
+    <style name="SecondaryButton" parent="PrimaryButton">
+        <item name="android:tag">outlineButton</item>
+    </style>
 </resources>

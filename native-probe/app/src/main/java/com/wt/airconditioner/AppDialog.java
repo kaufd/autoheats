@@ -204,13 +204,7 @@ final class AppDialog {
             applyFilled(activity, button, palette, enabled);
             return button;
         }
-        GradientDrawable shape = new GradientDrawable();
-        shape.setShape(GradientDrawable.RECTANGLE);
-        shape.setCornerRadius(Ui.dp(activity, 30));
-        shape.setColor(Color.TRANSPARENT);
-        shape.setStroke(Ui.dp(activity, 1), palette.accent);
-        button.setBackground(shape);
-        button.setTextColor(Color.WHITE);
+        Ui.paintOutlineButton(button, palette);
         return button;
     }
 

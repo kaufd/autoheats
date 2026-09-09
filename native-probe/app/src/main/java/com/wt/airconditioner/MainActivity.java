@@ -316,12 +316,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         applyTemperatureVisibility();
 
         findViewById(R.id.enableAutostart).setOnClickListener(v -> requestPermissions());
-        findViewById(R.id.startCascade).setOnClickListener(v -> {
-            SeatHeatService service = serviceBinding.get();
-            if (service != null) {
-                service.startAutoHeatNow();
-            }
-        });
         renderPermissions();
     }
 

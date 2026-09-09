@@ -41,14 +41,24 @@
                 android:textSize="15sp"
                 android:textColor="@color/text_body" />
 
+            <!-- Запуск каскада стоит рядом с логом не случайно: это тот же
+                 диагностический ряд, и результат нажатия читается строкой ниже,
+                 в том же окне. На вкладке настроек кнопка была оторвана от
+                 своего вывода. -->
+            <TextView
+                android:id="@+id/startCascade"
+                style="@style/SecondaryButton"
+                android:text="Запустить каскад" />
+
             <TextView
                 android:id="@+id/readTemp"
-                style="@style/PrimaryButton"
+                style="@style/SecondaryButton"
+                android:layout_marginStart="12dp"
                 android:text="Прочитать" />
 
             <TextView
                 android:id="@+id/restartCar"
-                style="@style/PrimaryButton"
+                style="@style/SecondaryButton"
                 android:layout_marginStart="12dp"
                 android:text="Переподключиться" />
 
