@@ -6,6 +6,12 @@
 
 ## [Unreleased]
 
+- Репозиторий окончательно переведён на native Android Gradle-проект. Java,
+  Android-ресурсы, тесты и Gradle wrapper подняты из `native-probe/` в корень;
+  прежняя Flutter-реализация удалена.
+- GitHub Actions теперь проверяет и собирает APK командой
+  `./gradlew test lint assembleRelease` с JDK 17 и публикует native APK.
+
 - Исправлена release-подпись: GitHub Actions теперь требует стабильный Android
   keystore из secrets вместо ephemeral debug-keystore runner'а.
 - Исправлена установка рядом с оригинальным `com.wt.airconditioner`: AutoHeat v3

@@ -2,6 +2,23 @@ plugins {
     id 'com.android.application'
 }
 
+def releaseSigning = [
+    storeFilePath: System.getenv('AUTOHEAT_KEYSTORE_PATH'),
+    storePassword: System.getenv('AUTOHEAT_KEYSTORE_PASSWORD'),
+    keyAlias: System.getenv('AUTOHEAT_KEY_ALIAS'),
+    keyPassword: System.getenv('AUTOHEAT_KEY_PASSWORD'),
+]
+def hasAnyReleaseSigningEnv = releaseSigning.values().any { it != null && !it.isBlank() }
+def hasFullReleaseSigningEnv = releaseSigning.values().every { it != null && !it.isBlank() }
+
+if (hasAnyReleaseSigningEnv && !hasFullReleaseSigningEnv) {
+    throw new GradleException('Incomplete release signing env: set AUTOHEAT_KEYSTORE_PATH, AUTOHEAT_KEYSTORE_PASSWORD, AUTOHEAT_KEY_ALIAS, and AUTOHEAT_KEY_PASSWORD.')
+}
+
+if (System.getenv('GITHUB_ACTIONS') == 'true' && !hasFullReleaseSigningEnv) {
+    throw new GradleException('GitHub release builds must use stable signing. Configure ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, and ANDROID_KEY_PASSWORD secrets.')
+}
+
 android {
     namespace 'com.wt.airconditioner'
     compileSdk 33
@@ -21,10 +38,21 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
 
+    signingConfigs {
+        if (hasFullReleaseSigningEnv) {
+            release {
+                storeFile = file(releaseSigning.storeFilePath)
+                storePassword = releaseSigning.storePassword
+                keyAlias = releaseSigning.keyAlias
+                keyPassword = releaseSigning.keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.debug
+            signingConfig hasFullReleaseSigningEnv ? signingConfigs.release : signingConfigs.debug
         }
     }
 

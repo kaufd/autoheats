@@ -1,203 +1,23 @@
 # AutoHeat
 
-[![Release](https://img.shields.io/github/v/release/kaufd/autoheats?label=release)](https://github.com/kaufd/autoheats/releases/latest)
-[![Flutter](https://img.shields.io/badge/Flutter-3.41.9-blue.svg)](https://docs.flutter.dev/release/release-notes)
+Native Android-приложение для автоматического управления подогревом сидений на головном устройстве Changan с Android Automotive OS. Оно читает температуру салона через `android.car.*`, управляет обоими сиденьями, хранит пресеты и работает как foreground-service после закрытия экрана.
 
-Flutter-приложение для автоматического управления подогревом сидений в автомобиле
-**Changan UNI-S/CS55 PLUS**
+## Сборка и проверка
 
-Вместо того чтобы каждый раз вручную нажимать кнопки на экране,
-приложение само поднимает уровень подогрева на максимум при холодном салоне,
-плавно снижает мощность по мере прогрева и выключает подогрев при отключении
-зажигания.
-
----
-
-## Возможности
-
-- **Три режима работы** для каждого сиденья независимо (водитель / пассажир):
-  - `manual` — обычное ручное переключение уровней `1 / 2 / 3 / off`.
-  - `presets` — пользовательские пресеты с гейтом по температуре и фиксированной
-    последовательностью уровней (например, «утро»: 3 мин на 3, 2 мин на 2, 5 мин
-    на 1, включается только если в салоне холоднее 5 °C).
-  - `auto` — автоматический режим на основе встроенного датчика температуры
-    салона. Чем холоднее в машине, тем дольше держится высокий уровень.
-    Адаптивный шаг вниз по температуре, защита от «бесконечного цикла» через
-    plan-key guard, max-timer как safety-net.
-- **Сохранение состояния** между запусками: текущий режим и уровень каждого
-  сиденья, активный пресет, тема приложения, видимость индикатора температуры.
-- **Foreground-service**: подогрев продолжает работать, когда приложение свёрнуто.
-- **Авто-выключение по ignition OFF**: оба сиденья получают `level = 0` без
-  участия пользователя.
-- **Темы**: светлая (`white`), тёмная (`red`), базовая (`base`) — переключается
-  в настройках, фон вкладок подстраивается.
-- **Debug-режим** для проверки авто-режима без зимы (см. ниже).
-
-## Платформа
-
-- Головное устройство **Changan UNI-S** или **CS55 Plus** на MediaTek MT8666
-  (AAOS-build с суффиксом `_64_car`). Архитектура — `arm64-v8a`.
-- Минимальная Android API — 24 (по текущему Flutter Gradle config), целевая `android.car.*` подсистема —
-  AAOS любой современной версии.
-- Подпись APK — обычный Android release/debug keystore. Платформенный ключ не
-  нужен: всё работает за счёт `android.car.permission.*` в манифесте — так же,
-  как `autoheat_old`. GitHub Releases должны собираться только со стабильным
-  release-keystore, иначе обновление поверх предыдущего APK ломается по подписи.
-- Vendor permission `com.wt.airconditioner.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`
-  только запрашивается, но не объявляется: его владелец — оригинальный пакет
-  `com.wt.airconditioner`, который обычно уже стоит на голове.
-- Manifest intentionally keeps the original app's broad permission envelope
-  (location/storage/phone, overlay, write-settings, extended `android.car.*`) and
-  accessibility service declaration because these grants are part of the working
-  head-unit setup.
-
-Поддержка обычных Android-устройств (телефонов, планшетов) **не предусмотрена** —
-UI рассчитан только под фиксированное альбомное разрешение головного устройства.
-
-## Установка
-
-1. Скачать последнюю сборку
-   [`AutoHeat-v3.apk`](https://github.com/kaufd/autoheats/releases/latest)
-   из GitHub Releases.
-2. Включить установку из неизвестных источников / ADB на голове Changan
-   (на UNI-S / CS55 Plus это делается через инженерное меню, см. ветки на XDA).
-3. Установить APK обычным способом (через файловый менеджер, ADB или сервис
-   обновлений вашей головы).
-4. При первом запуске разрешить уведомления — без них Android 13+ не разрешит
-   работу foreground-service, и автоподогрев не выживет при свёрнутом приложении.
-
-## Как пользоваться
-
-### Главный экран
-
-Два «сиденья» — водитель и пассажир. У каждого свой переключатель режимов
-(`Вручную / Пресеты / Авто`) и индикатор уровня.
-
-- **Тап по картинке сиденья**: переключает уровни по кругу `0 → 1 → 2 → 3 → 0`.
-- **Селектор «1 / 2 / 3 / OFF» под переключателем режимов**: прямой выбор
-  уровня в manual-режиме.
-- **Индикатор «Температура в салоне» сверху**: текущее значение от датчика
-  с цветовой индикацией.
-
-### Пресеты
-
-Отдельная вкладка с редактором и списком. Каждый пресет — это:
-- Тип сиденья (driver / passenger).
-- Длительности уровней 3, 2, 1 (в минутах, до 15 каждая).
-- Порог температуры включения: если в салоне выше этого значения, пресет не
-  запустится (например, не включать подогрев в +15 °C).
-
-После применения каскад идёт строго по своим длительностям, не реагируя на
-плавающую температуру.
-
-### Авто
-
-Без настроек со стороны пользователя. При входе в режим алгоритм смотрит
-текущую температуру салона и подбирает длительность каждого уровня по таблице:
-
-| Диапазон | Уровень 3 | Уровень 2 | Уровень 1 | Всего |
-|---|---|---|---|---|
-| > +10 °C | — | — | — | выключено |
-| +5…+10 °C (warm) | 3 мин | 2 мин | 5 мин | 10 мин |
-| 0…+5 °C (cool) | 5 мин | 3 мин | 7 мин | 15 мин |
-| −5…0 °C (cold) | 8 мин | 5 мин | 7 мин | 20 мин |
-| −10…−5 °C (freezing) | 12 мин | 7 мин | 7 мин | 26 мин |
-| < −10 °C (extreme) | 15 мин | 10 мин | 8 мин | 33 мин |
-
-Дополнительно у каждого уровня есть порог температуры, при достижении которого
-алгоритм сразу переходит к более низкому уровню, не дожидаясь таймера. После
-завершения каскада он **не перезапускается сам** — пока температура не уйдёт в
-другой диапазон или пользователь не пере-войдёт в режим.
-
-### Debug-режим
-
-Полезен для проверки на эмуляторе летом, когда реальной температуры < 10 °C нет.
-
-- **Активация**: длительный тап (≈600 мс) по индикатору «Температура в салоне»
-  на главном экране. SnackBar подтвердит включение.
-- В шапке появится дополнительная вкладка **«Логи»**. На ней:
-  - Слева — живой просмотр последних 500 строк `Logger`'а.
-  - Справа — sidebar с инжектором температуры:
-    - Кнопки быстрого выбора `-15 / -10 / -5 / 0 / 5 / 10 °C`.
-    - Текстовое поле для произвольного значения.
-- При выключении debug-режима реальная температура восстанавливается, буфер
-  логов очищается — никакого влияния на повседневную работу.
-
-## Стек
-
-- Flutter `^3.6.0` / Dart 3.
-- State management: `flutter_bloc` (Cubit) + `equatable`.
-- DI: `get_it`.
-- Persistence: `shared_preferences`.
-- Фон: `flutter_background_service`.
-- Native bridge: локальный path-плагин `packages/android_automotive_plugin/`
-  (снапшот [`abuharsky/changan_car_flutter_library`](https://github.com/abuharsky/changan_car_flutter_library)).
-
-## Разработка
+Нужны JDK 17 и Android SDK 33. Из корня репозитория:
 
 ```bash
-# Зависимости
-flutter pub get
-( cd packages/android_automotive_plugin && flutter pub get )
-
-# Анализ + тесты
-flutter analyze
-flutter test
-
-# Журнал поведения auto/preset режимов и переключений (читать глазами):
-flutter test test/scenarios/walkthrough_log_test.dart --reporter expanded
-
-# Запуск на подключённой голове или эмуляторе AAOS
-flutter run
-
-# Релизная сборка APK для головы (только arm64-v8a, ~19 MB)
-flutter build apk --release --target-platform android-arm64
-# → build/app/outputs/apk/release/AutoHeat-v3.apk
+./gradlew test lint assembleRelease
 ```
+
+Готовый APK: `app/build/outputs/apk/release/AutoHeat-native-v0.6.0-vc260.apk`. Локальная release-сборка без переменных подписи использует debug keystore. Для стабильной подписи задайте `AUTOHEAT_KEYSTORE_PATH`, `AUTOHEAT_KEYSTORE_PASSWORD`, `AUTOHEAT_KEY_ALIAS` и `AUTOHEAT_KEY_PASSWORD`.
+
+## Установка на голове
+
+`applicationId` — `com.wt.airconditioner`: это whitelisted-пакет головы, без которого `CarService` не отдаёт `CarHvacManager`. APK устанавливается вместо прежнего приложения с тем же идентификатором и должен быть подписан тем же ключом для обновления поверх него.
+
+Проверки на устройстве и известные ограничения описаны в [docs/native-validation.md](docs/native-validation.md). Архитектура — в [ARCHITECTURE.md](ARCHITECTURE.md), история перехода — в [NATIVE_MIGRATION.md](NATIVE_MIGRATION.md).
 
 ## Релизы
 
-Релизы публикуются автоматически на [GitHub Releases](https://github.com/kaufd/autoheats/releases)
-при push'е тега `v*`:
-
-```bash
-# 1. Бамп версии в pubspec.yaml, включая build number: X.Y.Z+NNN
-# 2. Добавить секцию '## [X.Y.Z] - YYYY-MM-DD' в CHANGELOG.md
-git commit -am "Release X.Y.Z"
-git tag vX.Y.Z
-git push origin vX.Y.Z
-```
-
-GitHub Actions workflow [`.github/workflows/release.yml`](./.github/workflows/release.yml)
-прогонит `flutter analyze` + `flutter test`, соберёт подписанный
-`AutoHeat-v3.apk` под arm64, вырежет нужную секцию из `CHANGELOG.md` и создаст
-релиз. Для workflow обязательны secrets `ANDROID_KEYSTORE_BASE64`,
-`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`.
-
-## Документация
-
-- [`CLAUDE.md`](./CLAUDE.md) — расширенный контекст: архитектура, инварианты,
-  правила, ссылки на код.
-- [`AGENTS.md`](./AGENTS.md) — GRACE-протокол для агентов: контракты, разметка,
-  knowledge graph, верификация.
-- [`ARCHITECTURE.md`](./ARCHITECTURE.md) — диаграммы потоков данных.
-- [`CHANGELOG.md`](./CHANGELOG.md) — заметные изменения по версиям.
-- `docs/` — XML-артефакты GRACE: requirements, technology, development-plan,
-  verification-plan, knowledge-graph, operational-packets.
-
-## Лицензия и наследие
-
-Проект — переработка предыдущей версии `autoheat_old`, не предназначен для
-публикации в Google Play. Базовый плагин `android_automotive_plugin` хранится
-локально как снапшот для офлайн-сборки и независимости от оргинального репозитория.
-
-## Дисклеймер
-
-Тестировался на конкретной модели ГУ (UNI-S/CS55 Plus). На
-других моделях с другим SoC, другим набором `android.car.permission.*` или
-другой реализацией CarHvacManager поведение может отличаться. Перед массовой
-установкой проверить на конкретной машине через debug-режим и просмотр логов.
-
-Приложение управляет реальным железом сидений в работающем автомобиле — все
-ошибки HVAC обрабатываются с graceful fallback, процесс не крашится, но логи
-всё равно стоит периодически просматривать.
+Push тега `v*` запускает GitHub Actions: JDK 17, `./gradlew test lint assembleRelease`, подпись из существующих secrets и публикацию APK из `app/build/outputs/apk/release/`. Перед тегом обновите `versionName` и `versionCode` в `app/build.gradle`, а также секцию `## [X.Y.Z]` в `CHANGELOG.md`.

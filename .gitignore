@@ -23,27 +23,11 @@ migrate_working_dir/
 # is commented out by default.
 #.vscode/
 
-# Flutter/Dart/Pub related
-**/doc/api/
-**/ios/Flutter/.last_build_id
-.dart_tool/
-.flutter-plugins
-.flutter-plugins-dependencies
-.pub-cache/
-.pub/
-/build/
-
-# Symbolication related
-app.*.symbols
-
-# Obfuscation related
-app.*.map.json
-
-# Android Studio will place build artifacts here
-/android/app/debug
-/android/app/profile
-/android/app/release
-/android/app/signing/
+# Gradle / Android
+.gradle/
+build/
+local.properties
+app/signing/
 
 # brainstorming visual companion mockups
 .superpowers/
@@ -51,6 +35,3 @@ app.*.map.json
 # Диагностические APK и рабочие материалы (не для git — ~170 MB)
 diagnostic-apks/
 temp/
-
-# FVM Version Cache
-.fvm/

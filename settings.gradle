@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AutoHeatProbe"
+rootProject.name = "AutoHeat"
 include ':app'
