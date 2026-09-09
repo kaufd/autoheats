@@ -35,10 +35,11 @@ final class PresetsPanel {
         void onApply(Preset preset);
 
         /**
-         * Идёт ли этот пресет на своём сиденье. Знает об этом только сервис:
-         * панель редактирует записи и не следит за тем, что греет в машине.
+         * Пресет, который сейчас ведёт это сиденье, или null. Знает об этом
+         * только сервис: панель редактирует записи и не следит за тем, что
+         * греет в машине.
          */
-        boolean isRunning(Preset preset);
+        String runningPreset(Seat seat);
 
         /** Снять пресет с сиденья и отдать его ручному управлению. */
         void onStop(Preset preset);
@@ -290,6 +291,7 @@ final class PresetsPanel {
     void render() {
         list.removeAllViews();
         List<Preset> presets = store.load();
+        String running = listener.runningPreset(selectedSeat);
 
         boolean empty = true;
         for (int index = 0; index < presets.size(); index++) {
@@ -298,7 +300,7 @@ final class PresetsPanel {
                 continue;
             }
             empty = false;
-            list.addView(buildCard(preset, index));
+            list.addView(buildCard(preset, index, preset.encode().equals(running)));
         }
 
         if (empty) {
@@ -313,7 +315,7 @@ final class PresetsPanel {
         }
     }
 
-    private View buildCard(Preset preset, int index) {
+    private View buildCard(Preset preset, int index, boolean running) {
         LinearLayout card = new LinearLayout(activity);
         card.setOrientation(LinearLayout.HORIZONTAL);
         card.setGravity(Gravity.CENTER_VERTICAL);
@@ -350,7 +352,6 @@ final class PresetsPanel {
         // Пресет запущен — та же кнопка его снимает. Без этого список не
         // показывал, что именно сейчас греет, и «отменить» можно было только
         // через переключатель режима на соседней вкладке.
-        boolean running = listener.isRunning(preset);
         card.addView(iconButton(running ? R.drawable.ic_pause : R.drawable.ic_play,
                 palette.accent,
                 v -> {

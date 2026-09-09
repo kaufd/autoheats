@@ -100,14 +100,14 @@ final class LogUiController {
         renderLog();
     }
 
-    /** Вкладка на экране: показываем накопленное целиком, а не по строке. */
-    void onTabShown() {
-        visible = true;
+    /**
+     * Вкладка на экране или ушла с него. На показе рисуем накопленное целиком:
+     * и то, что пришло, пока вкладка была скрыта, и прокрутку к последней
+     * строке — ею же пользуются, повторно нажав кнопку «Логи».
+     */
+    void setTabVisible(boolean visible) {
+        this.visible = visible;
         renderLog();
-    }
-
-    void onTabHidden() {
-        visible = false;
     }
 
     /** Текущая температура рядом с инжектором — тем же текстом, что в шапке. */
@@ -129,18 +129,12 @@ final class LogUiController {
     void onLogLine(String line) {
         activity.runOnUiThread(() -> {
             logLines.addLast(line);
-            boolean trimmed = logLines.size() > LogBuffer.CAPACITY + LOG_TRIM_SLACK;
-            if (trimmed) {
+            if (logLines.size() > LogBuffer.CAPACITY + LOG_TRIM_SLACK) {
                 while (logLines.size() > LogBuffer.CAPACITY) {
                     logLines.removeFirst();
                 }
-            }
-            if (!visible) {
-                return;
-            }
-            if (trimmed) {
                 renderLog();
-            } else {
+            } else if (visible) {
                 logView.append(line + "\n");
                 // Счётчик обновляется и на быстром пути: renderLog случается
                 // только при подрезке, и между подрезками цифра показывала бы

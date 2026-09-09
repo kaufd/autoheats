@@ -301,14 +301,17 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     }
 
     /**
-     * Ведёт ли этот пресет своё сиденье прямо сейчас. Именно пара «режим +
+     * Пресет, который ведёт сиденье прямо сейчас, или null. Именно пара «режим +
      * активный пресет», а не наличие таймера в движке: дошедший до нуля каскад
      * пресет с сиденья не снимает — по следующему зажиганию ON он запустится
      * снова, и предлагать в списке «запустить» было бы неправдой.
+     *
+     * Отвечаем про сиденье, а не про пресет: список показывает записи одного
+     * сиденья, и ответ у них общий — спрашивать его на каждую карточку значило
+     * бы перечитывать те же две настройки по разу на строку.
      */
-    public boolean isPresetRunning(Preset preset) {
-        return settings.mode(preset.seat) == HeatMode.PRESETS
-                && preset.encode().equals(settings.activePreset(preset.seat));
+    public String runningPreset(Seat seat) {
+        return settings.mode(seat) == HeatMode.PRESETS ? settings.activePreset(seat) : null;
     }
 
     /**

@@ -30,6 +30,8 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private static final int TAB_PRESETS = 1;
     private static final int TAB_SETTINGS = 2;
     private static final int TAB_LOG = 3;
+    /** Со скрытой вкладкой логов страниц на одну меньше — она последняя. */
+    private static final int TAB_COUNT = 4;
 
     /**
      * Переключатель по CustomSwitch из Flutter-версии: трек 65×30, ползунок —
@@ -74,9 +76,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
 
         @Override
-        public boolean isRunning(Preset preset) {
+        public String runningPreset(Seat seat) {
             SeatHeatService service = serviceBinding.get();
-            return service != null && service.isPresetRunning(preset);
+            return service == null ? null : service.runningPreset(seat);
         }
 
         @Override
@@ -109,7 +111,6 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     private ThemePalette palette;
 
     private ViewPager pager;
-    private PagerAdapter tabsAdapter;
     private TextView[] tabButtons;
     private TextView temperatureView;
 
@@ -281,8 +282,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             final int position = index;
             tabButtons[index].setOnClickListener(v -> showTab(position));
         }
-        tabButtons[TAB_LOG].setVisibility(
-                settings.debugMode() ? View.VISIBLE : View.GONE);
+        renderDebugTab();
 
         // Страницы приходят из разметки уже видимыми, а показывать их решает
         // адаптер: без этого выключенная вкладка логов осталась бы VISIBLE и
@@ -292,12 +292,11 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             pager.getChildAt(index).setVisibility(View.GONE);
         }
 
-        tabsAdapter = new TabsAdapter();
-        pager.setAdapter(tabsAdapter);
+        pager.setAdapter(new TabsAdapter());
         // Четыре статических экрана: держим все разложенными, чтобы
         // activity.findViewById находил их в любой момент, а не только пока
         // вкладка рядом с текущей.
-        pager.setOffscreenPageLimit(TAB_LOG);
+        pager.setOffscreenPageLimit(TAB_COUNT - 1);
         pager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
             @Override
             public void onPageSelected(int position) {
@@ -334,14 +333,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
             // это на соседней вкладке: список должен свериться на каждом показе.
             presetsPanel.render();
         }
-        if (index == TAB_LOG) {
-            logUi.onTabShown();
-        } else {
-            // Лог продолжает копиться, но в свой TextView не пишет: страница
-            // остаётся разложенной, и каждая строка стоила бы пересборки
-            // разметки на пятистах строках.
-            logUi.onTabHidden();
-        }
+        // Скрытый лог продолжает копиться, но в свой TextView не пишет:
+        // страница остаётся разложенной, и каждая строка стоила бы пересборки
+        // разметки на пятистах строках.
+        logUi.setTabVisible(index == TAB_LOG);
     }
 
     /** Пресеты того сиденья, чей сегмент нажали, а не всегда водительские. */
@@ -365,7 +360,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
         @Override
         public int getCount() {
-            return (settings.debugMode() ? TAB_LOG : TAB_SETTINGS) + 1;
+            return settings.debugMode() ? TAB_COUNT : TAB_COUNT - 1;
         }
 
         @Override
@@ -407,14 +402,25 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
     }
 
+    /**
+     * Кнопка вкладки логов и число страниц у адаптера — одно правило, поэтому
+     * читают его тут вдвоём: разъехавшись, они дали бы кнопку без страницы.
+     */
+    private void renderDebugTab() {
+        tabButtons[TAB_LOG].setVisibility(settings.debugMode() ? View.VISIBLE : View.GONE);
+        PagerAdapter adapter = pager.getAdapter();
+        if (adapter != null) {
+            adapter.notifyDataSetChanged();
+        }
+    }
+
     private void toggleDebugMode() {
         boolean enabled = !settings.debugMode();
         // Запоминаем до notifyDataSetChanged: убрав страницу, ViewPager сам
         // сдвинет текущую позицию, и спрашивать её потом уже поздно.
         boolean wasOnLog = pager.getCurrentItem() == TAB_LOG;
         settings.setDebugMode(enabled);
-        tabButtons[TAB_LOG].setVisibility(enabled ? View.VISIBLE : View.GONE);
-        tabsAdapter.notifyDataSetChanged();
+        renderDebugTab();
         if (!enabled && wasOnLog) {
             showTab(TAB_HEAT);
         }
