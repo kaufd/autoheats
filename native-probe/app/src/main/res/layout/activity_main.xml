@@ -67,9 +67,8 @@
         android:layout_weight="1">
 
         <!-- Вкладки листаются пальцем, как TabBarView во Flutter-версии.
-             Страницы лежат прямо здесь, а не создаются адаптером: контроллеры
-             вкладок ищут свои View через activity.findViewById, и страница,
-             вынутая из дерева, стала бы для них невидимой. -->
+             Страницы создаёт адаптер (см. MainActivity.TabsAdapter): каждая
+             уходит своему контроллеру, который ищет View внутри неё. -->
         <androidx.viewpager.widget.ViewPager
             android:id="@+id/pager"
             android:layout_width="match_parent"
@@ -77,13 +76,6 @@
             android:paddingStart="32dp"
             android:paddingTop="49dp"
             android:paddingEnd="32dp"
-            android:paddingBottom="32dp">
-
-            <include layout="@layout/tab_heat" />
-            <include layout="@layout/tab_presets" />
-            <include layout="@layout/tab_settings" />
-            <include layout="@layout/tab_logs" />
-
-        </androidx.viewpager.widget.ViewPager>
+            android:paddingBottom="32dp" />
     </FrameLayout>
 </LinearLayout>

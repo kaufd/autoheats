@@ -5,9 +5,11 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.PorterDuff;
 import android.view.View;
 import android.widget.CheckBox;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -31,12 +33,22 @@ final class LogUiController {
     private final Activity activity;
     private final ServiceBindingController serviceProvider;
     private final Deque<String> logLines = new ArrayDeque<>();
-    private final TextView logView;
-    private final TextView counter;
-    private final ScrollView logScroll;
-    /** Полем, а не поиском по id: его читает каждая строка лога. */
-    private final CheckBox autoScroll;
     private ThemePalette palette;
+
+    /**
+     * Страница вкладки или null, пока её нет. С выключенной отладкой адаптер
+     * страницу не создаёт, поэтому лог продолжает копиться в logLines, а рисует
+     * его только тот, у кого есть куда.
+     */
+    private View page;
+    private TextView logView;
+    private TextView counter;
+    private ScrollView logScroll;
+    /** Полем, а не поиском по id: его читает каждая строка лога. */
+    private CheckBox autoScroll;
+    private TextView injectCurrent;
+    private EditText injectValue;
+    private LinearLayout quickTemperatures;
 
     /**
      * Показана ли сейчас вкладка логов. Страницы ViewPager держатся
@@ -51,29 +63,35 @@ final class LogUiController {
         this.activity = activity;
         this.serviceProvider = serviceProvider;
         this.palette = palette;
-        logView = activity.findViewById(R.id.log);
-        counter = activity.findViewById(R.id.logCounter);
-        logScroll = activity.findViewById(R.id.logScroll);
-        autoScroll = activity.findViewById(R.id.autoScroll);
     }
 
-    void bind() {
-        activity.findViewById(R.id.startCascade).setOnClickListener(v -> {
+    /** Страница создана адаптером: разбираем её и вешаем слушателей. */
+    void bind(View page) {
+        this.page = page;
+        logView = page.findViewById(R.id.log);
+        counter = page.findViewById(R.id.logCounter);
+        logScroll = page.findViewById(R.id.logScroll);
+        autoScroll = page.findViewById(R.id.autoScroll);
+        injectCurrent = page.findViewById(R.id.injectCurrent);
+        injectValue = page.findViewById(R.id.injectValue);
+        quickTemperatures = page.findViewById(R.id.quickTemperatures);
+
+        page.findViewById(R.id.startCascade).setOnClickListener(v -> {
             SeatHeatService service = serviceProvider.get();
             if (service != null) {
                 service.startAutoHeatNow();
             }
         });
-        activity.findViewById(R.id.readTemp).setOnClickListener(v -> {
+        page.findViewById(R.id.readTemp).setOnClickListener(v -> {
             SeatHeatService service = serviceProvider.get();
             if (service != null) {
                 service.readCabinTemperature();
             }
         });
-        activity.findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
-        activity.findViewById(R.id.clearLog).setOnClickListener(v -> clearLog());
-        activity.findViewById(R.id.injectTemp).setOnClickListener(v -> injectTemperature());
-        activity.findViewById(R.id.restartCar).setOnClickListener(v -> {
+        page.findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
+        page.findViewById(R.id.clearLog).setOnClickListener(v -> clearLog());
+        page.findViewById(R.id.injectTemp).setOnClickListener(v -> injectTemperature());
+        page.findViewById(R.id.restartCar).setOnClickListener(v -> {
             SeatHeatService service = serviceProvider.get();
             if (service != null) {
                 service.restartCarConnection();
@@ -81,10 +99,21 @@ final class LogUiController {
         });
     }
 
+    /** Отладку выключили — страницы больше нет, но лог копится дальше. */
+    void unbind() {
+        page = null;
+        visible = false;
+    }
+
     void applyTheme(ThemePalette palette) {
         this.palette = palette;
-        paintPanel(activity.findViewById(R.id.logScroll));
-        paintPanel(activity.findViewById(R.id.injectPanel));
+        if (page == null) {
+            return;
+        }
+        paintPanel(logScroll);
+        paintPanel(page.findViewById(R.id.injectPanel));
+        ((ImageView) page.findViewById(R.id.injectThermometer))
+                .setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
         // Системный CheckBox рисуется дефолтным colorAccent платформы и при
         // смене темы оставался бирюзовым — видно только на запущенном
         // приложении, в разметке этого нет.
@@ -106,15 +135,17 @@ final class LogUiController {
      * строке — ею же пользуются, повторно нажав кнопку «Логи».
      */
     void setTabVisible(boolean visible) {
-        this.visible = visible;
+        this.visible = visible && page != null;
         renderLog();
     }
 
-    /** Текущая температура рядом с инжектором — тем же текстом, что в шапке. */
+    /** Текущая температура рядом с инжектором — тем же текстом, что и на сиденьях. */
     void onCabinTemperature(String text, int color) {
-        TextView current = activity.findViewById(R.id.injectCurrent);
-        current.setText(text);
-        current.setTextColor(color);
+        if (page == null) {
+            return;
+        }
+        injectCurrent.setText(text);
+        injectCurrent.setTextColor(color);
     }
 
     void clearLog() {
@@ -153,7 +184,7 @@ final class LogUiController {
     }
 
     private void buildQuickTemperatures() {
-        LinearLayout container = activity.findViewById(R.id.quickTemperatures);
+        LinearLayout container = quickTemperatures;
         container.removeAllViews();
 
         LinearLayout row = null;
@@ -197,8 +228,7 @@ final class LogUiController {
     }
 
     private void injectTemperature() {
-        EditText field = activity.findViewById(R.id.injectValue);
-        String text = field.getText().toString().trim().replace(',', '.');
+        String text = injectValue.getText().toString().trim().replace(',', '.');
         SeatHeatService service = serviceProvider.get();
         if (service == null || text.isEmpty()) {
             return;

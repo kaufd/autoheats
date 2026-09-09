@@ -77,9 +77,13 @@ final class PresetsPanel {
     private final Listener listener;
     private ThemePalette palette;
 
-    private final LinearLayout list;
-    private final LinearLayout levelsContainer;
-    private final SeekBar thresholdBar;
+    private View page;
+    private LinearLayout list;
+    private LinearLayout levelsContainer;
+    private SeekBar thresholdBar;
+    private TextView thresholdTitle;
+    private LinearLayout thresholdLabels;
+    private LinearLayout seatSegments;
 
     private Seat selectedSeat = Seat.DRIVER;
 
@@ -97,21 +101,29 @@ final class PresetsPanel {
         this.store = store;
         this.palette = palette;
         this.listener = listener;
+    }
 
-        list = activity.findViewById(R.id.presetList);
-        levelsContainer = activity.findViewById(R.id.presetLevels);
-        thresholdBar = activity.findViewById(R.id.presetThreshold);
+    /**
+     * Страница создана адаптером. Здесь только разовая привязка: всё, что
+     * зависит от палитры, рисует applyTheme — его зовут сразу следом, поэтому
+     * собирать редактор и читать пресеты тут значило бы делать это дважды.
+     *
+     * Кнопки не красим: их находит Ui.paintButtons обходом по тегу из
+     * @style/PrimaryButton — у покраски должен быть один владелец, иначе при
+     * добавлении кнопки снова придётся гадать, кто про неё вспомнит.
+     */
+    void bind(View page) {
+        this.page = page;
+        list = page.findViewById(R.id.presetList);
+        levelsContainer = page.findViewById(R.id.presetLevels);
+        thresholdBar = page.findViewById(R.id.presetThreshold);
+        thresholdTitle = page.findViewById(R.id.presetThresholdTitle);
+        thresholdLabels = page.findViewById(R.id.presetThresholdLabels);
+        seatSegments = page.findViewById(R.id.presetSeatSegments);
 
-        // Разовая привязка. Всё, что зависит от палитры, рисует applyTheme —
-        // MainActivity зовёт его сразу после конструктора, поэтому собирать
-        // редактор и читать пресеты здесь значило бы делать это дважды подряд.
-        //
-        // Кнопки не красим: их находит Ui.paintButtons обходом по тегу из
-        // @style/PrimaryButton — у покраски должен быть один владелец, иначе
-        // при добавлении кнопки снова придётся гадать, кто про неё вспомнит.
         bindThreshold();
-        activity.findViewById(R.id.presetSave).setOnClickListener(v -> askNameAndSave());
-        activity.findViewById(R.id.presetNew).setOnClickListener(v -> resetEditor());
+        page.findViewById(R.id.presetSave).setOnClickListener(v -> askNameAndSave());
+        page.findViewById(R.id.presetNew).setOnClickListener(v -> resetEditor());
     }
 
     /**
@@ -125,12 +137,12 @@ final class PresetsPanel {
         buildLevelSliders();
         paintSeekBar(thresholdBar, THRESHOLDS.length - 1);
         buildThresholdLabels();
-        activity.findViewById(R.id.presetDivider).setBackgroundColor(palette.divider);
+        page.findViewById(R.id.presetDivider).setBackgroundColor(palette.divider);
         render();
     }
 
     private void buildSeatSegments() {
-        SegmentedControl.render(activity.findViewById(R.id.presetSeatSegments),
+        SegmentedControl.render(seatSegments,
                 new SegmentedControl.Item[]{
                         new SegmentedControl.Item(Seat.DRIVER.label),
                         new SegmentedControl.Item(Seat.PASSENGER.label)},
@@ -207,14 +219,13 @@ final class PresetsPanel {
     }
 
     private void updateThresholdTitle() {
-        TextView title = activity.findViewById(R.id.presetThresholdTitle);
-        title.setText("Включать, когда температура в салоне ниже "
+        thresholdTitle.setText("Включать, когда температура в салоне ниже "
                 + THRESHOLDS[thresholdBar.getProgress()] + "°C");
     }
 
     /** Подписи под слайдером порога: -5, 0, 5, 10, 15 °C. */
     private void buildThresholdLabels() {
-        LinearLayout labels = activity.findViewById(R.id.presetThresholdLabels);
+        LinearLayout labels = thresholdLabels;
         labels.removeAllViews();
         for (int index = 0; index < THRESHOLDS.length; index++) {
             TextView label = new TextView(activity);

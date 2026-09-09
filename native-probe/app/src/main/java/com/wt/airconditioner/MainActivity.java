@@ -33,6 +33,14 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     /** Со скрытой вкладкой логов страниц на одну меньше — она последняя. */
     private static final int TAB_COUNT = 4;
 
+    /** Разметка каждой вкладки, по её позиции. */
+    private static final int[] TAB_LAYOUTS = {
+            R.layout.tab_heat,
+            R.layout.tab_presets,
+            R.layout.tab_settings,
+            R.layout.tab_logs,
+    };
+
     /**
      * Переключатель по CustomSwitch из Flutter-версии: трек 65×30, ползунок —
      * круг 30 во всю высоту трека. Включённый трек — акцент с прозрачностью
@@ -61,6 +69,19 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
                 public void onDisconnected() {
                     heatUi.render();
                     presetsPanel.render();
+                }
+            };
+
+    private final SeatHeatUiController.Listener heatListener =
+            new SeatHeatUiController.Listener() {
+                @Override
+                public void onPresetsRequested(Seat seat) {
+                    openPresetsFor(seat);
+                }
+
+                @Override
+                public void onDebugToggleRequested() {
+                    toggleDebugMode();
                 }
             };
 
@@ -112,7 +133,13 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     private ViewPager pager;
     private TextView[] tabButtons;
-    private TextView temperatureView;
+
+    /**
+     * Живые страницы вкладок, по позиции. null — страницы сейчас нет: так
+     * выглядит вкладка логов с выключенной отладкой. Заполняет и чистит
+     * TabsAdapter, а читают те, кто красит и обновляет вкладки.
+     */
+    private final View[] pages = new View[TAB_COUNT];
 
     private ServiceBindingController serviceBinding;
     private SeatHeatUiController heatUi;
@@ -127,33 +154,21 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         settings = new HeatSettings(this);
         theme = settings.theme();
         palette = ThemePalette.of(this, theme);
-        temperatureView = findViewById(R.id.temperature);
         pager = findViewById(R.id.pager);
 
         serviceBinding = new ServiceBindingController(this, this, bindingListener);
-        heatUi = new SeatHeatUiController(this, settings, serviceBinding,
-                this::openPresetsFor, palette);
+        // Контроллеры заводятся без своих View: страницы им раздаст адаптер,
+        // как только пейджер их создаст.
+        heatUi = new SeatHeatUiController(this, settings, serviceBinding, heatListener, palette);
         logUi = new LogUiController(this, serviceBinding, palette);
-        // Панель создаётся до вкладок: на смену страницы отвечает onPageSelected,
-        // и к первому же его вызову она обязана существовать.
         presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
 
+        // Страницы создаются, разбираются контроллерами и красятся внутри
+        // setAdapter — снаружи остаются только шапка и фон. Раньше каждая
+        // вкладка собиралась дважды: сначала здесь, потом ещё раз из applyTheme.
         buildTabs();
-        bindSettingsTab();
-        heatUi.bind();
-        logUi.bind();
-
-        // Слушатели навешаны, динамический UI ещё не собран: его целиком строит
-        // applyTheme. Раньше каждая вкладка строилась дважды — сначала здесь,
-        // потом ещё раз отсюда же, вместе с чтением всех пресетов из хранилища.
-        applyTheme();
-        Fonts.applyTo(findViewById(android.R.id.content));
-
-        // Скрытый переключатель отладки — тот же жест, что во Flutter-версии.
-        findViewById(R.id.temperaturePill).setOnLongClickListener(v -> {
-            toggleDebugMode();
-            return true;
-        });
+        paintChrome();
+        Fonts.applyTo(findViewById(R.id.appBar));
 
         serviceBinding.start();
     }
@@ -176,31 +191,50 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
     /**
      * Единственная точка смены оформления: палитра собирается один раз и уходит
-     * всем, кто рисует. Кнопки не перечисляются поимённо — их находит обход
-     * дерева по тегу из @style/PrimaryButton, поэтому новая кнопка в разметке
-     * перекрашивается сама.
+     * всем, кто рисует, — шапке и каждой живой странице.
      */
     private void applyTheme() {
         palette = ThemePalette.of(this, theme);
+        paintChrome();
+        for (int position = 0; position < TAB_COUNT; position++) {
+            paintPage(position);
+        }
+    }
+
+    /** Всё, что живёт вне пейджера и потому не принадлежит ни одной вкладке. */
+    private void paintChrome() {
         findViewById(R.id.background).setBackgroundResource(palette.backgroundRes);
-        findViewById(R.id.centerDivider).setBackgroundColor(palette.divider);
-
-        // Плашка температуры бледнее чипов: своя пара значений, и она здесь
-        // единственная — роли в ThemePalette заведены только для повторяющихся.
-        findViewById(R.id.temperaturePill).setBackground(Ui.roundRect(this, 50,
-                Ui.withAlpha(palette.accent, 30), Ui.withAlpha(palette.accent, 100)));
-
-        ImageView icon = findViewById(R.id.temperatureIcon);
-        icon.setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
-        ((ImageView) findViewById(R.id.injectThermometer))
-                .setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
-
         renderTabs();
-        paintSettingsTab();
-        heatUi.applyTheme(palette);
-        presetsPanel.applyTheme(palette);
-        logUi.applyTheme(palette);
-        Ui.paintButtons(findViewById(android.R.id.content), palette);
+    }
+
+    /**
+     * Красит одну страницу: сначала кнопки, потом её контроллер. Кнопки не
+     * перечисляются поимённо — их находит обход страницы по тегу из
+     * @style/PrimaryButton, поэтому новая кнопка в разметке перекрашивается
+     * сама.
+     */
+    private void paintPage(int position) {
+        View page = pages[position];
+        if (page == null) {
+            return;
+        }
+        Ui.paintButtons(page, palette);
+        switch (position) {
+            case TAB_HEAT:
+                heatUi.applyTheme(palette);
+                break;
+            case TAB_PRESETS:
+                presetsPanel.applyTheme(palette);
+                break;
+            case TAB_SETTINGS:
+                paintSettingsTab();
+                break;
+            case TAB_LOG:
+                logUi.applyTheme(palette);
+                break;
+            default:
+                break;
+        }
     }
 
     /**
@@ -284,26 +318,17 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         }
         renderDebugTab();
 
-        // Страницы приходят из разметки уже видимыми, а показывать их решает
-        // адаптер: без этого выключенная вкладка логов осталась бы VISIBLE и
-        // держалась бы в дереве нерасположенной — то есть невидимой случайно,
-        // а не по правилу.
-        for (int index = 0; index < pager.getChildCount(); index++) {
-            pager.getChildAt(index).setVisibility(View.GONE);
-        }
-
-        pager.setAdapter(new TabsAdapter());
-        // Четыре статических экрана: держим все разложенными, чтобы
-        // activity.findViewById находил их в любой момент, а не только пока
-        // вкладка рядом с текущей.
+        // Четыре статических экрана: держим все разложенными. Так страница
+        // живёт ровно столько же, сколько её контроллер, и пересобирать её при
+        // каждом листании не приходится.
         pager.setOffscreenPageLimit(TAB_COUNT - 1);
+        pager.setAdapter(new TabsAdapter());
         pager.addOnPageChangeListener(new ViewPager.SimpleOnPageChangeListener() {
             @Override
             public void onPageSelected(int position) {
                 onTabShown(position);
             }
         });
-        renderTabs();
     }
 
     /**
@@ -346,15 +371,10 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     }
 
     /**
-     * Страницы уже лежат в разметке, адаптер их не создаёт и не выбрасывает:
-     * контроллеры вкладок ищут свои View через activity.findViewById, и
-     * страница, вынутая из дерева, стала бы для них null. Поэтому «удаление»
-     * страницы — это GONE: скрытая вкладка логов пропадает из листания,
-     * оставаясь и в дереве, и под своим контроллером.
-     *
-     * Отсюда ограничение: прятать можно только последнюю страницу. Позиция в
-     * пейджере здесь равна индексу ребёнка, а GONE его не сдвигает — скрытая
-     * середина увела бы все страницы правее на одну позицию.
+     * Создаёт страницы вкладок и раздаёт их контроллерам. Каждая страница —
+     * отдельная разметка: контроллер получает её корень и ищет свои View
+     * внутри него, поэтому активити не обязана держать все вкладки в дереве
+     * ради чужих findViewById.
      */
     private final class TabsAdapter extends PagerAdapter {
 
@@ -365,28 +385,63 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
 
         @Override
         public Object instantiateItem(ViewGroup container, int position) {
-            View page = container.getChildAt(position);
-            page.setVisibility(View.VISIBLE);
+            View page = getLayoutInflater().inflate(TAB_LAYOUTS[position], container, false);
+            container.addView(page);
+            pages[position] = page;
+            bindPage(position, page);
             return page;
         }
 
         @Override
         public void destroyItem(ViewGroup container, int position, Object object) {
-            ((View) object).setVisibility(View.GONE);
+            container.removeView((View) object);
+            pages[position] = null;
+            if (position == TAB_LOG) {
+                logUi.unbind();
+            }
         }
 
         @Override
         public int getItemPosition(Object object) {
-            int index = pager.indexOfChild((View) object);
+            for (int position = 0; position < getCount(); position++) {
+                if (pages[position] == object) {
+                    return position;
+                }
+            }
             // Страница выпала за пределы списка — только так ViewPager узнает,
             // что её пора убрать, когда отладку выключили.
-            return index >= 0 && index < getCount() ? index : POSITION_NONE;
+            return POSITION_NONE;
         }
 
         @Override
         public boolean isViewFromObject(View view, Object object) {
             return view == object;
         }
+    }
+
+    /**
+     * Свежая страница уходит своему контроллеру и сразу красится: вкладка логов
+     * появляется по ходу работы, и ждать следующей смены темы ей нельзя.
+     */
+    private void bindPage(int position, View page) {
+        switch (position) {
+            case TAB_HEAT:
+                heatUi.bind(page);
+                break;
+            case TAB_PRESETS:
+                presetsPanel.bind(page);
+                break;
+            case TAB_SETTINGS:
+                bindSettingsTab(page);
+                break;
+            case TAB_LOG:
+                logUi.bind(page);
+                break;
+            default:
+                break;
+        }
+        Fonts.applyTo(page);
+        paintPage(position);
     }
 
     private void renderTabs() {
@@ -432,29 +487,30 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     // --- вкладка настроек ---
 
     /** Разовая привязка: слушатели и стартовое состояние, ничего от палитры. */
-    private void bindSettingsTab() {
-        Switch showTemperature = findViewById(R.id.showTemperature);
+    private void bindSettingsTab(View page) {
+        Switch showTemperature = page.findViewById(R.id.showTemperature);
         // Слушателя ещё нет, поэтому setChecked никого не дёргает и снимать его
         // на время не нужно: раньше это приходилось делать только потому, что
         // вкладка пересобиралась при каждой смене темы.
         showTemperature.setChecked(settings.showCabinTemperature());
         showTemperature.setOnCheckedChangeListener((button, checked) -> {
             settings.setShowCabinTemperature(checked);
-            applyTemperatureVisibility();
+            // Плашка живёт на соседней вкладке и принадлежит её контроллеру.
+            heatUi.applyTemperatureVisibility();
         });
-        applyTemperatureVisibility();
 
-        findViewById(R.id.enableAutostart).setOnClickListener(v -> requestPermissions());
+        page.findViewById(R.id.enableAutostart).setOnClickListener(v -> requestPermissions());
     }
 
     /** Всё, что зависит от темы: витрина тем, переключатель, галочка доступа. */
     private void paintSettingsTab() {
-        LinearLayout themes = findViewById(R.id.themeSegments);
+        View page = pages[TAB_SETTINGS];
+        LinearLayout themes = page.findViewById(R.id.themeSegments);
         themes.removeAllViews();
         for (AppTheme option : AppTheme.values()) {
             themes.addView(themeButton(option));
         }
-        paintSwitch(findViewById(R.id.showTemperature));
+        paintSwitch(page.findViewById(R.id.showTemperature));
         renderPermissions();
     }
 
@@ -488,23 +544,16 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         return button;
     }
 
-    /**
-     * Скрытие через прозрачность, а не INVISIBLE: на этом же пятне живёт
-     * длинный тап, включающий отладку. Невидимая View не получает касаний, и
-     * человек, спрятавший температуру, не смог бы выключить вкладку «Логи» —
-     * пришлось бы сначала возвращать температуру на экран.
-     */
-    private void applyTemperatureVisibility() {
-        findViewById(R.id.temperaturePill)
-                .setAlpha(settings.showCabinTemperature() ? 1f : 0f);
-    }
-
     private void renderPermissions() {
+        View page = pages[TAB_SETTINGS];
+        if (page == null) {
+            return;
+        }
         boolean granted = AccessibilityToggle.isEnabled(this);
-        ImageView check = findViewById(R.id.permissionsGranted);
+        ImageView check = page.findViewById(R.id.permissionsGranted);
         check.setVisibility(granted ? View.VISIBLE : View.GONE);
         check.setColorFilter(palette.accent, PorterDuff.Mode.SRC_IN);
-        findViewById(R.id.enableAutostart).setVisibility(granted ? View.GONE : View.VISIBLE);
+        page.findViewById(R.id.enableAutostart).setVisibility(granted ? View.GONE : View.VISIBLE);
     }
 
     private void requestPermissions() {
@@ -538,10 +587,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         runOnUiThread(() -> {
             String text = String.format(Locale.US, "%.1f °C", celsius);
             int color = temperatureColor(celsius);
-            temperatureView.setText(text);
-            temperatureView.setTextColor(color);
-            // Вторую подпись на вкладке логов рисует её собственный контроллер:
-            // Activity раздаёт событие, а не лезет в чужие View по id.
+            // Обе подписи рисуют контроллеры своих вкладок: Activity раздаёт
+            // событие, а не лезет в чужие View по id.
+            heatUi.onCabinTemperature(text, color);
             logUi.onCabinTemperature(text, color);
         });
     }
