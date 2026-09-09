@@ -120,7 +120,7 @@ final class PresetsPanel {
     }
 
     private void buildSeatSegments() {
-        SegmentedControl.build(activity.findViewById(R.id.presetSeatSegments),
+        SegmentedControl.render(activity.findViewById(R.id.presetSeatSegments),
                 new SegmentedControl.Item[]{
                         new SegmentedControl.Item(Seat.DRIVER.label),
                         new SegmentedControl.Item(Seat.PASSENGER.label)},

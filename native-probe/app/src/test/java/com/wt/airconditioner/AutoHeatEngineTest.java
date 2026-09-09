@@ -204,6 +204,28 @@ public class AutoHeatEngineTest {
     }
 
     /**
+     * stopAll глушит каскады, но температура — свойство салона, а не каскада.
+     * Её забывали заодно с каскадами, и следующий запуск (зажигание ON после
+     * пробуждения головы) вставал в «жду температуру» до ближайшего события
+     * датчика — в холодном неподвижном салоне это минуты.
+     */
+    @Test
+    public void stopAllKeepsKnownTemperature() {
+        engine.setTemperature(-3.0);
+        startDriver();
+        assertEquals(Arrays.asList(3), driverLevels);
+
+        engine.stopAll();
+        scheduler.elapse(30);
+        assertEquals("каскад остановлен", Arrays.asList(3), driverLevels);
+        assertEquals(0, scheduler.pendingCount());
+
+        startDriver();
+        assertEquals("температура помнится — каскад стартует без нового события",
+                Arrays.asList(3, 3), driverLevels);
+    }
+
+    /**
      * scenario-6: у водителя и пассажира отдельные callback и расписания —
      * остановка одного сиденья не должна погасить подогрев у другого, хотя
      * температура в салоне у них общая.

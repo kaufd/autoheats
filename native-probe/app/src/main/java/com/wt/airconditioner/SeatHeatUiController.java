@@ -1,6 +1,8 @@
 package com.wt.airconditioner;
 
 import android.app.Activity;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.view.View;
 import android.widget.LinearLayout;
 
@@ -20,6 +22,8 @@ final class SeatHeatUiController {
     private static final int LEVEL_TEXT_SP = 14;
     private static final int LEVEL_HEIGHT_DP = 29;
     private static final int LEVEL_PADDING_DP = 4;
+    /** Индикатор уровня — три точки, как в оригинале. */
+    private static final int DOTS = 3;
 
     private static final SeatView[] SEAT_VIEWS = {
             new SeatView(Seat.DRIVER, R.id.driverSeat, R.id.driverModes,
@@ -69,7 +73,7 @@ final class SeatHeatUiController {
                 new SegmentedControl.Item(HeatMode.PRESETS.title, R.drawable.ic_settings),
                 new SegmentedControl.Item(HeatMode.AUTO.title, R.drawable.ic_auto),
         };
-        SegmentedControl.build(activity.findViewById(seatView.modesId), modes, mode.ordinal(),
+        SegmentedControl.render(activity.findViewById(seatView.modesId), modes, mode.ordinal(),
                 palette, MODE_TEXT_SP, MODE_HEIGHT_DP, MODE_PADDING_DP,
                 index -> selectMode(seat, HeatMode.values()[index]));
 
@@ -83,7 +87,7 @@ final class SeatHeatUiController {
             }
         }
         LinearLayout levels = activity.findViewById(seatView.levelsId);
-        SegmentedControl.build(levels, levelItems, selected, palette,
+        SegmentedControl.render(levels, levelItems, selected, palette,
                 LEVEL_TEXT_SP, LEVEL_HEIGHT_DP, LEVEL_PADDING_DP,
                 index -> setLevel(seat, LEVEL_ORDER[index]));
         // В неручных режимах controls остаются невидимыми, но сохраняют место.
@@ -91,18 +95,28 @@ final class SeatHeatUiController {
         renderDots(activity.findViewById(seatView.dotsId), level);
     }
 
+    /**
+     * Точки уровня. Как и переключатели, собираются один раз: меняется только
+     * цвет заливки, а render() зовётся на каждый шаг каскада.
+     */
     private void renderDots(LinearLayout container, int level) {
-        container.removeAllViews();
-        for (int index = 0; index < 3; index++) {
-            View dot = new View(activity);
-            dot.setBackground(Ui.oval(level > index ? palette.accent
-                    : activity.getResources().getColor(R.color.system_grey)));
-
-            LinearLayout.LayoutParams params =
-                    new LinearLayout.LayoutParams(Ui.dp(activity, 20), Ui.dp(activity, 20));
-            params.setMarginStart(Ui.dp(activity, 4));
-            params.setMarginEnd(Ui.dp(activity, 4));
-            container.addView(dot, params);
+        if (container.getChildCount() != DOTS) {
+            container.removeAllViews();
+            for (int index = 0; index < DOTS; index++) {
+                View dot = new View(activity);
+                dot.setBackground(Ui.oval(Color.TRANSPARENT));
+                LinearLayout.LayoutParams params =
+                        new LinearLayout.LayoutParams(Ui.dp(activity, 20), Ui.dp(activity, 20));
+                params.setMarginStart(Ui.dp(activity, 4));
+                params.setMarginEnd(Ui.dp(activity, 4));
+                container.addView(dot, params);
+            }
+        }
+        int off = activity.getResources().getColor(R.color.system_grey);
+        for (int index = 0; index < DOTS; index++) {
+            GradientDrawable shape =
+                    (GradientDrawable) container.getChildAt(index).getBackground();
+            shape.setColor(level > index ? palette.accent : off);
         }
     }
 
