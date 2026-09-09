@@ -68,7 +68,7 @@
 
     <application
         android:label="AutoHeat"
-        android:icon="@drawable/autoheat_launcher"
+        android:icon="@mipmap/autoheat_launcher"
         android:theme="@android:style/Theme.Material.NoActionBar">
 
         <activity
