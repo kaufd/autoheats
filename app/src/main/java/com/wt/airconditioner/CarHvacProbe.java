@@ -17,6 +17,7 @@ import android.os.IBinder;
 import android.os.Looper;
 
 import java.util.Arrays;
+import java.util.Objects;
 
 
 /**
@@ -99,14 +100,29 @@ public class CarHvacProbe {
      */
     private boolean serviceConnected;
 
+    /**
+     * Последнее записанное сырое значение температуры не из салона. Событий
+     * может идти сколько угодно, а буфер лога — 500 строк: без отсева повторов
+     * поток одинаковых значений вытеснил бы из него всё, ради чего лог открыт.
+     */
+    private Integer lastZoneRaw;
+
     private final CarHvacManager.CarHvacEventCallback hvacCallback =
             new CarHvacManager.CarHvacEventCallback() {
                 @Override
                 public void onChangeEvent(CarPropertyValue value) {
-                    if (value.getPropertyId() == ID_HVAC_IN_OUT_TEMP
-                            && value.getAreaId() == AREA_INSIDE) {
-                        publishTemperature(value.getValue());
+                    if (value.getPropertyId() != ID_HVAC_IN_OUT_TEMP) {
+                        return;
                     }
+                    if (value.getAreaId() == AREA_INSIDE) {
+                        publishTemperature(value.getValue());
+                        return;
+                    }
+                    /**
+                     * Прежде такие события молча отбрасывались, и по логу нельзя
+                     * было понять даже того, шлёт ли их голова вообще.
+                     */
+                    logZoneTemperature(value.getAreaId(), value.getValue());
                 }
 
                 @Override
@@ -469,6 +485,29 @@ public class CarHvacProbe {
          */
         probeOutsideTemperature();
         probeCoolantTemperature();
+    }
+
+    /**
+     * Температура из зоны, отличной от салона, — почти наверняка улица. Только
+     * в лог: годится ли для неё формула салона, до сверки со штатным
+     * показанием неизвестно, поэтому пишется и сырое значение.
+     *
+     * Повторы отсеиваются — нужен ряд значений, а не частота событий. Objects
+     * .equals, а не сравнение через raw: два подряд неразобранных значения
+     * тоже повтор, и поток таких строк забил бы лог не хуже обычных.
+     */
+    private void logZoneTemperature(int areaId, Object rawValue) {
+        Integer raw = parseRaw(rawValue);
+        if (Objects.equals(raw, lastZoneRaw)) {
+            return;
+        }
+        lastZoneRaw = raw;
+        Double celsius = celsiusToPublish(rawValue);
+        log("температура зоны " + areaId + ": raw=" + raw
+                + (celsius == null
+                        ? " — sentinel или неразбираемое значение"
+                        : " → " + TemperatureConstants.celsiusText(celsius)
+                                + " (формулой салона)"));
     }
 
     /**
