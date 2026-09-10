@@ -1,6 +1,7 @@
 package com.wt.airconditioner;
 
 import android.car.Car;
+import android.car.VehicleAreaInOutCAR;
 import android.car.VehicleAreaSeat;
 import android.car.VehiclePropertyIds;
 import android.car.hardware.CarPropertyValue;
@@ -15,6 +16,8 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 
+import java.util.Arrays;
+
 
 /**
  * Мост к android.car HVAC: подключение, чтение температуры салона, установка
@@ -26,11 +29,20 @@ import android.os.Looper;
  */
 public class CarHvacProbe {
 
-    /** Температура в салоне. Вычислено из HvacPropertyIds плагина. */
-    private static final int ID_HVAC_IN_OUT_TEMP = 675289370;
+    /**
+     * Температура воздуха; салон это или улица, решает зона. Константа есть в
+     * самом android.car.jar, поэтому прежнее магическое 675289370, вычисленное
+     * из HvacPropertyIds плагина, больше не нужно — значение то же.
+     */
+    private static final int ID_HVAC_IN_OUT_TEMP = CarHvacManager.ID_HVAC_IN_OUT_TEMP;
 
-    /** VehicleAreaInOutCAR.InOutCAR_INSIDE — зона «внутри салона». */
-    private static final int AREA_INSIDE = 1;
+    private static final int AREA_INSIDE = VehicleAreaInOutCAR.InOutCAR_INSIDE;
+
+    /**
+     * Зона «за бортом». Объявлена в SDK, но отдаёт ли её голова — неизвестно:
+     * это и выясняет пробник в readCabinTemperature.
+     */
+    private static final int AREA_OUTSIDE = VehicleAreaInOutCAR.InOutCAR_OUTSIDE;
 
     /** Без таймаута статус «Подключение к Car…» может висеть вечно. */
     private static final long CONNECT_TIMEOUT_MS = 10_000L;
@@ -319,6 +331,7 @@ public class CarHvacProbe {
             sensorRetriesLeft = SENSOR_RETRIES;
             log("подписка на зажигание оформлена");
             publishCurrentIgnition(manager);
+            logSupportedSensors(manager);
         } catch (Throwable t) {
             retrySensorManager(String.valueOf(t));
         }
@@ -449,6 +462,68 @@ public class CarHvacProbe {
             publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE));
         } catch (Exception e) {
             log("ОШИБКА чтения температуры: " + e);
+        }
+        /**
+         * Только в лог: обе величины пока исследовательские, ни на подогрев,
+         * ни на экран не влияют. Отказ любой из них — не ошибка приложения.
+         */
+        probeOutsideTemperature();
+        probeCoolantTemperature();
+    }
+
+    /**
+     * Температура за бортом: то же свойство, что и салон, зона «снаружи».
+     * Нужна тепловой модели — окружение подушки холоднее воздуха салона, и
+     * поправка считается от разницы с улицей.
+     *
+     * Логируется и raw, и пересчёт формулой салона: применима ли она к этой
+     * зоне, неизвестно, и решать это по одному числу на экране нельзя.
+     */
+    private void probeOutsideTemperature() {
+        try {
+            int raw = hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_OUTSIDE);
+            Double celsius = celsiusToPublish(raw);
+            log(celsius == null
+                    ? "за бортом: raw=" + raw + " — sentinel, данных нет"
+                    : "за бортом: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius)
+                            + " (формулой салона)");
+        } catch (Exception e) {
+            log("за бортом прочитать не удалось: " + e);
+        }
+    }
+
+    /**
+     * Температура ОЖ. В выборе уровня подогрева не участвует; пишется, чтобы
+     * потом связать прогрев салона с моментом, когда печка начинает отдавать
+     * тепло. Оба массива значений целиком: какой индекс несёт температуру на
+     * этой голове, из документации не следует.
+     */
+    private void probeCoolantTemperature() {
+        CarSensorManager manager = sensorManager;
+        if (manager == null) {
+            return;
+        }
+        try {
+            CarSensorEvent event = manager.getLatestSensorEvent(
+                    CarSensorManager.SENSOR_TYPE_ENGINE_COOLAN_TEMPERATURE);
+            log(event == null
+                    ? "ОЖ: getLatestSensorEvent вернул null"
+                    : "ОЖ: float=" + Arrays.toString(event.floatValues)
+                            + ", int=" + Arrays.toString(event.intValues));
+        } catch (Throwable t) {
+            log("ОЖ прочитать не удалось: " + t);
+        }
+    }
+
+    /**
+     * Что эта голова вообще отдаёт. Один раз на соединение: список нужен, чтобы
+     * не гадать про доступность датчиков по одной неудачной попытке чтения.
+     */
+    private void logSupportedSensors(CarSensorManager manager) {
+        try {
+            log("поддерживаемые сенсоры: " + Arrays.toString(manager.getSupportedSensors()));
+        } catch (Throwable t) {
+            log("список сенсоров недоступен: " + t);
         }
     }
 
