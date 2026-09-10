@@ -251,12 +251,14 @@ final class LogUiController implements TabController {
      * Лог в файл, а не в буфер обмена: на голове его некуда вставить — ни
      * почты, ни редактора, ни adb.
      *
-     * Пишем во все доступные места сразу, а не в одно «правильное»: заранее
-     * неизвестно, что окажется читаемым. getExternalFilesDirs даёт несколько
-     * каталогов, когда воткнута флешка, и тогда файл сразу на ней; Downloads
-     * виден файловому менеджеру головы, но требует выданного WRITE_EXTERNAL_
-     * STORAGE, которого приложение не запрашивает. Пути уходят в лог — их
-     * видно на экране, когда тост уже погас.
+     * Пишем на съёмные носители и в Downloads — туда, откуда файл реально
+     * забрать. Внутренняя память намеренно исключена: /sdcard/Android/data
+     * штатными средствами головы не открывается, и файл там всё равно что
+     * потерян. Downloads виден файловому менеджеру, но требует выданного
+     * WRITE_EXTERNAL_STORAGE, которого приложение не запрашивает, поэтому
+     * одной флешки может не оказаться достаточно — пишем в оба места.
+     *
+     * Пути уходят и в лог: тост гаснет, а прочитать, куда именно легло, нужно.
      */
     private void saveLog() {
         String name = "autoheat-log-"
@@ -265,9 +267,15 @@ final class LogUiController implements TabController {
         List<String> saved = new ArrayList<>();
 
         List<File> targets = new ArrayList<>();
-        for (File dir : activity.getExternalFilesDirs(null)) {
-            if (dir != null) {
-                targets.add(dir);
+        File[] appDirs = activity.getExternalFilesDirs(null);
+        /**
+         * Нулевой каталог — primary external, то есть /sdcard/Android/data;
+         * он пропускается. Все последующие появляются только при подключённом
+         * съёмном носителе, и разрешений они не требуют.
+         */
+        for (int i = 1; i < appDirs.length; i++) {
+            if (appDirs[i] != null) {
+                targets.add(appDirs[i]);
             }
         }
         targets.add(Environment.getExternalStoragePublicDirectory(
@@ -289,7 +297,7 @@ final class LogUiController implements TabController {
         }
 
         if (saved.isEmpty()) {
-            Toast.makeText(activity, "Лог сохранить не удалось — причина в логе",
+            Toast.makeText(activity, "Некуда сохранить — вставьте флешку (причина в логе)",
                     Toast.LENGTH_LONG).show();
             return;
         }
