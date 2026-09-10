@@ -1,11 +1,9 @@
 package com.wt.airconditioner;
 
 import android.app.Activity;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.PorterDuff;
+import android.os.Environment;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.CheckBox;
@@ -16,9 +14,19 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Date;
 import java.util.Deque;
 import java.util.List;
+import java.util.Locale;
 
 /** Локальное представление диагностического лога и debug-инжектора. */
 final class LogUiController implements TabController {
@@ -84,7 +92,7 @@ final class LogUiController implements TabController {
                 service.readCabinTemperature();
             }
         });
-        page.findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
+        page.findViewById(R.id.saveLog).setOnClickListener(v -> saveLog());
         page.findViewById(R.id.clearLog).setOnClickListener(v -> clearLog());
         page.findViewById(R.id.injectTemp).setOnClickListener(v -> injectTemperature());
         page.findViewById(R.id.restartCar).setOnClickListener(v -> {
@@ -239,14 +247,57 @@ final class LogUiController implements TabController {
         }
     }
 
-    private void copyLog() {
-        ClipboardManager clipboard =
-                (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboard == null) {
+    /**
+     * Лог в файл, а не в буфер обмена: на голове его некуда вставить — ни
+     * почты, ни редактора, ни adb.
+     *
+     * Пишем во все доступные места сразу, а не в одно «правильное»: заранее
+     * неизвестно, что окажется читаемым. getExternalFilesDirs даёт несколько
+     * каталогов, когда воткнута флешка, и тогда файл сразу на ней; Downloads
+     * виден файловому менеджеру головы, но требует выданного WRITE_EXTERNAL_
+     * STORAGE, которого приложение не запрашивает. Пути уходят в лог — их
+     * видно на экране, когда тост уже погас.
+     */
+    private void saveLog() {
+        String name = "autoheat-log-"
+                + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + ".txt";
+        String text = logText();
+        List<String> saved = new ArrayList<>();
+
+        List<File> targets = new ArrayList<>();
+        for (File dir : activity.getExternalFilesDirs(null)) {
+            if (dir != null) {
+                targets.add(dir);
+            }
+        }
+        targets.add(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS));
+
+        for (File dir : targets) {
+            File file = new File(dir, name);
+            try (Writer writer = new OutputStreamWriter(
+                    new FileOutputStream(file), StandardCharsets.UTF_8)) {
+                writer.write(text);
+                saved.add(file.getAbsolutePath());
+            } catch (IOException | SecurityException e) {
+                /**
+                 * Ожидаемо для Downloads без разрешения и для отсутствующей
+                 * флешки: неудача одного места не отменяет остальные.
+                 */
+                log("не сохранилось в " + dir + ": " + e);
+            }
+        }
+
+        if (saved.isEmpty()) {
+            Toast.makeText(activity, "Лог сохранить не удалось — причина в логе",
+                    Toast.LENGTH_LONG).show();
             return;
         }
-        clipboard.setPrimaryClip(ClipData.newPlainText("AutoHeat", logText()));
-        Toast.makeText(activity, "Лог скопирован", Toast.LENGTH_SHORT).show();
+        for (String path : saved) {
+            log("лог сохранён: " + path);
+        }
+        Toast.makeText(activity, "Сохранено (" + saved.size() + "): " + saved.get(0),
+                Toast.LENGTH_LONG).show();
     }
 
     private String logText() {
