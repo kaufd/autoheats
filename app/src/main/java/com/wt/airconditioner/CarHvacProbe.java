@@ -107,6 +107,40 @@ public class CarHvacProbe {
      */
     private Integer lastZoneRaw;
 
+    /**
+     * Последние прочитанные значения — их забирает ряд калибровки в сервисе.
+     * Здесь, а не в listener: сервис снимает их по своему таймеру, и городить
+     * ради этого ещё один колбэк не за чем.
+     */
+    private Integer lastCabinRaw;
+    private float[] lastCoolantFloats;
+    private int[] lastCoolantInts;
+
+    /**
+     * Об отказе чтения сообщаем один раз, а не каждый снимок: недоступная зона
+     * или отсутствующий датчик — состояние, а не событие, и повторять его в
+     * логе раз в полминуты значит потерять всё остальное.
+     */
+    private boolean cabinFailureLogged;
+    private boolean outsideFailureLogged;
+    private boolean coolantFailureLogged;
+
+    Integer lastCabinRaw() {
+        return lastCabinRaw;
+    }
+
+    Integer lastOutsideRaw() {
+        return lastZoneRaw;
+    }
+
+    float[] lastCoolantFloats() {
+        return lastCoolantFloats;
+    }
+
+    int[] lastCoolantInts() {
+        return lastCoolantInts;
+    }
+
     private final CarHvacManager.CarHvacEventCallback hvacCallback =
             new CarHvacManager.CarHvacEventCallback() {
                 @Override
@@ -519,15 +553,38 @@ public class CarHvacProbe {
      * зоне, неизвестно, и решать это по одному числу на экране нельзя.
      */
     private void probeOutsideTemperature() {
+        Integer raw = readOutsideRaw();
+        if (raw == null) {
+            return;
+        }
+        Double celsius = celsiusToPublish(raw);
+        log(celsius == null
+                ? "за бортом: raw=" + raw + " — sentinel, данных нет"
+                : "за бортом: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius)
+                        + " (формулой салона)");
+    }
+
+    /**
+     * Тихое чтение: значение уходит в поле, в лог — ничего, кроме первой
+     * неудачи. Ряд калибровки снимается раз в полминуты, и говорливая версия
+     * забила бы кольцевой буфер за час.
+     */
+    private Integer readOutsideRaw() {
         try {
             int raw = hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_OUTSIDE);
-            Double celsius = celsiusToPublish(raw);
-            log(celsius == null
-                    ? "за бортом: raw=" + raw + " — sentinel, данных нет"
-                    : "за бортом: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius)
-                            + " (формулой салона)");
+            /**
+             * Заодно гасит повтор от подписки: то же значение событием писать
+             * уже незачем, а по кнопке человек ждёт ответа в любом случае.
+             */
+            lastZoneRaw = raw;
+            outsideFailureLogged = false;
+            return raw;
         } catch (Exception e) {
-            log("за бортом прочитать не удалось: " + e);
+            if (!outsideFailureLogged) {
+                outsideFailureLogged = true;
+                log("за бортом прочитать не удалось: " + e);
+            }
+            return null;
         }
     }
 
@@ -538,20 +595,61 @@ public class CarHvacProbe {
      * этой голове, из документации не следует.
      */
     private void probeCoolantTemperature() {
+        if (!readCoolant()) {
+            return;
+        }
+        log("ОЖ: float=" + Arrays.toString(lastCoolantFloats)
+                + ", int=" + Arrays.toString(lastCoolantInts));
+    }
+
+    /** Тихое чтение ОЖ; false — значения нет, причина в логе не повторяется. */
+    private boolean readCoolant() {
         CarSensorManager manager = sensorManager;
         if (manager == null) {
-            return;
+            return false;
         }
         try {
             CarSensorEvent event = manager.getLatestSensorEvent(
                     CarSensorManager.SENSOR_TYPE_ENGINE_COOLAN_TEMPERATURE);
-            log(event == null
-                    ? "ОЖ: getLatestSensorEvent вернул null"
-                    : "ОЖ: float=" + Arrays.toString(event.floatValues)
-                            + ", int=" + Arrays.toString(event.intValues));
+            if (event == null) {
+                if (!coolantFailureLogged) {
+                    coolantFailureLogged = true;
+                    log("ОЖ: getLatestSensorEvent вернул null");
+                }
+                return false;
+            }
+            lastCoolantFloats = event.floatValues;
+            lastCoolantInts = event.intValues;
+            coolantFailureLogged = false;
+            return true;
         } catch (Throwable t) {
-            log("ОЖ прочитать не удалось: " + t);
+            if (!coolantFailureLogged) {
+                coolantFailureLogged = true;
+                log("ОЖ прочитать не удалось: " + t);
+            }
+            return false;
         }
+    }
+
+    /**
+     * Тихий снимок для ряда калибровки. Температура салона по-прежнему уходит
+     * в listener — от неё зависят экран и каскад, а подписка HVAC может и не
+     * оформиться; забортная и ОЖ идут только в поля.
+     */
+    public void sample() {
+        if (!isHvacReady()) {
+            return;
+        }
+        try {
+            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE));
+        } catch (Exception e) {
+            if (!cabinFailureLogged) {
+                cabinFailureLogged = true;
+                log("ОШИБКА чтения температуры: " + e);
+            }
+        }
+        readOutsideRaw();
+        readCoolant();
     }
 
     /**
@@ -666,9 +764,15 @@ public class CarHvacProbe {
      * рабочую температуру значило бы соврать об исправности датчика.
      */
     private void publishTemperature(Object rawValue) {
+        cabinFailureLogged = false;
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
             Integer raw = parseRaw(rawValue);
+            /**
+             * Sentinel тоже в ряд: «датчик молчал» — сведение, которое при
+             * разборе записи не должно выглядеть как отсутствие строки.
+             */
+            lastCabinRaw = raw;
             log(raw == null
                     ? "температура проигнорирована: неожиданный тип значения (" + rawValue + ")"
                     : "температура проигнорирована: sentinel raw=" + raw + " (нет данных с датчика)");
@@ -676,6 +780,7 @@ public class CarHvacProbe {
         }
         final int raw = parseRaw(rawValue);
         final double value = celsius;
+        lastCabinRaw = raw;
         mainHandler.post(() -> listener.onCabinTemperature(value, raw));
     }
 

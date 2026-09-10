@@ -15,14 +15,18 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
 import java.util.Deque;
 import java.util.List;
@@ -247,6 +251,28 @@ final class LogUiController implements TabController {
         }
     }
 
+    /** Накопленные ряды калибровки во внутренней памяти приложения. */
+    private List<File> calibrationFiles() {
+        File directory = activity.getExternalFilesDir(null);
+        File[] files = directory == null ? null : directory.listFiles(
+                (dir, name) -> name.endsWith(CalibrationLog.EXTENSION));
+        return files == null ? new ArrayList<>() : Arrays.asList(files);
+    }
+
+    private boolean copy(File from, File to) {
+        try (InputStream in = new FileInputStream(from);
+                OutputStream out = new FileOutputStream(to)) {
+            byte[] buffer = new byte[8192];
+            for (int read; (read = in.read(buffer)) > 0; ) {
+                out.write(buffer, 0, read);
+            }
+            return true;
+        } catch (IOException | SecurityException e) {
+            log("не скопировался " + from.getName() + ": " + e);
+            return false;
+        }
+    }
+
     /**
      * Лог в файл, а не в буфер обмена: на голове его некуда вставить — ни
      * почты, ни редактора, ни adb.
@@ -281,6 +307,7 @@ final class LogUiController implements TabController {
         targets.add(Environment.getExternalStoragePublicDirectory(
                 Environment.DIRECTORY_DOWNLOADS));
 
+        List<File> series = calibrationFiles();
         for (File dir : targets) {
             File file = new File(dir, name);
             try (Writer writer = new OutputStreamWriter(
@@ -293,6 +320,16 @@ final class LogUiController implements TabController {
                  * флешки: неудача одного места не отменяет остальные.
                  */
                 log("не сохранилось в " + dir + ": " + e);
+            }
+            /**
+             * Ряды калибровки копятся во внутренней памяти сами; наружу их
+             * выносит только эта кнопка — вместе с логом, одним движением.
+             */
+            for (File csv : series) {
+                File copy = new File(dir, csv.getName());
+                if (copy(csv, copy)) {
+                    saved.add(copy.getAbsolutePath());
+                }
             }
         }
 

@@ -9,8 +9,11 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Binder;
 import android.os.Build;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -85,6 +88,37 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     /** Решения о зажигании: была ли поездка и выключены ли сиденья. */
     private final IgnitionSession session = new IgnitionSession();
 
+    /**
+     * Шаг ряда калибровки. Постоянная времени подушки — около двух минут, так
+     * что минутные отсчёты уже размывают разгон, а чаще нет смысла: датчик
+     * воздуха всё равно обновляется медленнее.
+     */
+    private static final long SAMPLE_INTERVAL_MS = 30_000L;
+
+    private final Handler sampler = new Handler(Looper.getMainLooper());
+    private CalibrationLog calibrationLog;
+
+    /** Последнее известное зажигание — в ряд; решения принимает IgnitionSession. */
+    private Boolean ignitionOn;
+
+    /** Последний записанный в лог raw: события приходят чаще, чем меняется значение. */
+    private Integer loggedCabinRaw;
+
+    private boolean calibrationFailureLogged;
+
+    /**
+     * Снимок по таймеру. Читаем сами, а не ждём события HVAC: в неподвижном
+     * салоне их может не быть часами, а ряд нужен равномерный.
+     */
+    private final Runnable sampleTick = new Runnable() {
+        @Override
+        public void run() {
+            probe.sample();
+            recordSample("tick");
+            sampler.postDelayed(this, SAMPLE_INTERVAL_MS);
+        }
+    };
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -95,6 +129,47 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         presets = new PresetStore(this);
         autoHeat = new AutoHeatEngine(new HandlerScheduler(), this::onLog);
         probe = new CarHvacProbe(this, this);
+        startCalibrationLog();
+    }
+
+    /**
+     * Ряд пишется во внутреннюю память, а не на флешку: он должен вестись
+     * всегда, а не только когда носитель воткнут. На флешку его выгружает
+     * кнопка «Сохранить» — там же, где диагностический лог.
+     */
+    private void startCalibrationLog() {
+        File directory = getExternalFilesDir(null);
+        if (directory == null) {
+            onLog("ВНИМАНИЕ: ряд калибровки не ведётся — внешнее хранилище недоступно");
+            return;
+        }
+        calibrationLog = new CalibrationLog(directory);
+        onLog("ряд калибровки: " + calibrationLog.file().getName());
+        sampler.postDelayed(sampleTick, SAMPLE_INTERVAL_MS);
+    }
+
+    /**
+     * Строка ряда. Значения берём из пробника, а не из полей экрана: там уже
+     * пересчитанное, а для подгонки модели нужно сырьё.
+     */
+    private void recordSample(String reason) {
+        if (calibrationLog == null) {
+            return;
+        }
+        CalibrationLog.Sample sample = new CalibrationLog.Sample();
+        sample.reason = reason;
+        sample.cabinRaw = probe.lastCabinRaw();
+        sample.cabinCelsius = lastCelsius;
+        sample.outsideRaw = probe.lastOutsideRaw();
+        sample.coolantFloats = probe.lastCoolantFloats();
+        sample.coolantInts = probe.lastCoolantInts();
+        sample.driverLevel = levels.get(Seat.DRIVER);
+        sample.passengerLevel = levels.get(Seat.PASSENGER);
+        sample.ignitionOn = ignitionOn;
+        if (!calibrationLog.append(sample) && !calibrationFailureLogged) {
+            calibrationFailureLogged = true;
+            onLog("ВНИМАНИЕ: ряд калибровки не пишется — " + calibrationLog.file());
+        }
     }
 
     @Override
@@ -117,6 +192,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
          * Единственный метод, который может застать поля незаполненными:
          * остальные пути идут после успешного onCreate и проверок не требуют.
          */
+        sampler.removeCallbacks(sampleTick);
         if (autoHeat != null) {
             autoHeat.stopAll();
         }
@@ -170,6 +246,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         }
         levels.put(seat, level);
         notifySeatLevel(seat, level);
+        recordSample("level");
         return true;
     }
 
@@ -389,7 +466,15 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     @Override
     public void onCabinTemperature(double celsius, int raw) {
         lastCelsius = celsius;
-        onLog("температура: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius));
+        /**
+         * Только при изменении: события идут и от подписки, и от снимков раз в
+         * полминуты, а буфер лога — 500 строк. Ряд калибровки пишет каждое
+         * значение независимо, там пропусков не будет.
+         */
+        if (loggedCabinRaw == null || loggedCabinRaw != raw) {
+            loggedCabinRaw = raw;
+            onLog("температура: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius));
+        }
         autoHeat.setTemperature(celsius);
         UiListener listener = uiListener;
         if (listener != null) {
@@ -406,6 +491,12 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
     @Override
     public void onIgnition(boolean on) {
+        ignitionOn = on;
+        /**
+         * До обработки: строка фиксирует момент события с уровнями, какими они
+         * были. Их изменение запишется своими строками из setSeatHeat.
+         */
+        recordSample("ignition");
         switch (session.onIgnition(on)) {
             case START_HEAT:
                 onLog("зажигание ON — с этого момента выключение по зажиганию активно");
