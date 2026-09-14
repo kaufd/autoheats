@@ -9,6 +9,7 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
+import java.util.function.IntFunction;
 
 /**
  * Ряд измерений для калибровки тепловой модели: время, температуры воздуха,
@@ -85,8 +86,15 @@ final class CalibrationLog {
 
     /** Имя по времени создания: перезапуск сервиса начинает новый файл. */
     CalibrationLog(File directory) {
-        String stamp = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
-        this.file = new File(directory, PREFIX + stamp + EXTENSION);
+        this.file = new File(directory, PREFIX + stamp() + EXTENSION);
+    }
+
+    /**
+     * Штамп для имени файла. Общий с кнопкой «Сохранить»: ряд и лог одной
+     * поездки должны сортироваться рядом в файловом менеджере головы.
+     */
+    static String stamp() {
+        return new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date());
     }
 
     File file() {
@@ -142,11 +150,15 @@ final class CalibrationLog {
                 + seat + "_model_level";
     }
 
-    /** Пять полей всегда: без модели они пустые, и столбцы не съезжают. */
+    /** Столько колонок отдаёт modelHeader; без модели они пустые. */
+    private static final int MODEL_COLUMNS = 5;
+
+    /** Все колонки всегда: без модели они пустые, и столбцы не съезжают. */
     private static void appendModel(StringBuilder text, Model model) {
         if (model == null) {
-            text.append(SEPARATOR).append(SEPARATOR).append(SEPARATOR).append(SEPARATOR)
-                    .append(SEPARATOR);
+            for (int i = 0; i < MODEL_COLUMNS; i++) {
+                text.append(SEPARATOR);
+            }
             return;
         }
         text.append(SEPARATOR).append(celsius(model.baseLow));
@@ -169,29 +181,21 @@ final class CalibrationLog {
      * этой голове, неизвестно, и выбирать один из них до проверки нельзя.
      */
     private static String text(float[] values) {
-        if (values == null || values.length == 0) {
-            return "";
-        }
-        StringBuilder text = new StringBuilder();
-        for (float value : values) {
-            if (text.length() > 0) {
-                text.append(' ');
-            }
-            text.append(String.format(Locale.US, "%.2f", value));
-        }
-        return text.toString();
+        return values == null ? "" : join(values.length,
+                i -> String.format(Locale.US, "%.2f", values[i]));
     }
 
     private static String text(int[] values) {
-        if (values == null || values.length == 0) {
-            return "";
-        }
+        return values == null ? "" : join(values.length, i -> String.valueOf(values[i]));
+    }
+
+    private static String join(int length, IntFunction<String> at) {
         StringBuilder text = new StringBuilder();
-        for (int value : values) {
-            if (text.length() > 0) {
+        for (int i = 0; i < length; i++) {
+            if (i > 0) {
                 text.append(' ');
             }
-            text.append(value);
+            text.append(at.apply(i));
         }
         return text.toString();
     }

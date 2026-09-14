@@ -19,6 +19,8 @@ import android.os.SystemClock;
 
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -137,11 +139,27 @@ public class CarHvacProbe {
     /**
      * Об отказе чтения сообщаем один раз, а не каждый снимок: недоступная зона
      * или отсутствующий датчик — состояние, а не событие, и повторять его в
-     * логе раз в полминуты значит потерять всё остальное.
+     * логе раз в полминуты значит потерять всё остальное. Ключи каналов, о чьём
+     * отказе уже сказано; успешное чтение снимает отметку через forgetFailure.
+     *
+     * Конкурентное множество: чтения идут и с главного потока (снимок по
+     * таймеру), и с потока колбэков Car.
      */
-    private boolean cabinFailureLogged;
-    private boolean outsideFailureLogged;
-    private boolean coolantFailureLogged;
+    private final Set<String> loggedFailures = ConcurrentHashMap.newKeySet();
+
+    private static final String CABIN = "cabin";
+    private static final String OUTSIDE = "outside";
+    private static final String COOLANT = "coolant";
+
+    private void logOnce(String channel, String message) {
+        if (loggedFailures.add(channel)) {
+            log(message);
+        }
+    }
+
+    private void forgetFailure(String channel) {
+        loggedFailures.remove(channel);
+    }
 
     Integer lastCabinRaw() {
         return lastCabinRaw;
@@ -534,21 +552,58 @@ public class CarHvacProbe {
 
     /** Разовое чтение температуры салона; результат уходит в listener. */
     public void readCabinTemperature() {
+        read(true);
+    }
+
+    /**
+     * Тихий снимок для ряда калибровки. Температура салона по-прежнему уходит
+     * в listener — от неё зависят экран и каскад, а подписка HVAC может и не
+     * оформиться; забортная и ОЖ идут только в поля.
+     */
+    public void sample() {
+        read(false);
+    }
+
+    /**
+     * Единственный путь чтения всех трёх каналов. verbose — чтение по кнопке:
+     * человек ждёт ответа, поэтому строки пишутся на каждый результат, включая
+     * повтор и повторный отказ. На снимке раз в полминуты в лог уходит только
+     * первый отказ канала — иначе ночь стоянки вытеснит из буфера всё.
+     *
+     * Забортная и ОЖ — только в лог и в поля: обе величины пока
+     * исследовательские, ни на подогрев, ни на экран не влияют, и отказ любой
+     * из них не ошибка приложения.
+     */
+    private void read(boolean verbose) {
         if (!isHvacReady()) {
-            log("readCabinTemperature пропущено: HVAC не готов");
+            if (verbose) {
+                log("readCabinTemperature пропущено: HVAC не готов");
+            }
             return;
         }
         try {
-            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), true);
+            publishTemperature(
+                    hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), verbose);
         } catch (Exception e) {
-            log("ОШИБКА чтения температуры: " + e);
+            String message = "ОШИБКА чтения температуры: " + e;
+            if (verbose) {
+                log(message);
+            } else {
+                logOnce(CABIN, message);
+            }
         }
-        /**
-         * Только в лог: обе величины пока исследовательские, ни на подогрев,
-         * ни на экран не влияют. Отказ любой из них — не ошибка приложения.
-         */
-        probeOutsideTemperature();
-        probeCoolantTemperature();
+        Integer outside = readOutsideRaw();
+        if (verbose && outside != null) {
+            Double celsius = outsideCelsius(outside);
+            log(celsius == null
+                    ? "за бортом: raw=" + outside + " — sentinel, данных нет"
+                    : "за бортом: raw=" + outside + " → "
+                            + TemperatureConstants.celsiusText(celsius));
+        }
+        if (readCoolant() && verbose) {
+            log("ОЖ: float=" + Arrays.toString(lastCoolantFloats)
+                    + ", int=" + Arrays.toString(lastCoolantInts));
+        }
     }
 
     /**
@@ -579,24 +634,8 @@ public class CarHvacProbe {
      * Нужна тепловой модели — окружение подушки холоднее воздуха салона, и
      * поправка считается от разницы с улицей.
      *
-     * Логируется и raw: ряд калибровки хранит именно его, и пересчёт в логе
-     * должен сверяться с рядом.
-     */
-    private void probeOutsideTemperature() {
-        Integer raw = readOutsideRaw();
-        if (raw == null) {
-            return;
-        }
-        Double celsius = outsideCelsius(raw);
-        log(celsius == null
-                ? "за бортом: raw=" + raw + " — sentinel, данных нет"
-                : "за бортом: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius));
-    }
-
-    /**
-     * Тихое чтение: значение уходит в поле, в лог — ничего, кроме первой
-     * неудачи. Ряд калибровки снимается раз в полминуты, и говорливая версия
-     * забила бы кольцевой буфер за час.
+     * Значение уходит в поле; в лог его пишет read(true), и вместе с raw: ряд
+     * калибровки хранит именно его, и пересчёт в логе должен сверяться с рядом.
      */
     private Integer readOutsideRaw() {
         try {
@@ -607,32 +646,22 @@ public class CarHvacProbe {
              */
             lastZoneRaw = raw;
             lastOutsideAtMs = SystemClock.elapsedRealtime();
-            outsideFailureLogged = false;
+            forgetFailure(OUTSIDE);
             return raw;
         } catch (Exception e) {
-            if (!outsideFailureLogged) {
-                outsideFailureLogged = true;
-                log("за бортом прочитать не удалось: " + e);
-            }
+            logOnce(OUTSIDE, "за бортом прочитать не удалось: " + e);
             return null;
         }
     }
 
     /**
-     * Температура ОЖ. В выборе уровня подогрева не участвует; пишется, чтобы
+     * Температура ОЖ. В выборе уровня подогрева не участвует; читается, чтобы
      * потом связать прогрев салона с моментом, когда печка начинает отдавать
      * тепло. Оба массива значений целиком: какой индекс несёт температуру на
      * этой голове, из документации не следует.
+     *
+     * false — значения нет, причина в логе не повторяется.
      */
-    private void probeCoolantTemperature() {
-        if (!readCoolant()) {
-            return;
-        }
-        log("ОЖ: float=" + Arrays.toString(lastCoolantFloats)
-                + ", int=" + Arrays.toString(lastCoolantInts));
-    }
-
-    /** Тихое чтение ОЖ; false — значения нет, причина в логе не повторяется. */
     private boolean readCoolant() {
         CarSensorManager manager = sensorManager;
         if (manager == null) {
@@ -642,44 +671,17 @@ public class CarHvacProbe {
             CarSensorEvent event = manager.getLatestSensorEvent(
                     CarSensorManager.SENSOR_TYPE_ENGINE_COOLAN_TEMPERATURE);
             if (event == null) {
-                if (!coolantFailureLogged) {
-                    coolantFailureLogged = true;
-                    log("ОЖ: getLatestSensorEvent вернул null");
-                }
+                logOnce(COOLANT, "ОЖ: getLatestSensorEvent вернул null");
                 return false;
             }
             lastCoolantFloats = event.floatValues;
             lastCoolantInts = event.intValues;
-            coolantFailureLogged = false;
+            forgetFailure(COOLANT);
             return true;
         } catch (Throwable t) {
-            if (!coolantFailureLogged) {
-                coolantFailureLogged = true;
-                log("ОЖ прочитать не удалось: " + t);
-            }
+            logOnce(COOLANT, "ОЖ прочитать не удалось: " + t);
             return false;
         }
-    }
-
-    /**
-     * Тихий снимок для ряда калибровки. Температура салона по-прежнему уходит
-     * в listener — от неё зависят экран и каскад, а подписка HVAC может и не
-     * оформиться; забортная и ОЖ идут только в поля.
-     */
-    public void sample() {
-        if (!isHvacReady()) {
-            return;
-        }
-        try {
-            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), false);
-        } catch (Exception e) {
-            if (!cabinFailureLogged) {
-                cabinFailureLogged = true;
-                log("ОШИБКА чтения температуры: " + e);
-            }
-        }
-        readOutsideRaw();
-        readCoolant();
     }
 
     /**
@@ -796,7 +798,7 @@ public class CarHvacProbe {
      * @param requested чтение по кнопке: человек ждёт ответа и на повтор
      */
     private void publishTemperature(Object rawValue, boolean requested) {
-        cabinFailureLogged = false;
+        forgetFailure(CABIN);
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
             Integer raw = parseRaw(rawValue);

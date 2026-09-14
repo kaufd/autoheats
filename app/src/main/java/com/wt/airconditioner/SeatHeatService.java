@@ -227,8 +227,12 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
             }
 
             @Override
-            public void save(Seat seat, String snapshot) {
-                preferences.edit().putString("snapshot_" + seat.name(), snapshot).apply();
+            public void save(Map<Seat, String> snapshots) {
+                SharedPreferences.Editor editor = preferences.edit();
+                for (Map.Entry<Seat, String> entry : snapshots.entrySet()) {
+                    editor.putString("snapshot_" + entry.getKey().name(), entry.getValue());
+                }
+                editor.apply();
             }
         };
     }

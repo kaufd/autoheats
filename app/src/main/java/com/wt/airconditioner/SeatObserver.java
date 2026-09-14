@@ -62,7 +62,8 @@ final class SeatObserver {
      */
     private static final double SETTLE_MINUTES = 2.0;
 
-    private static final double MINUTE_MS = 60_000.0;
+    /** package-private: этой же минутой оболочка меряет время со смены уровня. */
+    static final double MINUTE_MS = 60_000.0;
 
     /** Банк раздела 6 спецификации: p, r, множитель cₐ. */
     private static final double[][] HEAT_EXCHANGE = {

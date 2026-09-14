@@ -1,6 +1,7 @@
 package com.wt.airconditioner;
 
 import java.util.EnumMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
@@ -16,12 +17,16 @@ import java.util.Map;
  */
 final class ModelShadow {
 
-    /** Где лежит снимок сиденья между перезапусками процесса. */
+    /** Где лежат снимки сидений между перезапусками процесса. */
     interface Store {
         /** null — снимка нет. */
         String load(Seat seat);
 
-        void save(Seat seat, String snapshot);
+        /**
+         * Оба сиденья разом: снимок пишется на каждом обновлении, а посидельная
+         * запись означала бы два полных перезаписывания файла настроек подряд.
+         */
+        void save(Map<Seat, String> snapshots);
     }
 
     /** Обычный выбор уровня — раз в минуту, раздел 5 спецификации модели. */
@@ -97,11 +102,13 @@ final class ModelShadow {
             return null;
         }
         SeatObserver observer = observers.get(seat);
+        SeatObserver.Range base = observer.base();
+        SeatObserver.Range bank = observer.bank();
         CalibrationLog.Model model = new CalibrationLog.Model();
-        model.baseLow = observer.base().low;
-        model.baseHigh = observer.base().high;
-        model.bankLow = observer.bank().low;
-        model.bankHigh = observer.bank().high;
+        model.baseLow = base.low;
+        model.baseHigh = base.high;
+        model.bankLow = bank.low;
+        model.bankHigh = bank.high;
         SeatThermostat.Decision decision = decisions.get(seat);
         model.level = decision == null ? null : decision.level;
         return model;
@@ -152,9 +159,11 @@ final class ModelShadow {
                         cabinCelsius, outsideCelsius);
             }
         }
+        Map<Seat, String> snapshots = new EnumMap<>(Seat.class);
         for (Seat seat : Seat.values()) {
-            store.save(seat, observers.get(seat).encode(wallMs));
+            snapshots.put(seat, observers.get(seat).encode(wallMs));
         }
+        store.save(snapshots);
         return true;
     }
 
@@ -174,7 +183,9 @@ final class ModelShadow {
             SeatObserver observer = observers.get(seat);
             Integer known = levels.get(seat);
             int current = known == null ? 0 : known;
-            boolean coast = SeatThermostat.mustCoast(observer.scenarios(), current);
+            /** Список строится заново на каждый вызов, а внутри цикла не меняется. */
+            List<SeatThermostat.Scenario> scenarios = observer.scenarios();
+            boolean coast = SeatThermostat.mustCoast(scenarios, current);
             boolean wasCoasting = Boolean.TRUE.equals(coasting.put(seat, coast));
             if (coast && !wasCoasting) {
                 publish(seat, new SeatThermostat.Decision(0, COAST_REASON), observer);
@@ -183,8 +194,8 @@ final class ModelShadow {
                 Long changedAt = levelChangedAtMs.get(seat);
                 double sinceChange = changedAt == null
                         ? Double.POSITIVE_INFINITY
-                        : (elapsedMs - changedAt) / 60_000.0;
-                publish(seat, SeatThermostat.choose(observer.scenarios(), current, sinceChange,
+                        : (elapsedMs - changedAt) / SeatObserver.MINUTE_MS;
+                publish(seat, SeatThermostat.choose(scenarios, current, sinceChange,
                         cabinCelsius), observer);
             }
         }

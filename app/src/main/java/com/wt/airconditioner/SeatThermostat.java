@@ -231,7 +231,8 @@ final class SeatThermostat {
         for (int level : plan) {
             for (int substep = 0; substep < subdivisions; substep++) {
                 SeatThermalModel.State before = state;
-                state = SeatThermalModel.advance(state, level, scenario.environment,
+                /** Сценарии и уровни планов проверены выше — см. usable, maxLevel. */
+                state = SeatThermalModel.advanceValid(state, level, scenario.environment,
                         scenario.parameters, dt);
                 total += dt * (discomfort(before.surface) + discomfort(state.surface)) / 2;
                 peak = Math.max(peak, state.surface);

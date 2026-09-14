@@ -32,11 +32,11 @@ public class ModelShadowTest {
         }
 
         @Override
-        public void save(Seat seat, String snapshot) {
+        public void save(Map<Seat, String> saved) {
             if (failing) {
                 throw new IllegalStateException("диск");
             }
-            snapshots.put(seat, snapshot);
+            snapshots.putAll(saved);
         }
     }
 

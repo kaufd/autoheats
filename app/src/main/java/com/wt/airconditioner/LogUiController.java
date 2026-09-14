@@ -15,22 +15,18 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.Deque;
 import java.util.List;
-import java.util.Locale;
 
 /** Локальное представление диагностического лога и debug-инжектора. */
 final class LogUiController implements TabController {
@@ -260,12 +256,8 @@ final class LogUiController implements TabController {
     }
 
     private boolean copy(File from, File to) {
-        try (InputStream in = new FileInputStream(from);
-                OutputStream out = new FileOutputStream(to)) {
-            byte[] buffer = new byte[8192];
-            for (int read; (read = in.read(buffer)) > 0; ) {
-                out.write(buffer, 0, read);
-            }
+        try {
+            Files.copy(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING);
             return true;
         } catch (IOException | SecurityException e) {
             log("не скопировался " + from.getName() + ": " + e);
@@ -287,8 +279,8 @@ final class LogUiController implements TabController {
      * Пути уходят и в лог: тост гаснет, а прочитать, куда именно легло, нужно.
      */
     private void saveLog() {
-        String name = "autoheat-log-"
-                + new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(new Date()) + ".txt";
+        /** Штамп общий с рядом калибровки: в файловом менеджере они лягут рядом. */
+        String name = "autoheat-log-" + CalibrationLog.stamp() + ".txt";
         String text = logText();
         List<String> saved = new ArrayList<>();
 
@@ -326,9 +318,9 @@ final class LogUiController implements TabController {
              * выносит только эта кнопка — вместе с логом, одним движением.
              */
             for (File csv : series) {
-                File copy = new File(dir, csv.getName());
-                if (copy(csv, copy)) {
-                    saved.add(copy.getAbsolutePath());
+                File target = new File(dir, csv.getName());
+                if (copy(csv, target)) {
+                    saved.add(target.getAbsolutePath());
                 }
             }
         }

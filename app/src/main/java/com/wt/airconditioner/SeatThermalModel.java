@@ -80,6 +80,16 @@ final class SeatThermalModel {
                 || level < 0 || level > 3 || !Double.isFinite(minutes) || minutes < 0) {
             throw new IllegalArgumentException("недопустимый вход тепловой модели");
         }
+        return advanceValid(state, level, environment, parameters, minutes);
+    }
+
+    /**
+     * То же без проверок — для перебора планов, где вход проверен один раз на
+     * входе в термостат. Проверять его заново на каждом из десятков тысяч шагов
+     * значит тратить треть расчёта, а он идёт в главном потоке головы.
+     */
+    static State advanceValid(State state, int level, double environment, Parameters parameters,
+            double minutes) {
         double remaining = minutes;
         while (remaining > 1e-10) {
             double dt = Math.min(remaining, stepBound(parameters));
