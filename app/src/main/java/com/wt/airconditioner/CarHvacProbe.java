@@ -39,6 +39,9 @@ public class CarHvacProbe {
 
     private static final int AREA_INSIDE = VehicleAreaInOutCAR.InOutCAR_INSIDE;
 
+    /** Однобайтовое «нет данных»; выше него значений не бывает. */
+    private static final int NO_DATA_RAW = 255;
+
     /**
      * Зона «за бортом». Объявлена в SDK, но отдаёт ли её голова — неизвестно:
      * это и выясняет пробник в readCabinTemperature.
@@ -760,19 +763,27 @@ public class CarHvacProbe {
 
     /**
      * Формула датчика головы: (raw - 84) / 2 = °C. Значение приходит числом ИЛИ
-     * строкой, а raw < 0 — sentinel «нет данных», а не -42 °C: показать его как
-     * рабочую температуру значило бы соврать об исправности датчика.
+     * строкой, а sentinel «нет данных» (см. celsiusToPublish) — не температура:
+     * показать его как рабочую значило бы соврать об исправности датчика.
      */
     private void publishTemperature(Object rawValue) {
         cabinFailureLogged = false;
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
             Integer raw = parseRaw(rawValue);
+            boolean repeated = raw != null && raw.equals(lastCabinRaw);
             /**
              * Sentinel тоже в ряд: «датчик молчал» — сведение, которое при
              * разборе записи не должно выглядеть как отсутствие строки.
              */
             lastCabinRaw = raw;
+            /**
+             * 255 голова шлёт всю стоянку, пока не спит, а снимок идёт раз в
+             * полминуты: ночь таких строк вытеснила бы из буфера лога всё.
+             */
+            if (repeated) {
+                return;
+            }
             log(raw == null
                     ? "температура проигнорирована: неожиданный тип значения (" + rawValue + ")"
                     : "температура проигнорирована: sentinel raw=" + raw + " (нет данных с датчика)");
@@ -786,12 +797,16 @@ public class CarHvacProbe {
 
     /**
      * Единственное место, где решается, показывать ли температуру. null — не
-     * публиковать: значение не разобралось или пришёл sentinel raw < 0. Отдельно
-     * — чтобы проверялось тестом: на эмуляторе путь недостижим.
+     * публиковать: значение не разобралось или пришёл sentinel. Отдельно — чтобы
+     * проверялось тестом: на эмуляторе путь недостижим.
+     *
+     * Sentinel двух видов: raw < 0 и 255 — байт без данных. 255 голова шлёт на
+     * стоянке и первые секунды после пробуждения, и без отсева он уходил в
+     * каскад как «салон 85.5 °C» (замер 14.09, раздел 7 спецификации модели).
      */
     static Double celsiusToPublish(Object rawValue) {
         Integer raw = parseRaw(rawValue);
-        if (raw == null || raw < 0) {
+        if (raw == null || raw < 0 || raw >= NO_DATA_RAW) {
             return null;
         }
         return (raw - 84) / 2.0;

@@ -66,6 +66,18 @@ public class CarHvacProbeTest {
     }
 
     @Test
+    public void doesNotPublishNoDataByte() {
+        /**
+         * Замер 14.09: на стоянке и после пробуждения голова шлёт 255, и он
+         * уходил в каскад как «салон 85.5 °C». Граница — ровно 255: 254 ещё
+         * разбирается как температура.
+         */
+        assertNull(CarHvacProbe.celsiusToPublish(255));
+        assertNull(CarHvacProbe.celsiusToPublish("255"));
+        assertEquals(Double.valueOf(85.0), CarHvacProbe.celsiusToPublish(254));
+    }
+
+    @Test
     public void doesNotPublishUnparseableValue() {
         assertNull(CarHvacProbe.celsiusToPublish("нет данных"));
         assertNull(CarHvacProbe.celsiusToPublish(null));
@@ -116,7 +128,7 @@ public class CarHvacProbeTest {
     @Test
     public void publishesZeroRawAsItsRealValue() {
         /**
-         * raw = 0 валиден (-42 °C): sentinel — это строго отрицательное.
+         * raw = 0 валиден (-42 °C): снизу sentinel — строго отрицательное.
          */
         assertEquals(Double.valueOf(-42.0), CarHvacProbe.celsiusToPublish(0));
     }
