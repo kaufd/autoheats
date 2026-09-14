@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -95,8 +96,24 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      */
     private static final long SAMPLE_INTERVAL_MS = 30_000L;
 
+    /**
+     * Сколько ряд пишется после выключения зажигания. Первые минуты голова ещё
+     * отдаёт салон, дальше — только 255 всю стоянку. Опрос в это время пользы не
+     * несёт, а в ночь 12→13.09 голова восемь часов не спала, и без опроса на
+     * стоянке вопрос «не мы ли её держим» снимается сам.
+     */
+    static final long PARKED_SAMPLE_MS = 5 * 60_000L;
+
     private final Handler sampler = new Handler(Looper.getMainLooper());
     private CalibrationLog calibrationLog;
+    private boolean sampling;
+
+    /**
+     * elapsedRealtime первого «не ON» подряд; null — зажигание ON или ещё не
+     * известно. Неизвестное стоянкой не считается: без подписки на зажигание
+     * ряд иначе встал бы посреди поездки.
+     */
+    private Long parkedSinceMs;
 
     /** Последнее известное зажигание — в ряд; решения принимает IgnitionSession. */
     private Boolean ignitionOn;
@@ -115,9 +132,31 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         public void run() {
             probe.sample();
             recordSample("tick");
+            if (!keepsSampling(parkedSinceMs, SystemClock.elapsedRealtime())) {
+                sampling = false;
+                onLog("стоянка: ряд калибровки на паузе до зажигания ON");
+                return;
+            }
             sampler.postDelayed(this, SAMPLE_INTERVAL_MS);
         }
     };
+
+    /**
+     * Время стоянки — по elapsedRealtime, а не по uptime: сон головы в него
+     * входит, и первый тик после ночи останавливает ряд, а не пишет ещё пять
+     * минут бодрствования. Отдельно — ради теста.
+     */
+    static boolean keepsSampling(Long parkedSinceMs, long nowMs) {
+        return parkedSinceMs == null || nowMs - parkedSinceMs < PARKED_SAMPLE_MS;
+    }
+
+    private void startSampling() {
+        if (calibrationLog == null || sampling) {
+            return;
+        }
+        sampling = true;
+        sampler.postDelayed(sampleTick, SAMPLE_INTERVAL_MS);
+    }
 
     @Override
     public void onCreate() {
@@ -145,7 +184,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         }
         calibrationLog = new CalibrationLog(directory);
         onLog("ряд калибровки: " + calibrationLog.file().getName());
-        sampler.postDelayed(sampleTick, SAMPLE_INTERVAL_MS);
+        startSampling();
     }
 
     /**
@@ -492,6 +531,16 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     @Override
     public void onIgnition(boolean on) {
         ignitionOn = on;
+        /**
+         * Отсчёт стоянки — от первого «не ON»: голова шлёт их пачкой (ACC,
+         * затем OFF), и каждое следующее не должно продлевать запись.
+         */
+        if (on) {
+            parkedSinceMs = null;
+            startSampling();
+        } else if (parkedSinceMs == null) {
+            parkedSinceMs = SystemClock.elapsedRealtime();
+        }
         /**
          * До обработки: строка фиксирует момент события с уровнями, какими они
          * были. Их изменение запишется своими строками из setSeatHeat.
