@@ -402,7 +402,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     @Override
     public void onCabinTemperature(double celsius) {
         runOnUiThread(() -> {
-            String text = TemperatureConstants.celsiusText(celsius);
+            String text = Temperature.celsiusText(celsius);
             int color = Ui.temperatureColor(this, celsius);
             heatUi.onCabinTemperature(text, color);
             logUi.onCabinTemperature(text, color);

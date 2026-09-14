@@ -598,7 +598,7 @@ public class CarHvacProbe {
             log(celsius == null
                     ? "за бортом: raw=" + outside + " — sentinel, данных нет"
                     : "за бортом: raw=" + outside + " → "
-                            + TemperatureConstants.celsiusText(celsius));
+                            + Temperature.celsiusText(celsius));
         }
         if (readCoolant() && verbose) {
             log("ОЖ: float=" + Arrays.toString(lastCoolantFloats)
@@ -626,7 +626,7 @@ public class CarHvacProbe {
         log("температура зоны " + areaId + ": raw=" + raw
                 + (celsius == null
                         ? " — sentinel или неразбираемое значение"
-                        : " → " + TemperatureConstants.celsiusText(celsius)));
+                        : " → " + Temperature.celsiusText(celsius)));
     }
 
     /**

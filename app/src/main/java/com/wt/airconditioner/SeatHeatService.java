@@ -74,7 +74,11 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     private final LogBuffer logs = new LogBuffer();
 
     private CarHvacProbe probe;
-    private AutoHeatEngine autoHeat;
+    /**
+     * Что ведёт сиденья. Поле типа интерфейса, а не движка каскада: перевод на
+     * тепловую модель должен быть подстановкой реализации в onCreate.
+     */
+    private SeatHeatDriver driver;
     private HeatSettings settings;
     private PresetStore presets;
     private UiListener uiListener;
@@ -90,31 +94,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     /** Решения о зажигании: была ли поездка и выключены ли сиденья. */
     private final IgnitionSession session = new IgnitionSession();
 
-    /**
-     * Шаг ряда калибровки. Постоянная времени подушки — около двух минут, так
-     * что минутные отсчёты уже размывают разгон, а чаще нет смысла: датчик
-     * воздуха всё равно обновляется медленнее.
-     */
-    private static final long SAMPLE_INTERVAL_MS = 30_000L;
-
-    /**
-     * Сколько ряд пишется после выключения зажигания. Первые минуты голова ещё
-     * отдаёт салон, дальше — только 255 всю стоянку. Опрос в это время пользы не
-     * несёт, а в ночь 12→13.09 голова восемь часов не спала, и без опроса на
-     * стоянке вопрос «не мы ли её держим» снимается сам.
-     */
-    static final long PARKED_SAMPLE_MS = 5 * 60_000L;
-
-    private final Handler sampler = new Handler(Looper.getMainLooper());
-    private CalibrationLog calibrationLog;
-    private boolean sampling;
-
-    /**
-     * elapsedRealtime первого «не ON» подряд; null — зажигание ON или ещё не
-     * известно. Неизвестное стоянкой не считается: без подписки на зажигание
-     * ряд иначе встал бы посреди поездки.
-     */
-    private Long parkedSinceMs;
+    /** Ряд калибровки со своим тиком; он же держит порядок «модель до строки». */
+    private CalibrationSampler sampler;
 
     /** Последнее известное зажигание — в ряд; решения принимает IgnitionSession. */
     private Boolean ignitionOn;
@@ -129,64 +110,6 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     /** Последний записанный в лог raw: события приходят чаще, чем меняется значение. */
     private Integer loggedCabinRaw;
 
-    private boolean calibrationFailureLogged;
-
-    /**
-     * Снимок по таймеру. Читаем сами, а не ждём события HVAC: в неподвижном
-     * салоне их может не быть часами, а ряд нужен равномерный.
-     */
-    private final Runnable sampleTick = new Runnable() {
-        @Override
-        public void run() {
-            probe.sample();
-            updateModel();
-            recordSample("tick");
-            if (!keepsSampling(parkedSinceMs, SystemClock.elapsedRealtime())) {
-                sampling = false;
-                onLog("стоянка: ряд калибровки на паузе до зажигания ON");
-                return;
-            }
-            sampler.postDelayed(this, SAMPLE_INTERVAL_MS);
-        }
-    };
-
-    /**
-     * Время стоянки — по elapsedRealtime, а не по uptime: сон головы в него
-     * входит, и первый тик после ночи останавливает ряд, а не пишет ещё пять
-     * минут бодрствования. Отдельно — ради теста.
-     */
-    static boolean keepsSampling(Long parkedSinceMs, long nowMs) {
-        return parkedSinceMs == null || nowMs - parkedSinceMs < PARKED_SAMPLE_MS;
-    }
-
-    /**
-     * Допустимый возраст воздуха с момента получения приложением, раздел 2
-     * спецификации модели. При опросе раз в 30 секунд превышение значит
-     * несколько подряд неудачных чтений или sentinel, а не неподвижный салон.
-     */
-    static final long MAX_AIR_AGE_MS = 120_000L;
-
-    /**
-     * Значение, если оно достоверно по возрасту, иначе null. Внутреннюю
-     * устарелость головы отсюда не видно — от неё защищает пересчёт при смене
-     * значения в SeatObserver.
-     */
-    static Double reliable(Double value, Long receivedAtMs, long nowMs) {
-        if (value == null || receivedAtMs == null) {
-            return null;
-        }
-        long age = nowMs - receivedAtMs;
-        return age >= 0 && age <= MAX_AIR_AGE_MS ? value : null;
-    }
-
-    private void startSampling() {
-        if (sampling) {
-            return;
-        }
-        sampling = true;
-        sampler.postDelayed(sampleTick, SAMPLE_INTERVAL_MS);
-    }
-
     @Override
     public void onCreate() {
         super.onCreate();
@@ -195,27 +118,12 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         onLog("сервис запущен");
         settings = new HeatSettings(this);
         presets = new PresetStore(this);
-        autoHeat = new AutoHeatEngine(new HandlerScheduler(), this::onLog);
+        driver = new AutoHeatEngine(new HandlerScheduler(), this::onLog);
         modelShadow = new ModelShadow(modelStore(), this::onLog);
         probe = new CarHvacProbe(this, this);
-        startCalibrationLog();
+        sampler = new CalibrationSampler(getExternalFilesDir(null), sampleSource, this::onLog);
         /** Тик нужен и без ряда: он освежает воздух и ведёт фоновую модель. */
-        startSampling();
-    }
-
-    /**
-     * Ряд пишется во внутреннюю память, а не на флешку: он должен вестись
-     * всегда, а не только когда носитель воткнут. На флешку его выгружает
-     * кнопка «Сохранить» — там же, где диагностический лог.
-     */
-    private void startCalibrationLog() {
-        File directory = getExternalFilesDir(null);
-        if (directory == null) {
-            onLog("ВНИМАНИЕ: ряд калибровки не ведётся — внешнее хранилище недоступно");
-            return;
-        }
-        calibrationLog = new CalibrationLog(directory);
-        onLog("ряд калибровки: " + calibrationLog.file().getName());
+        sampler.start();
     }
 
     private ModelShadow.Store modelStore() {
@@ -238,49 +146,74 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     }
 
     /**
-     * Фоновая модель — на тике ряда и на событиях уровня и зажигания, до записи
-     * строки: строка должна показать оценку уже с учётом события. Сбой модели
-     * остаётся внутри ModelShadow.
+     * Что видит ряд калибровки. Значения берём из пробника, а не из полей
+     * экрана: там уже пересчитанное, а для подгонки модели нужно сырьё.
      */
-    private void updateModel() {
-        long now = SystemClock.elapsedRealtime();
-        Double outside = reliable(CarHvacProbe.outsideCelsius(probe.lastOutsideRaw()),
-                probe.lastOutsideAtMs(), now);
-        modelShadow.update(now, System.currentTimeMillis(), levels,
-                Boolean.TRUE.equals(ignitionOn),
-                reliable(probe.lastCabinCelsius(), probe.lastCabinAtMs(), now),
-                outside);
+    private final CalibrationSampler.Source sampleSource = new CalibrationSampler.Source() {
+        @Override
+        public void refresh() {
+            /**
+             * Читаем сами, а не ждём события HVAC: в неподвижном салоне их
+             * может не быть часами, а ряд нужен равномерный.
+             */
+            probe.sample();
+        }
+
+        @Override
+        public void updateModel() {
+            SeatHeatService.this.updateModel();
+        }
+
+        @Override
+        public CalibrationLog.Sample sample(String reason) {
+            CalibrationLog.Sample sample = new CalibrationLog.Sample();
+            sample.reason = reason;
+            sample.cabinRaw = probe.lastCabinRaw();
+            /**
+             * Из того же raw, а не из lastCelsius: пересчёт приходит в сервис
+             * через post и отстаёт от чтения, а при sentinel не приходит вовсе
+             * — строка связала бы новый raw со старой температурой.
+             */
+            sample.cabinCelsius = CarHvacProbe.celsiusToPublish(sample.cabinRaw);
+            sample.outsideRaw = probe.lastOutsideRaw();
+            sample.coolantFloats = probe.lastCoolantFloats();
+            sample.coolantInts = probe.lastCoolantInts();
+            sample.driverLevel = levels.get(Seat.DRIVER);
+            sample.passengerLevel = levels.get(Seat.PASSENGER);
+            sample.ignitionOn = ignitionOn;
+            sample.driverModel = model(modelShadow.estimate(Seat.DRIVER));
+            sample.passengerModel = model(modelShadow.estimate(Seat.PASSENGER));
+            return sample;
+        }
+    };
+
+    /**
+     * Оценка модели в колонки ряда. Перекладывает сервис: расчёт про формат
+     * файла знать не должен.
+     */
+    private static CalibrationLog.Model model(ModelShadow.Estimate estimate) {
+        if (estimate == null) {
+            return null;
+        }
+        CalibrationLog.Model model = new CalibrationLog.Model();
+        model.baseLow = estimate.base.low;
+        model.baseHigh = estimate.base.high;
+        model.bankLow = estimate.bank.low;
+        model.bankHigh = estimate.bank.high;
+        model.level = estimate.level;
+        return model;
     }
 
     /**
-     * Строка ряда. Значения берём из пробника, а не из полей экрана: там уже
-     * пересчитанное, а для подгонки модели нужно сырьё.
+     * Фоновая модель. Достоверность воздуха решает она сама — сервис отдаёт
+     * показания и время их получения. Сбой модели остаётся внутри ModelShadow.
      */
-    private void recordSample(String reason) {
-        if (calibrationLog == null) {
-            return;
-        }
-        CalibrationLog.Sample sample = new CalibrationLog.Sample();
-        sample.reason = reason;
-        sample.cabinRaw = probe.lastCabinRaw();
-        /**
-         * Из того же raw, а не из lastCelsius: пересчёт приходит в сервис через
-         * post и отстаёт от чтения, а при sentinel не приходит вовсе — строка
-         * связала бы новый raw со старой температурой.
-         */
-        sample.cabinCelsius = CarHvacProbe.celsiusToPublish(sample.cabinRaw);
-        sample.outsideRaw = probe.lastOutsideRaw();
-        sample.coolantFloats = probe.lastCoolantFloats();
-        sample.coolantInts = probe.lastCoolantInts();
-        sample.driverLevel = levels.get(Seat.DRIVER);
-        sample.passengerLevel = levels.get(Seat.PASSENGER);
-        sample.ignitionOn = ignitionOn;
-        sample.driverModel = modelShadow.model(Seat.DRIVER);
-        sample.passengerModel = modelShadow.model(Seat.PASSENGER);
-        if (!calibrationLog.append(sample) && !calibrationFailureLogged) {
-            calibrationFailureLogged = true;
-            onLog("ВНИМАНИЕ: ряд калибровки не пишется — " + calibrationLog.file());
-        }
+    private void updateModel() {
+        modelShadow.update(SystemClock.elapsedRealtime(), System.currentTimeMillis(), levels,
+                Boolean.TRUE.equals(ignitionOn),
+                new Air(probe.lastCabinCelsius(), probe.lastCabinAtMs(),
+                        CarHvacProbe.outsideCelsius(probe.lastOutsideRaw()),
+                        probe.lastOutsideAtMs()));
     }
 
     @Override
@@ -303,9 +236,11 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
          * Единственный метод, который может застать поля незаполненными:
          * остальные пути идут после успешного onCreate и проверок не требуют.
          */
-        sampler.removeCallbacks(sampleTick);
-        if (autoHeat != null) {
-            autoHeat.stopAll();
+        if (sampler != null) {
+            sampler.stop();
+        }
+        if (driver != null) {
+            driver.stopAll();
         }
         if (probe != null) {
             probe.disconnect();
@@ -357,8 +292,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         }
         levels.put(seat, level);
         notifySeatLevel(seat, level);
-        updateModel();
-        recordSample("level");
+        sampler.record("level");
         return true;
     }
 
@@ -424,9 +358,33 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         settings.setMode(seat, mode);
         onLog("режим " + seat.title + ": " + mode.title);
         if (mode == HeatMode.AUTO) {
-            startCascade(seat);
+            startAuto(seat);
         } else {
-            autoHeat.stop(seat);
+            /**
+             * Пресет по переключению режима не запускается: человек выбирает
+             * его сам следующим действием. Автоматически его повторяет только
+             * зажигание ON — см. resume().
+             */
+            driver.stop(seat);
+        }
+    }
+
+    private void startAuto(Seat seat) {
+        onLog("автоподогрев для " + seat.title + " → жду температуру");
+        driver.start(seat, level -> setSeatHeat(seat, level));
+    }
+
+    /**
+     * Вернуть сиденье под управление после зажигания ON — по режиму, в котором
+     * его оставили. Пресет здесь повторяется: сиденье осталось в этом режиме с
+     * прошлой поездки, значит его и ждут.
+     */
+    private void resume(Seat seat) {
+        HeatMode mode = settings.mode(seat);
+        if (mode == HeatMode.AUTO) {
+            startAuto(seat);
+        } else if (mode == HeatMode.PRESETS) {
+            applyActivePreset(seat);
         }
     }
 
@@ -439,13 +397,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      * в поездке. Путь тот же, что у настоящего события, — до записи в автомобиль.
      */
     public void injectTemperature(double celsius) {
-        onLog("ОТЛАДКА: подставлена температура " + TemperatureConstants.celsiusText(celsius));
+        onLog("ОТЛАДКА: подставлена температура " + Temperature.celsiusText(celsius));
         lastCelsius = celsius;
         UiListener listener = uiListener;
         if (listener != null) {
             listener.onCabinTemperature(celsius);
         }
-        autoHeat.setTemperature(celsius);
+        driver.setTemperature(celsius);
     }
 
     /**
@@ -456,7 +414,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         onLog("пресет «" + preset.name + "» → " + preset.seat.title);
         settings.setMode(preset.seat, HeatMode.PRESETS);
         settings.setActivePreset(preset.seat, preset.encode());
-        autoHeat.start(preset.seat, level -> setSeatHeat(preset.seat, level), preset.settings);
+        driver.start(preset.seat, level -> setSeatHeat(preset.seat, level), preset.settings);
     }
 
     /**
@@ -586,9 +544,9 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
          */
         if (loggedCabinRaw == null || loggedCabinRaw != raw) {
             loggedCabinRaw = raw;
-            onLog("температура: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius));
+            onLog("температура: raw=" + raw + " → " + Temperature.celsiusText(celsius));
         }
-        autoHeat.setTemperature(celsius);
+        driver.setTemperature(celsius);
         UiListener listener = uiListener;
         if (listener != null) {
             listener.onCabinTemperature(celsius);
@@ -599,28 +557,18 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     public void onWakeUp() {
         onLog("голова проснулась → новая сессия");
         session.onWakeUp();
-        autoHeat.stopAll();
+        driver.stopAll();
     }
 
     @Override
     public void onIgnition(boolean on) {
         ignitionOn = on;
-        /**
-         * Отсчёт стоянки — от первого «не ON»: голова шлёт их пачкой (ACC,
-         * затем OFF), и каждое следующее не должно продлевать запись.
-         */
-        if (on) {
-            parkedSinceMs = null;
-            startSampling();
-        } else if (parkedSinceMs == null) {
-            parkedSinceMs = SystemClock.elapsedRealtime();
-        }
+        sampler.onIgnition(on);
         /**
          * До обработки: строка фиксирует момент события с уровнями, какими они
          * были. Их изменение запишется своими строками из setSeatHeat.
          */
-        updateModel();
-        recordSample("ignition");
+        sampler.record("ignition");
         switch (session.onIgnition(on)) {
             case START_HEAT:
                 onLog("зажигание ON — с этого момента выключение по зажиганию активно");
@@ -635,7 +583,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
                  * выполниться, а если бы успели — гасить было бы уже нечего.
                  */
                 onLog("зажигание выключено → выключаю оба сиденья");
-                autoHeat.stopAll();
+                driver.stopAll();
                 shutdownSeats();
                 break;
             default:
@@ -656,22 +604,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
          */
         probe.readCabinTemperature();
         for (Seat seat : Seat.values()) {
-            HeatMode mode = settings.mode(seat);
-            if (mode == HeatMode.AUTO) {
-                startCascade(seat);
-            } else if (mode == HeatMode.PRESETS) {
-                /**
-                 * Сиденье осталось в режиме пресета с прошлой поездки — значит
-                 * его и ждут, а не ручное управление.
-                 */
-                applyActivePreset(seat);
-            }
+            resume(seat);
         }
-    }
-
-    private void startCascade(Seat seat) {
-        onLog("автоподогрев для " + seat.title + " → жду температуру");
-        autoHeat.start(seat, level -> setSeatHeat(seat, level));
     }
 
     /**

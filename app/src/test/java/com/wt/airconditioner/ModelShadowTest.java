@@ -48,6 +48,16 @@ public class ModelShadowTest {
         return new ModelShadow(store, log::add);
     }
 
+    /**
+     * Воздух, полученный ровно в этот момент, — то есть заведомо достоверный.
+     * Возраст проверяется в AirTest; здесь проверяется стык, и null значит
+     * «показания нет», а не «протухло».
+     */
+    private static Air air(long elapsedMs, Double cabin, Double outside) {
+        return new Air(cabin, cabin == null ? null : elapsedMs,
+                outside, outside == null ? null : elapsedMs);
+    }
+
     /** Строки решений сиденья; строка восстановления сюда не входит. */
     private List<String> decisions(Seat seat) {
         List<String> found = new ArrayList<>();
@@ -77,27 +87,27 @@ public class ModelShadowTest {
          */
         store.snapshots.put(Seat.DRIVER, "годный снимок");
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, null, null);
-        assertNull(shadow.model(Seat.DRIVER));
+        shadow.update(0L, WALL, levels, true, air(0L, null, null));
+        assertNull(shadow.estimate(Seat.DRIVER));
         assertEquals("годный снимок", store.snapshots.get(Seat.DRIVER));
 
-        shadow.update(30_000L, WALL, levels, true, 10.0, null);
-        assertNotNull(shadow.model(Seat.DRIVER));
+        shadow.update(30_000L, WALL, levels, true, air(30_000L, 10.0, null));
+        assertNotNull(shadow.estimate(Seat.DRIVER));
         assertTrue(containing(log, "отключена").isEmpty());
     }
 
     @Test
     public void restoresBothSeatsAndSavesSnapshots() {
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, false, 10.0, null);
-        assertNotNull(shadow.model(Seat.DRIVER));
-        assertNotNull(shadow.model(Seat.PASSENGER));
+        shadow.update(0L, WALL, levels, false, air(0L, 10.0, null));
+        assertNotNull(shadow.estimate(Seat.DRIVER));
+        assertNotNull(shadow.estimate(Seat.PASSENGER));
         assertNotNull(store.snapshots.get(Seat.DRIVER));
         assertNotNull(store.snapshots.get(Seat.PASSENGER));
         assertEquals(2, containing(log, "неизвестная история").size());
 
         ModelShadow restarted = shadow();
-        restarted.update(0L, WALL, levels, false, 10.0, null);
+        restarted.update(0L, WALL, levels, false, air(0L, 10.0, null));
         assertEquals(2, containing(log, "снимок, перерыв").size());
     }
 
@@ -111,17 +121,17 @@ public class ModelShadowTest {
                 SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, 20.0, 20.0, 20.0));
         levels.put(Seat.DRIVER, 0);
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, 20.0, null);
+        shadow.update(0L, WALL, levels, true, air(0L, 20.0, null));
         levels.put(Seat.DRIVER, 3);
-        shadow.update(60_000L, WALL + 60_000L, levels, true, null, null);
-        shadow.update(180_000L, WALL + 180_000L, levels, true, 20.0, null);
+        shadow.update(60_000L, WALL + 60_000L, levels, true, air(60_000L, null, null));
+        shadow.update(180_000L, WALL + 180_000L, levels, true, air(180_000L, 20.0, null));
 
         SeatThermalModel.Parameters base = new SeatThermalModel.Parameters();
         SeatThermalModel.State idle = SeatThermalModel.advance(
                 new SeatThermalModel.State(20, 20), 0, 20, base, 1);
         double expected = SeatThermalModel.advance(idle, 3, 20, base, 2).surface;
-        assertEquals(expected, shadow.model(Seat.DRIVER).baseLow, 1e-9);
-        assertEquals(expected, shadow.model(Seat.DRIVER).baseHigh, 1e-9);
+        assertEquals(expected, shadow.estimate(Seat.DRIVER).base.low, 1e-9);
+        assertEquals(expected, shadow.estimate(Seat.DRIVER).base.high, 1e-9);
     }
 
     @Test
@@ -134,27 +144,27 @@ public class ModelShadowTest {
                 SeatObserverTest.snapshot(Seat.DRIVER, "0", 0, 20.0, 20.0, 20.0));
         levels.put(Seat.DRIVER, 0);
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, false, 20.0, null);
-        shadow.update(600_000L, WALL + 600_000L, levels, false, null, null);
+        shadow.update(0L, WALL, levels, false, air(0L, 20.0, null));
+        shadow.update(600_000L, WALL + 600_000L, levels, false, air(600_000L, null, null));
 
         ModelShadow restarted = shadow();
-        restarted.update(0L, WALL + 600_000L, levels, false, 20.0, null);
+        restarted.update(0L, WALL + 600_000L, levels, false, air(0L, 20.0, null));
         assertEquals(1, containing(log, "водитель: снимок, перерыв 10.0 мин").size());
     }
 
     @Test
     public void decidesOnlyWhileIgnitionIsOn() {
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, false, -15.0, null);
-        assertNull(shadow.model(Seat.DRIVER).level);
+        shadow.update(0L, WALL, levels, false, air(0L, -15.0, null));
+        assertNull(shadow.estimate(Seat.DRIVER).level);
         assertTrue(decisions(Seat.DRIVER).isEmpty());
 
-        shadow.update(1_000L, WALL, levels, true, -15.0, null);
-        assertNotNull(shadow.model(Seat.DRIVER).level);
+        shadow.update(1_000L, WALL, levels, true, air(1_000L, -15.0, null));
+        assertNotNull(shadow.estimate(Seat.DRIVER).level);
         assertEquals(1, decisions(Seat.DRIVER).size());
 
-        shadow.update(2_000L, WALL, levels, false, -15.0, null);
-        assertNull(shadow.model(Seat.DRIVER).level);
+        shadow.update(2_000L, WALL, levels, false, air(2_000L, -15.0, null));
+        assertNull(shadow.estimate(Seat.DRIVER).level);
     }
 
     @Test
@@ -168,14 +178,14 @@ public class ModelShadowTest {
                 SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -25.0, -25.0, -25.0));
         levels.put(Seat.DRIVER, 0);
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, -25.0, null);
-        assertEquals(Integer.valueOf(3), shadow.model(Seat.DRIVER).level);
+        shadow.update(0L, WALL, levels, true, air(0L, -25.0, null));
+        assertEquals(Integer.valueOf(3), shadow.estimate(Seat.DRIVER).level);
 
-        shadow.update(30_000L, WALL, levels, true, 5.0, null);
-        assertEquals(Integer.valueOf(3), shadow.model(Seat.DRIVER).level);
+        shadow.update(30_000L, WALL, levels, true, air(30_000L, 5.0, null));
+        assertEquals(Integer.valueOf(3), shadow.estimate(Seat.DRIVER).level);
 
-        shadow.update(60_000L, WALL, levels, true, 5.0, null);
-        assertEquals(Integer.valueOf(2), shadow.model(Seat.DRIVER).level);
+        shadow.update(60_000L, WALL, levels, true, air(60_000L, 5.0, null));
+        assertEquals(Integer.valueOf(2), shadow.estimate(Seat.DRIVER).level);
     }
 
     @Test
@@ -185,11 +195,11 @@ public class ModelShadowTest {
                 SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -15.0, -15.0, -15.0));
         levels.put(Seat.DRIVER, 0);
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, -15.0, null);
-        assertTrue(shadow.model(Seat.DRIVER).level > 0);
+        shadow.update(0L, WALL, levels, true, air(0L, -15.0, null));
+        assertTrue(shadow.estimate(Seat.DRIVER).level > 0);
 
-        shadow.update(30_000L, WALL, levels, true, null, null);
-        assertEquals(Integer.valueOf(0), shadow.model(Seat.DRIVER).level);
+        shadow.update(30_000L, WALL, levels, true, air(30_000L, null, null));
+        assertEquals(Integer.valueOf(0), shadow.estimate(Seat.DRIVER).level);
         List<String> lines = decisions(Seat.DRIVER);
         assertTrue(lines.get(lines.size() - 1).contains("салон недостоверен"));
     }
@@ -203,10 +213,10 @@ public class ModelShadowTest {
         store.snapshots.put(Seat.DRIVER,
                 SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -15.0, -15.0, -15.0));
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, null, null);
+        shadow.update(0L, WALL, levels, true, air(0L, null, null));
         levels.put(Seat.DRIVER, 0);
-        shadow.update(1_000L, WALL, levels, true, -15.0, null);
-        assertTrue(shadow.model(Seat.DRIVER).level > 0);
+        shadow.update(1_000L, WALL, levels, true, air(1_000L, -15.0, null));
+        assertTrue(shadow.estimate(Seat.DRIVER).level > 0);
     }
 
     @Test
@@ -218,11 +228,11 @@ public class ModelShadowTest {
          */
         levels.put(Seat.DRIVER, 3);
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, 25.0, null);
-        shadow.update(30_000L, WALL, levels, true, 25.0, null);
-        shadow.update(45_000L, WALL, levels, true, 25.0, null);
+        shadow.update(0L, WALL, levels, true, air(0L, 25.0, null));
+        shadow.update(30_000L, WALL, levels, true, air(30_000L, 25.0, null));
+        shadow.update(45_000L, WALL, levels, true, air(45_000L, 25.0, null));
         assertEquals(1, containing(decisions(Seat.DRIVER), "перегрев в прогнозе").size());
-        assertEquals(Integer.valueOf(0), shadow.model(Seat.DRIVER).level);
+        assertEquals(Integer.valueOf(0), shadow.estimate(Seat.DRIVER).level);
     }
 
     @Test
@@ -236,8 +246,8 @@ public class ModelShadowTest {
         store.snapshots.put(Seat.DRIVER,
                 SeatObserverTest.snapshot(Seat.DRIVER, "3", 1, 30.0, 25.0, 37.75));
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, 30.0, null);
-        assertEquals(Integer.valueOf(0), shadow.model(Seat.DRIVER).level);
+        shadow.update(0L, WALL, levels, true, air(0L, 30.0, null));
+        assertEquals(Integer.valueOf(0), shadow.estimate(Seat.DRIVER).level);
         for (String line : decisions(Seat.DRIVER)) {
             assertTrue(line, line.contains("перегрев в прогнозе"));
         }
@@ -254,9 +264,9 @@ public class ModelShadowTest {
         store.snapshots.put(Seat.DRIVER,
                 SeatObserverTest.snapshot(Seat.DRIVER, "3", 1, -15.0, -15.0, -15.0));
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, -15.0, null);
-        shadow.update(60_000L, WALL + 60_000L, levels, true, -15.0, null);
-        assertEquals(Integer.valueOf(2), shadow.model(Seat.DRIVER).level);
+        shadow.update(0L, WALL, levels, true, air(0L, -15.0, null));
+        shadow.update(60_000L, WALL + 60_000L, levels, true, air(60_000L, -15.0, null));
+        assertEquals(Integer.valueOf(2), shadow.estimate(Seat.DRIVER).level);
         assertEquals(1, decisions(Seat.DRIVER).size());
     }
 
@@ -264,9 +274,9 @@ public class ModelShadowTest {
     public void failureDisablesShadowWithoutThrowing() {
         store.failing = true;
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, 10.0, null);
-        shadow.update(30_000L, WALL, levels, true, 10.0, null);
-        assertNull(shadow.model(Seat.DRIVER));
+        shadow.update(0L, WALL, levels, true, air(0L, 10.0, null));
+        shadow.update(30_000L, WALL, levels, true, air(30_000L, 10.0, null));
+        assertNull(shadow.estimate(Seat.DRIVER));
         assertEquals(1, containing(log, "фоновая модель отключена").size());
         assertFalse(containing(log, "диск").isEmpty());
     }

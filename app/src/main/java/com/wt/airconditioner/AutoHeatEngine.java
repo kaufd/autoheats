@@ -1,7 +1,5 @@
 package com.wt.airconditioner;
 
-import com.wt.airconditioner.TemperatureConstants.HeatSequence;
-
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.Locale;
@@ -16,18 +14,7 @@ import java.util.Map;
  * Ни одной ссылки на Android: уровни уходят в callback, время идёт через
  * Scheduler, а расписание в минутах проверяется тестами на JVM.
  */
-final class AutoHeatEngine {
-
-    /** Куда уходит решение о новом уровне подогрева. */
-    interface LevelCallback {
-        /** false — внешний исполнитель не подтвердил запись уровня. */
-        boolean onLevel(int level);
-    }
-
-    /** Диагностика на экран; в тестах обычно не нужна. */
-    interface LogSink {
-        void log(String message);
-    }
+final class AutoHeatEngine implements SeatHeatDriver {
 
     /**
      * Минута — наименьший шаг Scheduler и разумная пауза: отказ обычно значит,
@@ -76,8 +63,8 @@ final class AutoHeatEngine {
         this.logSink = logSink;
     }
 
-    /** Новая температура салона: и от датчика, и от ручного ввода в отладке. */
-    void setTemperature(double celsius) {
+    @Override
+    public void setTemperature(double celsius) {
         currentTemperature = celsius;
         /**
          * Копия ключей: остановка каскада по ходу дела не должна ломать обход.
@@ -88,7 +75,8 @@ final class AutoHeatEngine {
     }
 
     /** Автоматический режим: расписание выбирается по температуре салона. */
-    void start(Seat seat, LevelCallback callback) {
+    @Override
+    public void start(Seat seat, LevelCallback callback) {
         start(seat, callback, null);
     }
 
@@ -96,7 +84,8 @@ final class AutoHeatEngine {
      * Пресет: расписание задано человеком, температура решает только, стартовать
      * ли вообще.
      */
-    void start(Seat seat, LevelCallback callback, PresetSettings settings) {
+    @Override
+    public void start(Seat seat, LevelCallback callback, PresetSettings settings) {
         /**
          * Состояние сиденья заменяется целиком: не сняв таймер прошлого каскада,
          * мы потеряли бы ссылку на него, и он сработал бы поверх нового.
@@ -106,7 +95,8 @@ final class AutoHeatEngine {
         update(seat);
     }
 
-    void stop(Seat seat) {
+    @Override
+    public void stop(Seat seat) {
         cancelTimer(states.remove(seat));
         log("каскад остановлен: " + seat.title);
     }
@@ -116,7 +106,8 @@ final class AutoHeatEngine {
      * Иначе следующий запуск упёрся бы в «жду температуру» до ближайшего события
      * датчика — в холодном неподвижном салоне это минуты.
      */
-    void stopAll() {
+    @Override
+    public void stopAll() {
         for (Seat seat : new ArrayList<>(states.keySet())) {
             stop(seat);
         }

@@ -39,7 +39,7 @@ final class ModelShadow {
     private static final String COAST_REASON = "перегрев в прогнозе, ноль без ожидания минуты";
 
     private final Store store;
-    private final AutoHeatEngine.LogSink logSink;
+    private final LogSink logSink;
 
     /** null — воздух ещё ни разу не был достоверен. */
     private Map<Seat, SeatObserver> observers;
@@ -52,7 +52,7 @@ final class ModelShadow {
     private final Map<Seat, Long> levelChangedAtMs = new EnumMap<>(Seat.class);
     private Long lastDecisionAtMs;
 
-    ModelShadow(Store store, AutoHeatEngine.LogSink logSink) {
+    ModelShadow(Store store, LogSink logSink) {
         this.store = store;
         this.logSink = logSink;
     }
@@ -63,15 +63,17 @@ final class ModelShadow {
      * от фонового расчёта зависеть не должен.
      *
      * @param levels подтверждённые автомобилем уровни; нет ключа — не известен
-     * @param cabinCelsius достоверный салон или null
-     * @param outsideCelsius достоверная улица или null
+     * @param air показания воздуха со временем получения; достоверность решает
+     *        сама модель
      */
     void update(long elapsedMs, long wallMs, Map<Seat, Integer> levels, boolean ignitionOn,
-            Double cabinCelsius, Double outsideCelsius) {
+            Air air) {
         if (disabled) {
             return;
         }
         long started = System.nanoTime();
+        Double cabinCelsius = air.cabin(elapsedMs);
+        Double outsideCelsius = air.outside(elapsedMs);
         try {
             trackLevels(elapsedMs, levels);
             if (!advance(elapsedMs, wallMs, levels, ignitionOn, cabinCelsius, outsideCelsius)) {
@@ -96,22 +98,36 @@ final class ModelShadow {
         }
     }
 
-    /** Оценка и решение для ряда; null — фон не готов или отключён. */
-    CalibrationLog.Model model(Seat seat) {
+    /**
+     * Фоновая оценка одного сиденья: поверхность базового профиля и банка
+     * нижней и верхней границей и решение термостата.
+     *
+     * Свой тип, а не строка ряда калибровки: считающий слой не должен знать про
+     * того, кто его записывает, иначе столбец в CSV не добавить, не тронув
+     * расчёт. Перекладывает поля вызывающий.
+     */
+    static final class Estimate {
+        final SeatObserver.Range base;
+        final SeatObserver.Range bank;
+        /** null — решения нет: зажигание не ON или минута ещё не прошла. */
+        final Integer level;
+
+        Estimate(SeatObserver.Range base, SeatObserver.Range bank, Integer level) {
+            this.base = base;
+            this.bank = bank;
+            this.level = level;
+        }
+    }
+
+    /** Оценка и решение по сиденью; null — фон не готов или отключён. */
+    Estimate estimate(Seat seat) {
         if (observers == null) {
             return null;
         }
         SeatObserver observer = observers.get(seat);
-        SeatObserver.Range base = observer.base();
-        SeatObserver.Range bank = observer.bank();
-        CalibrationLog.Model model = new CalibrationLog.Model();
-        model.baseLow = base.low;
-        model.baseHigh = base.high;
-        model.bankLow = bank.low;
-        model.bankHigh = bank.high;
         SeatThermostat.Decision decision = decisions.get(seat);
-        model.level = decision == null ? null : decision.level;
-        return model;
+        return new Estimate(observer.base(), observer.bank(),
+                decision == null ? null : decision.level);
     }
 
     /**
