@@ -41,7 +41,9 @@ final class CalibrationLog {
             + "coolant_int" + SEPARATOR
             + "driver_level" + SEPARATOR
             + "passenger_level" + SEPARATOR
-            + "ignition";
+            + "ignition" + SEPARATOR
+            + modelHeader("driver") + SEPARATOR
+            + modelHeader("passenger");
 
     /** Расширение общее с логом лишь по смыслу; префикс разный не случайно. */
     private static final String PREFIX = "autoheat-data-";
@@ -58,6 +60,23 @@ final class CalibrationLog {
         Integer driverLevel;
         Integer passengerLevel;
         Boolean ignitionOn;
+        /** null — фоновая модель по сиденью не готова. */
+        Model driverModel;
+        Model passengerModel;
+    }
+
+    /**
+     * Фоновая оценка сиденья: поверхность базового профиля и банка нижней и
+     * верхней границей и решение термостата. Оценка — не измерение: датчика
+     * поверхности нет.
+     */
+    static final class Model {
+        double baseLow;
+        double baseHigh;
+        double bankLow;
+        double bankHigh;
+        /** null — решения нет: зажигание не ON или минута ещё не прошла. */
+        Integer level;
     }
 
     private final File file;
@@ -110,7 +129,35 @@ final class CalibrationLog {
         text.append(text(sample.driverLevel)).append(SEPARATOR);
         text.append(text(sample.passengerLevel)).append(SEPARATOR);
         text.append(sample.ignitionOn == null ? "" : (sample.ignitionOn ? "1" : "0"));
+        appendModel(text, sample.driverModel);
+        appendModel(text, sample.passengerModel);
         return text.toString();
+    }
+
+    private static String modelHeader(String seat) {
+        return seat + "_base_lo" + SEPARATOR
+                + seat + "_base_hi" + SEPARATOR
+                + seat + "_bank_lo" + SEPARATOR
+                + seat + "_bank_hi" + SEPARATOR
+                + seat + "_model_level";
+    }
+
+    /** Пять полей всегда: без модели они пустые, и столбцы не съезжают. */
+    private static void appendModel(StringBuilder text, Model model) {
+        if (model == null) {
+            text.append(SEPARATOR).append(SEPARATOR).append(SEPARATOR).append(SEPARATOR)
+                    .append(SEPARATOR);
+            return;
+        }
+        text.append(SEPARATOR).append(celsius(model.baseLow));
+        text.append(SEPARATOR).append(celsius(model.baseHigh));
+        text.append(SEPARATOR).append(celsius(model.bankLow));
+        text.append(SEPARATOR).append(celsius(model.bankHigh));
+        text.append(SEPARATOR).append(text(model.level));
+    }
+
+    private static String celsius(double value) {
+        return String.format(Locale.US, "%.1f", value);
     }
 
     private static String text(Integer value) {

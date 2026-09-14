@@ -22,12 +22,26 @@ public class CalibrationLogTest {
         sample.driverLevel = 2;
         sample.passengerLevel = 0;
         sample.ignitionOn = true;
+        sample.driverModel = model(31.25, 33.0, 24.0, 38.5, 2);
+        sample.passengerModel = model(12.0, 45.0, 11.5, 45.0, 0);
         return sample;
+    }
+
+    private static CalibrationLog.Model model(double baseLow, double baseHigh, double bankLow,
+            double bankHigh, Integer level) {
+        CalibrationLog.Model model = new CalibrationLog.Model();
+        model.baseLow = baseLow;
+        model.baseHigh = baseHigh;
+        model.bankLow = bankLow;
+        model.bankHigh = bankHigh;
+        model.level = level;
+        return model;
     }
 
     @Test
     public void writesEveryColumnInHeaderOrder() {
-        assertEquals("2026-09-11 08:30:00;tick;124;20.0;108;88.50 0.00;3 7;2;0;1",
+        assertEquals("2026-09-11 08:30:00;tick;124;20.0;108;88.50 0.00;3 7;2;0;1"
+                        + ";31.3;33.0;24.0;38.5;2;12.0;45.0;11.5;45.0;0",
                 CalibrationLog.row("2026-09-11 08:30:00", sample()));
     }
 
@@ -44,7 +58,21 @@ public class CalibrationLogTest {
          * не должны выглядеть одинаково — на этом строится вся калибровка.
          */
         CalibrationLog.Sample empty = new CalibrationLog.Sample();
-        assertEquals("t;;;;;;;;;", CalibrationLog.row("t", empty));
+        assertEquals("t;;;;;;;;;;;;;;;;;;;", CalibrationLog.row("t", empty));
+    }
+
+    @Test
+    public void modelWithoutDecisionLeavesOnlyLevelEmpty() {
+        /**
+         * Оценка есть всегда, пока наблюдатель готов, а решение — только при
+         * ON: пустой уровень не должен сдвигать или прятать оценку.
+         */
+        CalibrationLog.Sample sample = new CalibrationLog.Sample();
+        sample.driverModel = model(30.0, 30.0, 29.0, 31.0, null);
+        String[] fields = CalibrationLog.row("t", sample).split(";", -1);
+        assertEquals("30.0;30.0;29.0;31.0;",
+                String.join(";", java.util.Arrays.copyOfRange(fields, 10, 15)));
+        assertEquals(";;;;", String.join(";", java.util.Arrays.copyOfRange(fields, 15, 20)));
     }
 
     @Test
