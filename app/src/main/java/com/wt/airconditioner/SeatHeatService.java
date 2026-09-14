@@ -29,7 +29,7 @@ import java.util.Map;
  * со свёрнутым приложением: на Android 13+ без foreground-сервиса процесс
  * убивают, и автоматика молча перестаёт срабатывать.
  */
-public class SeatHeatService extends Service implements CarHvacProbe.Listener, Diagnostics {
+public class SeatHeatService extends Service implements CarHvacProbe.Listener, Diagnostics, SeatControl {
 
     private static final String CHANNEL_ID = "seat_heat";
     private static final int NOTIFICATION_ID = 888;
@@ -279,7 +279,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
         return logs.subscribe(listener::onLogLine);
     }
 
-    public boolean setSeatHeat(Seat seat, int level) {
+    private boolean setSeatHeat(Seat seat, int level) {
         if (!probe.setSeatHeat(seat, level)) {
             /**
              * levels держит только подтверждённое: иначе UI и engine ушли бы
@@ -297,6 +297,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
     }
 
     /** Уровень запоминается в настройках: после перезапуска экран покажет его. */
+    @Override
     public boolean setManualLevel(Seat seat, int level) {
         /**
          * Сначала запись в автомобиль: запомнить непринятую команду значило бы
@@ -342,11 +343,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
      * разрыва. Это не протухшие данные — подогрев висит на HVAC автомобиля и
      * переживает перезапуск CarService.
      */
+    @Override
     public int levelOf(Seat seat) {
         Integer level = levels.get(seat);
         return level == null ? settings.manualLevel(seat) : level;
     }
 
+    @Override
     public HeatMode modeOf(Seat seat) {
         return settings.mode(seat);
     }
@@ -355,6 +358,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
      * «Вручную» останавливает каскад, но уровень не трогает: человек мог только
      * что его выставить. «Авто» стартует сразу, если температура известна.
      */
+    @Override
     public void setMode(Seat seat, HeatMode mode) {
         settings.setMode(seat, mode);
         log("режим " + seat.title + ": " + mode.title);
@@ -455,6 +459,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
      * Повторяет последний пресет сиденья. false — повторять нечего: пресет ещё
      * не выбирали или его удалили, и тогда человека нужно отправить выбирать.
      */
+    @Override
     public boolean applyActivePreset(Seat seat) {
         Preset preset = presets.find(settings.activePreset(seat));
         if (preset == null) {

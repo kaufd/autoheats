@@ -9,6 +9,9 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
 /** Управляет только главной вкладкой: два фиксированных сиденья и их controls. */
 final class SeatHeatUiController implements TabController {
 
@@ -46,7 +49,12 @@ final class SeatHeatUiController implements TabController {
 
     private final Activity activity;
     private final HeatSettings settings;
-    private final ServiceBindingController serviceProvider;
+    /**
+     * Роль, а не сервис целиком. Supplier — потому что binding случается позже
+     * открытия экрана, и до него здесь null: тогда состояние берётся из
+     * настроек, а команды молча не проходят.
+     */
+    private final Supplier<SeatControl> seats;
     private final Listener listener;
     private ThemePalette palette;
 
@@ -55,10 +63,10 @@ final class SeatHeatUiController implements TabController {
     private TextView temperatureView;
 
     SeatHeatUiController(Activity activity, HeatSettings settings,
-            ServiceBindingController serviceProvider, Listener listener, ThemePalette palette) {
+            Supplier<SeatControl> seats, Listener listener, ThemePalette palette) {
         this.activity = activity;
         this.settings = settings;
-        this.serviceProvider = serviceProvider;
+        this.seats = seats;
         this.listener = listener;
         this.palette = palette;
     }
@@ -191,54 +199,55 @@ final class SeatHeatUiController implements TabController {
         }
     }
 
+    /**
+     * Команда сиденью и перерисовка, если сервис уже привязан. Без него экран
+     * показывает настройки и на нажатия не отвечает — обещать тепло, которого
+     * никто не подтверждал, нельзя.
+     */
+    private void command(Consumer<SeatControl> action) {
+        SeatControl service = seats.get();
+        if (service == null) {
+            return;
+        }
+        action.accept(service);
+        render();
+    }
+
     private int levelOf(Seat seat) {
-        SeatHeatService service = serviceProvider.get();
+        SeatControl service = seats.get();
         return service == null ? settings.manualLevel(seat) : service.levelOf(seat);
     }
 
     private HeatMode modeOf(Seat seat) {
-        SeatHeatService service = serviceProvider.get();
+        SeatControl service = seats.get();
         return service == null ? settings.mode(seat) : service.modeOf(seat);
     }
 
     private void selectMode(Seat seat, HeatMode mode) {
-        SeatHeatService service = serviceProvider.get();
-        if (service == null) {
-            return;
-        }
-        if (mode == HeatMode.PRESETS) {
-            if (!service.applyActivePreset(seat)) {
+        command(service -> {
+            if (mode != HeatMode.PRESETS) {
+                service.setMode(seat, mode);
+            } else if (!service.applyActivePreset(seat)) {
+                /** Повторять нечего — человека надо отправить выбирать. */
                 listener.onPresetsRequested(seat);
             }
-            render();
-            return;
-        }
-        service.setMode(seat, mode);
-        render();
+        });
     }
 
     private void setLevel(Seat seat, int level) {
-        SeatHeatService service = serviceProvider.get();
-        if (service == null) {
-            return;
-        }
-        service.setManualLevel(seat, level);
-        render();
+        command(service -> service.setManualLevel(seat, level));
     }
 
     private void toggleSeat(Seat seat) {
-        SeatHeatService service = serviceProvider.get();
-        if (service == null) {
-            return;
-        }
-        if (service.modeOf(seat) != HeatMode.MANUAL) {
-            service.setMode(seat, HeatMode.MANUAL);
-            service.setManualLevel(seat, 1);
-        } else {
-            int level = service.levelOf(seat);
-            service.setManualLevel(seat, level >= 3 ? 0 : level + 1);
-        }
-        render();
+        command(service -> {
+            if (service.modeOf(seat) != HeatMode.MANUAL) {
+                service.setMode(seat, HeatMode.MANUAL);
+                service.setManualLevel(seat, 1);
+            } else {
+                int level = service.levelOf(seat);
+                service.setManualLevel(seat, level >= 3 ? 0 : level + 1);
+            }
+        });
     }
 
     private static final class SeatView {
