@@ -2,6 +2,7 @@ package com.wt.airconditioner;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
@@ -27,6 +28,42 @@ public class SeatThermalModelTest {
             double environment, double minutes) {
         return SeatThermalModel.advance(from, level, environment,
                 new SeatThermalModel.Parameters(), minutes);
+    }
+
+    @Test(timeout = 2_000L)
+    public void rejectsInputsThatWouldHangOrPoisonTheStep() {
+        /**
+         * Отрицательный a давал отрицательный шаг, и advance не завершался —
+         * отсюда timeout. Остальное — ограничения эталона.
+         */
+        SeatThermalModel.Parameters negative = new SeatThermalModel.Parameters();
+        negative.a = -1.0;
+        assertRejected(state(20, 20), 3, 0, negative, 1);
+
+        SeatThermalModel.Parameters nan = new SeatThermalModel.Parameters();
+        nan.p = Double.NaN;
+        assertRejected(state(20, 20), 3, 0, nan, 1);
+
+        SeatThermalModel.Parameters shortDuty = new SeatThermalModel.Parameters();
+        shortDuty.duty = new double[] {0.0, 1.0};
+        assertRejected(state(20, 20), 3, 0, shortDuty, 1);
+
+        SeatThermalModel.Parameters defaults = new SeatThermalModel.Parameters();
+        assertRejected(state(Double.NaN, 20), 3, 0, defaults, 1);
+        assertRejected(state(20, 20), 4, 0, defaults, 1);
+        assertRejected(state(20, 20), 3, Double.NaN, defaults, 1);
+        assertRejected(state(20, 20), 3, 0, defaults, -1);
+        assertRejected(state(20, 20), 3, 0, defaults, Double.POSITIVE_INFINITY);
+    }
+
+    private static void assertRejected(SeatThermalModel.State from, int level,
+            double environment, SeatThermalModel.Parameters parameters, double minutes) {
+        try {
+            SeatThermalModel.advance(from, level, environment, parameters, minutes);
+            fail("вход должен быть отвергнут");
+        } catch (IllegalArgumentException expected) {
+            // ожидаемо
+        }
     }
 
     @Test

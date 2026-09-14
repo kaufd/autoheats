@@ -48,12 +48,38 @@ public class SeatThermostatTest {
     }
 
     @Test
-    public void untrustedCabinForbidsTheTopLevel() {
+    public void untrustedCabinTurnsHeatingOff() {
         /**
-         * Недостоверный салон — не повод считать его холодным: без числа
-         * тройка не разрешается, хотя сиденье промёрзло.
+         * Раздел 2 спецификации: при потере достоверного салона подаётся ноль,
+         * а не «всё, кроме тройки», — даже в промёрзшем сиденье.
          */
-        assertEquals(2, SeatThermostat.choose(frozenSeat(), 0, 3.0, null).level);
+        assertEquals(0, SeatThermostat.choose(frozenSeat(), 2, 3.0, null).level);
+        assertEquals(0, SeatThermostat.choose(frozenSeat(), 2, 3.0, Double.NaN).level);
+    }
+
+    @Test
+    public void emptyBankTurnsHeatingOff() {
+        /**
+         * Без сценариев любой план выглядел допустимым, и при текущей тройке
+         * она сохранялась; промежуточная проверка перегрев тоже не находила.
+         */
+        List<SeatThermostat.Scenario> none = Collections.emptyList();
+        assertEquals(0, SeatThermostat.choose(none, 3, 0.0, -15.0).level);
+        assertTrue(SeatThermostat.mustCoast(none, 3));
+    }
+
+    @Test
+    public void corruptedScenarioTurnsHeatingOff() {
+        SeatThermostat.Scenario broken = scenario(-15, -15, -15);
+        broken.parameters.a = -1.0;
+        List<SeatThermostat.Scenario> bank = Collections.singletonList(broken);
+        assertEquals(0, SeatThermostat.choose(bank, 3, 0.0, -15.0).level);
+        assertTrue(SeatThermostat.mustCoast(bank, 3));
+
+        List<SeatThermostat.Scenario> nan =
+                Collections.singletonList(scenario(Double.NaN, 42, 0));
+        assertEquals(0, SeatThermostat.choose(nan, 3, 0.0, 0.0).level);
+        assertTrue(SeatThermostat.mustCoast(nan, 3));
     }
 
     @Test

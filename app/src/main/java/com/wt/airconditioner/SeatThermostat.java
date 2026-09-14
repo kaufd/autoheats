@@ -97,11 +97,26 @@ final class SeatThermostat {
      * @param elapsedMinutes время с последней подтверждённой смены уровня;
      *        при первом запуске в сессии ожидание не добавляется искусственно
      * @param cabinCelsius достоверная температура салона; null — недостоверна,
-     *        и тогда тройка не разрешается
+     *        и тогда подаётся ноль (раздел 2 спецификации)
      */
     static Decision choose(List<Scenario> scenarios, int currentLevel, double elapsedMinutes,
             Double cabinCelsius) {
-        int maxLevel = cabinCelsius != null && cabinCelsius <= TOP_LEVEL_CABIN_CELSIUS ? 3 : 2;
+        /**
+         * Каждый отказ — ноль, а не исключение и не «как было»: пустой банк
+         * иначе признал бы допустимым любой план и сохранил бы тройку, а NaN
+         * прошёл бы сквозь предел перегрева.
+         */
+        if (!usable(scenarios)) {
+            return new Decision(0, "сценариев нет или они повреждены, нагрев выключен");
+        }
+        if (cabinCelsius == null || !Double.isFinite(cabinCelsius)) {
+            return new Decision(0, "салон недостоверен, нагрев выключен");
+        }
+        if (currentLevel < 0 || currentLevel > 3 || Double.isNaN(elapsedMinutes)
+                || elapsedMinutes < 0) {
+            return new Decision(0, "уровень или время недостоверны, нагрев выключен");
+        }
+        int maxLevel = cabinCelsius <= TOP_LEVEL_CABIN_CELSIUS ? 3 : 2;
         int[] best = null;
         double bestScore = 0;
         for (int[] plan : planCandidates(currentLevel, elapsedMinutes, maxLevel)) {
@@ -144,12 +159,31 @@ final class SeatThermostat {
         if (currentLevel <= 0) {
             return false;
         }
+        /** Проверить перегрев нечем — греть дальше нельзя. */
+        if (currentLevel > 3 || !usable(scenarios)) {
+            return true;
+        }
         for (Scenario scenario : scenarios) {
             if (evaluate(new int[] {currentLevel}, scenario).peak > GUARD_CELSIUS + TIE_CELSIUS) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** Хотя бы один сценарий, и все пригодны для расчёта. */
+    private static boolean usable(List<Scenario> scenarios) {
+        if (scenarios == null || scenarios.isEmpty()) {
+            return false;
+        }
+        for (Scenario scenario : scenarios) {
+            if (scenario == null || !SeatThermalModel.isValid(scenario.state)
+                    || !SeatThermalModel.isValid(scenario.parameters)
+                    || !Double.isFinite(scenario.environment)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
