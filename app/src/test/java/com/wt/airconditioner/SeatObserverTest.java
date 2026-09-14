@@ -27,7 +27,7 @@ public class SeatObserverTest {
      * (пусто — неизвестен); зажигание; окружение; базовый профиль; истории,
      * каждая «нижний мат,нижняя поверхность,верхний мат,верхняя поверхность».
      */
-    private static String snapshot(Seat seat, String level, int ignition, double environment,
+    static String snapshot(Seat seat, String level, int ignition, double environment,
             double mat, double surface) {
         int histories = seat == Seat.DRIVER ? 12 : 18;
         String state = mat + "," + surface + "," + mat + "," + surface;
