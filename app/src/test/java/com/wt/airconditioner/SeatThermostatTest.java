@@ -137,30 +137,16 @@ public class SeatThermostatTest {
     }
 
     /**
-     * Банк из 18 гипотетических профилей раздела 6 спецификации: три набора
-     * теплообмена × две гипотезы устройства уровней × три профиля контакта.
-     * Это набор для поиска проблем, не калибровка и не распределение
-     * вероятностей, поэтому он живёт в тесте, а не в приложении.
+     * Банк из 18 гипотетических профилей раздела 6 спецификации — тот, что
+     * ведёт наблюдатель пассажира: три набора теплообмена × две гипотезы
+     * устройства уровней × три профиля контакта. Набор для поиска проблем, не
+     * калибровка и не распределение вероятностей.
      */
     private static List<SeatThermostat.Scenario> hypotheticalBank() {
-        double[][] seeds = {{43.0, 1.0, 1.0}, {43.0 * 0.7, 0.5, 2.0}, {43.0 * 1.3, 2.0, 0.5}};
-        double[][] duties = {{0.0, 0.40, 0.66, 1.0}, {0.0, 1.0, 1.0, 1.0}};
-        double[][] contacts = {{1.0, 0.0, 33.0}, {0.75, 0.02, 32.0}, {0.5, 0.08, 35.0}};
         List<SeatThermostat.Scenario> bank = new ArrayList<>();
-        for (double[] seed : seeds) {
-            for (double[] duty : duties) {
-                for (double[] contact : contacts) {
-                    SeatThermalModel.Parameters parameters = new SeatThermalModel.Parameters();
-                    parameters.p = seed[0];
-                    parameters.r = seed[1];
-                    parameters.air = parameters.air * seed[2] * contact[0];
-                    parameters.duty = duty.clone();
-                    parameters.body = contact[1];
-                    parameters.bodyCelsius = contact[2];
-                    bank.add(new SeatThermostat.Scenario(
-                            new SeatThermalModel.State(-15, -15), parameters, -15));
-                }
-            }
+        for (SeatThermalModel.Parameters profile : SeatObserver.profilesWhileOn(Seat.PASSENGER)) {
+            bank.add(new SeatThermostat.Scenario(
+                    new SeatThermalModel.State(-15, -15), profile, -15));
         }
         return bank;
     }
