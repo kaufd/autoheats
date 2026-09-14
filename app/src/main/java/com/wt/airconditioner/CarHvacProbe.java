@@ -15,6 +15,7 @@ import android.content.ServiceConnection;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
 
 import java.util.Arrays;
 import java.util.Objects;
@@ -111,6 +112,13 @@ public class CarHvacProbe {
     private Integer lastZoneRaw;
 
     /**
+     * elapsedRealtime последнего получения улицы — чтением или событием, в том
+     * числе повтора. Возраст по нему проверяет фоновая модель; null — не
+     * получали.
+     */
+    private Long lastOutsideAtMs;
+
+    /**
      * Последние прочитанные значения — их забирает ряд калибровки в сервисе.
      * Здесь, а не в listener: сервис снимает их по своему таймеру, и городить
      * ради этого ещё один колбэк не за чем.
@@ -134,6 +142,10 @@ public class CarHvacProbe {
 
     Integer lastOutsideRaw() {
         return lastZoneRaw;
+    }
+
+    Long lastOutsideAtMs() {
+        return lastOutsideAtMs;
     }
 
     float[] lastCoolantFloats() {
@@ -535,6 +547,7 @@ public class CarHvacProbe {
      */
     private void logZoneTemperature(int areaId, Object rawValue) {
         Integer raw = parseRaw(rawValue);
+        lastOutsideAtMs = SystemClock.elapsedRealtime();
         if (Objects.equals(raw, lastZoneRaw)) {
             return;
         }
@@ -578,6 +591,7 @@ public class CarHvacProbe {
              * уже незачем, а по кнопке человек ждёт ответа в любом случае.
              */
             lastZoneRaw = raw;
+            lastOutsideAtMs = SystemClock.elapsedRealtime();
             outsideFailureLogged = false;
             return raw;
         } catch (Exception e) {
