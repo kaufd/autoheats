@@ -13,6 +13,7 @@
 | данные первого замера | `docs/autoheat-data-20260912-131954.csv`, снимки `docs/IMG_70*` |
 | данные второго замера | `docs/замеры 14.09/` (не в git по решению владельца) |
 | фоновый расчёт | `docs/superpowers/specs/2026-09-14-model-shadow-mode-design.md` |
+| границы модулей, долг по SRP | `docs/superpowers/specs/2026-09-14-service-boundaries-handoff.md` |
 | полевой чеклист | `docs/field-checklist.html` (не в git по решению владельца) |
 | ветка | `docs/thermal-model-spec` от `master` |
 
@@ -114,7 +115,12 @@
    отключена», колонки `*_base_*`, `*_bank_*`, `*_model_level` в ряду.
    Включать управление — не раньше четырёх точек нагрева и двух остывания;
    перевод из фона — `ModelShadow` отдаёт решение в `setSeatHeat` вместо лога
-   плюс порог `T_off` и такт 15 секунд.
+   плюс порог `T_off` и такт 15 секунд. Шов для этого готов: поле сервиса
+   имеет тип `SeatHeatDriver`, и модельный драйвер подставляется в `onCreate`
+   вместо `AutoHeatEngine`. **Разбор ядра `SeatHeatService` делается тем же
+   заходом** — он идёт через тот же код (`resume`, `startAuto`, `setSeatHeat`,
+   `levels`), и порознь это два полных smoke на голове вместо одного; см.
+   `2026-09-14-service-boundaries-handoff.md`.
 3. Попутно: стоянка со сравнявшимися салоном и улицей — проверка смещения
    формулы салона.
 
