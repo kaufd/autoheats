@@ -198,7 +198,12 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         CalibrationLog.Sample sample = new CalibrationLog.Sample();
         sample.reason = reason;
         sample.cabinRaw = probe.lastCabinRaw();
-        sample.cabinCelsius = lastCelsius;
+        /**
+         * Из того же raw, а не из lastCelsius: пересчёт приходит в сервис через
+         * post и отстаёт от чтения, а при sentinel не приходит вовсе — строка
+         * связала бы новый raw со старой температурой.
+         */
+        sample.cabinCelsius = CarHvacProbe.celsiusToPublish(sample.cabinRaw);
         sample.outsideRaw = probe.lastOutsideRaw();
         sample.coolantFloats = probe.lastCoolantFloats();
         sample.coolantInts = probe.lastCoolantInts();

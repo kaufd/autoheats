@@ -43,8 +43,8 @@ public class CarHvacProbe {
     private static final int NO_DATA_RAW = 255;
 
     /**
-     * Зона «за бортом». Объявлена в SDK, но отдаёт ли её голова — неизвестно:
-     * это и выясняет пробник в readCabinTemperature.
+     * Зона «за бортом». Голова её отдаёт — и чтением, и событиями подписки
+     * (замер 12.09); пересчёт — outsideCelsius.
      */
     private static final int AREA_OUTSIDE = VehicleAreaInOutCAR.InOutCAR_OUTSIDE;
 
@@ -539,12 +539,11 @@ public class CarHvacProbe {
             return;
         }
         lastZoneRaw = raw;
-        Double celsius = celsiusToPublish(rawValue);
+        Double celsius = outsideCelsius(rawValue);
         log("температура зоны " + areaId + ": raw=" + raw
                 + (celsius == null
                         ? " — sentinel или неразбираемое значение"
-                        : " → " + TemperatureConstants.celsiusText(celsius)
-                                + " (формулой салона)"));
+                        : " → " + TemperatureConstants.celsiusText(celsius)));
     }
 
     /**
@@ -552,19 +551,18 @@ public class CarHvacProbe {
      * Нужна тепловой модели — окружение подушки холоднее воздуха салона, и
      * поправка считается от разницы с улицей.
      *
-     * Логируется и raw, и пересчёт формулой салона: применима ли она к этой
-     * зоне, неизвестно, и решать это по одному числу на экране нельзя.
+     * Логируется и raw: ряд калибровки хранит именно его, и пересчёт в логе
+     * должен сверяться с рядом.
      */
     private void probeOutsideTemperature() {
         Integer raw = readOutsideRaw();
         if (raw == null) {
             return;
         }
-        Double celsius = celsiusToPublish(raw);
+        Double celsius = outsideCelsius(raw);
         log(celsius == null
                 ? "за бортом: raw=" + raw + " — sentinel, данных нет"
-                : "за бортом: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius)
-                        + " (формулой салона)");
+                : "за бортом: raw=" + raw + " → " + TemperatureConstants.celsiusText(celsius));
     }
 
     /**
@@ -805,11 +803,27 @@ public class CarHvacProbe {
      * каскад как «салон 85.5 °C» (замер 14.09, раздел 7 спецификации модели).
      */
     static Double celsiusToPublish(Object rawValue) {
+        Integer raw = readingRaw(rawValue);
+        return raw == null ? null : (raw - 84) / 2.0;
+    }
+
+    /**
+     * Забортная: шаг тот же, что у салона, смещение другое — raw/2 − 40. Две
+     * опоры по приборке (106 → 13 °C, 116 → 18 °C), замер 14.09, раздел 7
+     * спецификации модели. Формула салона давала на 2 °C холоднее.
+     */
+    static Double outsideCelsius(Object rawValue) {
+        Integer raw = readingRaw(rawValue);
+        return raw == null ? null : (raw - 80) / 2.0;
+    }
+
+    /** Разобранный raw без sentinel; null — температуры нет. */
+    private static Integer readingRaw(Object rawValue) {
         Integer raw = parseRaw(rawValue);
         if (raw == null || raw < 0 || raw >= NO_DATA_RAW) {
             return null;
         }
-        return (raw - 84) / 2.0;
+        return raw;
     }
 
     /** package-private ради юнит-теста: на эмуляторе этот путь не проверить. */

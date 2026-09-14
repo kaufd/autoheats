@@ -78,6 +78,18 @@ public class CarHvacProbeTest {
     }
 
     @Test
+    public void convertsOutsideWithItsOwnOffset() {
+        /**
+         * Опоры по приборке: 106 → 13 °C, 116 → 18 °C. Формула салона дала бы
+         * 11 и 16. Sentinel отсекается так же, как у салона.
+         */
+        assertEquals(Double.valueOf(13.0), CarHvacProbe.outsideCelsius(106));
+        assertEquals(Double.valueOf(18.0), CarHvacProbe.outsideCelsius("116"));
+        assertNull(CarHvacProbe.outsideCelsius(255));
+        assertNull(CarHvacProbe.outsideCelsius(-1));
+    }
+
+    @Test
     public void doesNotPublishUnparseableValue() {
         assertNull(CarHvacProbe.celsiusToPublish("нет данных"));
         assertNull(CarHvacProbe.celsiusToPublish(null));
