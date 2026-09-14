@@ -166,7 +166,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
          * Контроллеры заводятся без своих View: страницы им раздаст адаптер.
          */
         heatUi = new SeatHeatUiController(this, settings, serviceBinding, heatListener, palette);
-        logUi = new LogUiController(this, serviceBinding, palette);
+        logUi = new LogUiController(this, serviceBinding::get, palette);
         presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
         updateController = new AppUpdateController(this);
         settingsUi = new SettingsUiController(this, settings, updateController,

@@ -27,6 +27,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /** Локальное представление диагностического лога и debug-инжектора. */
 final class LogUiController implements TabController {
@@ -40,7 +42,12 @@ final class LogUiController implements TabController {
     private static final int PANEL_FILL = 0x99000000;
 
     private final Activity activity;
-    private final ServiceBindingController serviceProvider;
+    /**
+     * Роль, а не сервис целиком: вкладке логов нечего делать с подогревом.
+     * Supplier — потому что binding случается позже открытия экрана, и до него
+     * здесь null.
+     */
+    private final Supplier<Diagnostics> diagnostics;
     private final Deque<String> logLines = new ArrayDeque<>();
     private ThemePalette palette;
 
@@ -62,10 +69,21 @@ final class LogUiController implements TabController {
      */
     private boolean visible;
 
-    LogUiController(Activity activity, ServiceBindingController serviceProvider, ThemePalette palette) {
+    LogUiController(Activity activity, Supplier<Diagnostics> diagnostics, ThemePalette palette) {
         this.activity = activity;
-        this.serviceProvider = serviceProvider;
+        this.diagnostics = diagnostics;
         this.palette = palette;
+    }
+
+    /**
+     * Действие над сервисом, если он уже привязан. Шесть кнопок вкладки иначе
+     * повторяли бы одну и ту же проверку на null.
+     */
+    private void withService(Consumer<Diagnostics> action) {
+        Diagnostics service = diagnostics.get();
+        if (service != null) {
+            action.accept(service);
+        }
     }
 
     /** Страница создана адаптером: разбираем её и вешаем слушателей. */
@@ -80,27 +98,15 @@ final class LogUiController implements TabController {
         injectValue = page.findViewById(R.id.injectValue);
         quickTemperatures = page.findViewById(R.id.quickTemperatures);
 
-        page.findViewById(R.id.startCascade).setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.startAutoHeatNow();
-            }
-        });
-        page.findViewById(R.id.readTemp).setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.readCabinTemperature();
-            }
-        });
+        page.findViewById(R.id.startCascade).setOnClickListener(
+                v -> withService(Diagnostics::startAutoHeatNow));
+        page.findViewById(R.id.readTemp).setOnClickListener(
+                v -> withService(Diagnostics::readCabinTemperature));
         page.findViewById(R.id.saveLog).setOnClickListener(v -> saveLog());
         page.findViewById(R.id.clearLog).setOnClickListener(v -> clearLog());
         page.findViewById(R.id.injectTemp).setOnClickListener(v -> injectTemperature());
-        page.findViewById(R.id.restartCar).setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.restartCarConnection();
-            }
-        });
+        page.findViewById(R.id.restartCar).setOnClickListener(
+                v -> withService(Diagnostics::restartCarConnection));
     }
 
     /** Отладку выключили — страницы больше нет, но лог копится дальше. */
@@ -155,10 +161,7 @@ final class LogUiController implements TabController {
     }
 
     void clearLog() {
-        SeatHeatService service = serviceProvider.get();
-        if (service != null) {
-            service.clearLogs();
-        }
+        withService(Diagnostics::clearLogs);
         logLines.clear();
         renderLog();
     }
@@ -184,10 +187,7 @@ final class LogUiController implements TabController {
     }
 
     void log(String message) {
-        SeatHeatService service = serviceProvider.get();
-        if (service != null) {
-            service.onLog(message);
-        }
+        withService(service -> service.log(message));
     }
 
     private void buildQuickTemperatures() {
@@ -219,12 +219,7 @@ final class LogUiController implements TabController {
 
         button.setBackground(Ui.roundRect(activity, CHIP_RADIUS_DP,
                 palette.chipFill, palette.chipStroke));
-        button.setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.injectTemperature(celsius);
-            }
-        });
+        button.setOnClickListener(v -> withService(service -> service.injectTemperature(celsius)));
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, Ui.dp(activity, 38), 1f);
         if (withMargin) {
@@ -236,12 +231,12 @@ final class LogUiController implements TabController {
 
     private void injectTemperature() {
         String text = injectValue.getText().toString().trim().replace(',', '.');
-        SeatHeatService service = serviceProvider.get();
-        if (service == null || text.isEmpty()) {
+        if (text.isEmpty()) {
             return;
         }
         try {
-            service.injectTemperature(Double.parseDouble(text));
+            double celsius = Double.parseDouble(text);
+            withService(service -> service.injectTemperature(celsius));
         } catch (NumberFormatException e) {
             Toast.makeText(activity, "Не похоже на температуру", Toast.LENGTH_SHORT).show();
         }
