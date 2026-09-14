@@ -155,6 +155,11 @@ final class SeatObserver {
     private String origin;
     /** null — окно пересчёта после долгого перерыва закрыто. */
     private Replay replay;
+    /**
+     * Промежутки без достоверного салона со своими уровнем и зажиганием.
+     * Досчитываются, когда воздух вернётся; состояние и снимок — на их начало.
+     */
+    private final List<Segment> pending = new ArrayList<>();
     /** Настенное время принятого снимка; только для перерыва при восстановлении. */
     private long snapshotWallMs;
     private long lastElapsedMs;
@@ -192,7 +197,9 @@ final class SeatObserver {
     /**
      * Наблюдатель после старта процесса. Снимок годится — перерыв досчитывается
      * по настенному времени с уровнем и зажиганием из снимка; нет, повреждён,
-     * чужой версии или часы ушли назад — неизвестная история.
+     * чужой версии или часы ушли назад — неизвестная история. Снимок из
+     * поездки перед долгим перерывом — тоже: голова гаснет при OFF вместе с
+     * процессом, и когда выключили зажигание и кто сидел, не узнать.
      *
      * @param level и ignitionOn — текущие, действуют с этого момента
      */
@@ -201,10 +208,14 @@ final class SeatObserver {
         SeatObserver observer = new SeatObserver(seat);
         double now = environment(cabinCelsius, outsideCelsius);
         String failure = observer.load(snapshot, wallNowMs);
+        double gapMinutes = (wallNowMs - observer.snapshotWallMs) / MINUTE_MS;
+        if (failure == null && observer.ignitionOn && gapMinutes >= LONG_GAP_MINUTES) {
+            failure = String.format(Locale.US, "снимок из поездки, перерыв %.1f мин", gapMinutes);
+        }
         if (failure == null) {
-            double gapMinutes = (wallNowMs - observer.snapshotWallMs) / MINUTE_MS;
             observer.origin = String.format(Locale.US, "снимок, перерыв %.1f мин", gapMinutes);
-            observer.step(gapMinutes, now, cabinCelsius, outsideCelsius);
+            observer.step(new Segment(gapMinutes, observer.level, observer.ignitionOn,
+                    observer.environment, now), now, cabinCelsius, outsideCelsius);
         } else {
             observer.origin = "неизвестная история: " + failure;
             /** Воздух при старте тоже может быть устаревшим — окно открыто. */
@@ -228,15 +239,28 @@ final class SeatObserver {
      * Досчитывает промежуток с прошлого наблюдения и запоминает новые входы.
      * На промежутке действуют уровень и зажигание его начала: новое значение,
      * пришедшее событием, относится к будущему.
+     *
+     * Без салона промежуток откладывается: смена уровня или зажигания в это
+     * время не теряется, а окружение ему — оболочка между последним воздухом
+     * и вернувшимся.
      */
-    void observe(long elapsedMs, Integer level, boolean ignitionOn, double cabinCelsius,
+    void observe(long elapsedMs, Integer level, boolean ignitionOn, Double cabinCelsius,
             Double outsideCelsius) {
-        double now = environment(cabinCelsius, outsideCelsius);
-        step(Math.max(0L, elapsedMs - lastElapsedMs) / MINUTE_MS, now, cabinCelsius,
-                outsideCelsius);
+        pending.add(new Segment(Math.max(0L, elapsedMs - lastElapsedMs) / MINUTE_MS,
+                this.level, this.ignitionOn, environment, environment));
         lastElapsedMs = elapsedMs;
         this.level = level;
         this.ignitionOn = ignitionOn;
+        if (cabinCelsius == null) {
+            return;
+        }
+        double now = environment(cabinCelsius, outsideCelsius);
+        for (Segment segment : pending) {
+            segment.lowEnvironment = Math.min(segment.lowEnvironment, now);
+            segment.highEnvironment = Math.max(segment.highEnvironment, now);
+            step(segment, now, cabinCelsius, outsideCelsius);
+        }
+        pending.clear();
         environment = now;
     }
 
@@ -274,12 +298,22 @@ final class SeatObserver {
      * окружение; базовый профиль; истории — «нижний мат,нижняя поверхность,
      * верхний мат,верхняя поверхность». Double.toString читается обратно без
      * потерь.
+     *
+     * Время, уровень и зажигание — на момент досчитанного состояния, а не
+     * «сейчас»: отложенное без воздуха досчитает перерыв после перезапуска.
+     * Смены внутри отложенного при этом теряются.
      */
     String encode(long wallMs) {
+        double pendingMinutes = 0;
+        for (Segment segment : pending) {
+            pendingMinutes += segment.minutes;
+        }
+        Integer countedLevel = pending.isEmpty() ? level : pending.get(0).level;
+        boolean countedIgnition = pending.isEmpty() ? ignitionOn : pending.get(0).ignitionOn;
         StringBuilder text = new StringBuilder(SNAPSHOT_VERSION);
-        text.append(SEPARATOR).append(wallMs);
-        text.append(SEPARATOR).append(level == null ? "" : String.valueOf(level));
-        text.append(SEPARATOR).append(ignitionOn ? '1' : '0');
+        text.append(SEPARATOR).append(wallMs - Math.round(pendingMinutes * MINUTE_MS));
+        text.append(SEPARATOR).append(countedLevel == null ? "" : String.valueOf(countedLevel));
+        text.append(SEPARATOR).append(countedIgnition ? '1' : '0');
         text.append(SEPARATOR).append(environment);
         appendHistory(text, base);
         for (History history : histories) {
@@ -373,14 +407,13 @@ final class SeatObserver {
     }
 
     /**
-     * Отрезок от прошлого наблюдения с нынешним окружением в конце. Долгий
-     * перерыв открывает окно пересчёта; в окне воздух, вышедший за оболочку
-     * перерыва, прогоняет перерыв и всё после него заново.
+     * Отрезок до нынешнего воздуха. Долгий перерыв открывает окно пересчёта; в
+     * окне воздух, вышедший за оболочку перерыва, прогоняет перерыв и всё после
+     * него заново.
      */
-    private void step(double minutes, double now, double cabinCelsius, Double outsideCelsius) {
-        Segment segment = new Segment(minutes, level, ignitionOn, environment, now);
+    private void step(Segment segment, double now, double cabinCelsius, Double outsideCelsius) {
         if (replay != null) {
-            replay.minutesAfterGap += minutes;
+            replay.minutesAfterGap += segment.minutes;
             if (replay.minutesAfterGap > SETTLE_MINUTES) {
                 replay = null;
             } else {
@@ -393,7 +426,7 @@ final class SeatObserver {
                 return;
             }
         }
-        if (minutes >= LONG_GAP_MINUTES) {
+        if (segment.minutes >= LONG_GAP_MINUTES) {
             replay = new Replay(states(), now, now);
             replay.segments.add(segment);
         }
@@ -452,14 +485,24 @@ final class SeatObserver {
 
     /**
      * Отрезок под его уровнем и зажиганием. Нижняя граница — с меньшим
-     * окружением и, при неизвестном уровне, без нагрева; верхняя — с большим и
-     * тройкой.
+     * окружением и без нагрева, если уровень неизвестен или зажигание не ON:
+     * подогрев обесточивается вместе с зажиганием, но выключение не
+     * подтверждено. Верхняя — с большим окружением и тройкой при неизвестном
+     * уровне.
+     *
+     * Неподтверждённый нагрев дольше долгого перерыва — неизвестная история
+     * от воздуха отрезка: сколько грело, не узнать, а досчёт без ранней
+     * остановки на главном потоке ничем не ограничен.
      */
     private void advance(Segment segment) {
-        int lowLevel = segment.level == null ? 0 : segment.level;
+        int lowLevel = segment.level == null || !segment.ignitionOn ? 0 : segment.level;
         int highLevel = segment.level == null ? 3 : segment.level;
         double low = segment.lowEnvironment;
         double high = segment.highEnvironment;
+        if (highLevel > 0 && !segment.ignitionOn && segment.minutes >= LONG_GAP_MINUTES) {
+            startUnknown(low, high);
+            return;
+        }
         double remaining = segment.minutes;
         while (remaining > 0) {
             double chunk = Math.min(remaining, CHUNK_MINUTES);

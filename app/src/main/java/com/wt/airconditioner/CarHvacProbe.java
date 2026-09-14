@@ -124,6 +124,13 @@ public class CarHvacProbe {
      * ради этого ещё один колбэк не за чем.
      */
     private Integer lastCabinRaw;
+    /**
+     * Последний салон, не sentinel, и elapsedRealtime его получения — для
+     * фоновой модели. Здесь, а не в сервисе: пересчёт уходит туда через post и
+     * к тику ряда ещё не доходит, а отладочная подстановка сюда не попадает.
+     */
+    private Double lastCabinCelsius;
+    private Long lastCabinAtMs;
     private float[] lastCoolantFloats;
     private int[] lastCoolantInts;
 
@@ -138,6 +145,14 @@ public class CarHvacProbe {
 
     Integer lastCabinRaw() {
         return lastCabinRaw;
+    }
+
+    Double lastCabinCelsius() {
+        return lastCabinCelsius;
+    }
+
+    Long lastCabinAtMs() {
+        return lastCabinAtMs;
     }
 
     Integer lastOutsideRaw() {
@@ -164,7 +179,7 @@ public class CarHvacProbe {
                         return;
                     }
                     if (value.getAreaId() == AREA_INSIDE) {
-                        publishTemperature(value.getValue());
+                        publishTemperature(value.getValue(), false);
                         return;
                     }
                     /**
@@ -524,7 +539,7 @@ public class CarHvacProbe {
             return;
         }
         try {
-            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE));
+            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), true);
         } catch (Exception e) {
             log("ОШИБКА чтения температуры: " + e);
         }
@@ -656,7 +671,7 @@ public class CarHvacProbe {
             return;
         }
         try {
-            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE));
+            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), false);
         } catch (Exception e) {
             if (!cabinFailureLogged) {
                 cabinFailureLogged = true;
@@ -777,13 +792,19 @@ public class CarHvacProbe {
      * Формула датчика головы: (raw - 84) / 2 = °C. Значение приходит числом ИЛИ
      * строкой, а sentinel «нет данных» (см. celsiusToPublish) — не температура:
      * показать его как рабочую значило бы соврать об исправности датчика.
+     *
+     * @param requested чтение по кнопке: человек ждёт ответа и на повтор
      */
-    private void publishTemperature(Object rawValue) {
+    private void publishTemperature(Object rawValue, boolean requested) {
         cabinFailureLogged = false;
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
             Integer raw = parseRaw(rawValue);
-            boolean repeated = raw != null && raw.equals(lastCabinRaw);
+            /**
+             * Неразбираемое значение не отсеивается: потока таких не ждём, и
+             * каждое — сведение о типе, которого голова раньше не слала.
+             */
+            boolean repeated = !requested && raw != null && raw.equals(lastCabinRaw);
             /**
              * Sentinel тоже в ряд: «датчик молчал» — сведение, которое при
              * разборе записи не должно выглядеть как отсутствие строки.
@@ -804,6 +825,8 @@ public class CarHvacProbe {
         final int raw = parseRaw(rawValue);
         final double value = celsius;
         lastCabinRaw = raw;
+        lastCabinCelsius = value;
+        lastCabinAtMs = SystemClock.elapsedRealtime();
         mainHandler.post(() -> listener.onCabinTemperature(value, raw));
     }
 

@@ -102,6 +102,47 @@ public class ModelShadowTest {
     }
 
     @Test
+    public void levelChangeWhileCabinIsMissingIsNotLost() {
+        /**
+         * Утро: воздух ещё недостоверен, а каскад уже поставил тройку. Когда
+         * воздух вернулся, минута до каскада считается нулём, две после — тройкой.
+         */
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, 20.0, 20.0, 20.0));
+        levels.put(Seat.DRIVER, 0);
+        ModelShadow shadow = shadow();
+        shadow.update(0L, WALL, levels, true, 20.0, null);
+        levels.put(Seat.DRIVER, 3);
+        shadow.update(60_000L, WALL + 60_000L, levels, true, null, null);
+        shadow.update(180_000L, WALL + 180_000L, levels, true, 20.0, null);
+
+        SeatThermalModel.Parameters base = new SeatThermalModel.Parameters();
+        SeatThermalModel.State idle = SeatThermalModel.advance(
+                new SeatThermalModel.State(20, 20), 0, 20, base, 1);
+        double expected = SeatThermalModel.advance(idle, 3, 20, base, 2).surface;
+        assertEquals(expected, shadow.model(Seat.DRIVER).baseLow, 1e-9);
+        assertEquals(expected, shadow.model(Seat.DRIVER).baseHigh, 1e-9);
+    }
+
+    @Test
+    public void snapshotKeepsTheTimeOfCountedState() {
+        /**
+         * Без воздуха состояние не досчитано: снимок с «сейчас» потерял бы
+         * этот кусок перерыва при перезапуске.
+         */
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "0", 0, 20.0, 20.0, 20.0));
+        levels.put(Seat.DRIVER, 0);
+        ModelShadow shadow = shadow();
+        shadow.update(0L, WALL, levels, false, 20.0, null);
+        shadow.update(600_000L, WALL + 600_000L, levels, false, null, null);
+
+        ModelShadow restarted = shadow();
+        restarted.update(0L, WALL + 600_000L, levels, false, 20.0, null);
+        assertEquals(1, containing(log, "водитель: снимок, перерыв 10.0 мин").size());
+    }
+
+    @Test
     public void decidesOnlyWhileIgnitionIsOn() {
         ModelShadow shadow = shadow();
         shadow.update(0L, WALL, levels, false, -15.0, null);
@@ -119,21 +160,53 @@ public class ModelShadowTest {
     @Test
     public void regularDecisionWaitsAMinute() {
         /**
-         * Салон пропал: решение, посчитанное сразу, дало бы ноль и строку в
-         * логе. Через 30 секунд его ещё нет, через минуту — есть.
+         * Промёрзшее сиденье при −25 °C — тройка. Салон прогрелся выше нуля, и
+         * тройка больше не разрешена: решение, посчитанное сразу, сменилось бы.
+         * Через 30 секунд оно прежнее, через минуту — новое.
          */
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -25.0, -25.0, -25.0));
+        levels.put(Seat.DRIVER, 0);
+        ModelShadow shadow = shadow();
+        shadow.update(0L, WALL, levels, true, -25.0, null);
+        assertEquals(Integer.valueOf(3), shadow.model(Seat.DRIVER).level);
+
+        shadow.update(30_000L, WALL, levels, true, 5.0, null);
+        assertEquals(Integer.valueOf(3), shadow.model(Seat.DRIVER).level);
+
+        shadow.update(60_000L, WALL, levels, true, 5.0, null);
+        assertEquals(Integer.valueOf(2), shadow.model(Seat.DRIVER).level);
+    }
+
+    @Test
+    public void lostCabinTurnsDecisionToZeroWithoutWaiting() {
+        /** Раздел 2 спецификации: салон недостоверен — ноль, а не прежний уровень. */
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -15.0, -15.0, -15.0));
+        levels.put(Seat.DRIVER, 0);
         ModelShadow shadow = shadow();
         shadow.update(0L, WALL, levels, true, -15.0, null);
-        int before = decisions(Seat.PASSENGER).size();
+        assertTrue(shadow.model(Seat.DRIVER).level > 0);
 
         shadow.update(30_000L, WALL, levels, true, null, null);
-        assertEquals(before, decisions(Seat.PASSENGER).size());
+        assertEquals(Integer.valueOf(0), shadow.model(Seat.DRIVER).level);
+        List<String> lines = decisions(Seat.DRIVER);
+        assertTrue(lines.get(lines.size() - 1).contains("салон недостоверен"));
+    }
 
-        shadow.update(60_000L, WALL, levels, true, null, null);
-        List<String> after = decisions(Seat.PASSENGER);
-        assertEquals(before + 1, after.size());
-        assertTrue(after.get(after.size() - 1).contains("салон недостоверен"));
-        assertEquals(Integer.valueOf(0), shadow.model(Seat.PASSENGER).level);
+    @Test
+    public void firstKnownLevelDoesNotDelayRaising() {
+        /**
+         * Уровень ещё не прочитан, затем прочитан ноль. Это первый увиденный
+         * уровень, а не смена: трёхминутного запрета повышения нет.
+         */
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -15.0, -15.0, -15.0));
+        ModelShadow shadow = shadow();
+        shadow.update(0L, WALL, levels, true, null, null);
+        levels.put(Seat.DRIVER, 0);
+        shadow.update(1_000L, WALL, levels, true, -15.0, null);
+        assertTrue(shadow.model(Seat.DRIVER).level > 0);
     }
 
     @Test
@@ -150,6 +223,24 @@ public class ModelShadowTest {
         shadow.update(45_000L, WALL, levels, true, 25.0, null);
         assertEquals(1, containing(decisions(Seat.DRIVER), "перегрев в прогнозе").size());
         assertEquals(Integer.valueOf(0), shadow.model(Seat.DRIVER).level);
+    }
+
+    @Test
+    public void overheatForecastIsNotOverwrittenByRegularDecision() {
+        /**
+         * Мат остыл, поверхность горячая, тройка: прогноз перегрева требует
+         * ноль, а обычный выбор на том же минутном обновлении дал бы единицу.
+         * Пока прогноз держится, в ряду и логе — ноль перегрева.
+         */
+        levels.put(Seat.DRIVER, 3);
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "3", 1, 30.0, 25.0, 37.75));
+        ModelShadow shadow = shadow();
+        shadow.update(0L, WALL, levels, true, 30.0, null);
+        assertEquals(Integer.valueOf(0), shadow.model(Seat.DRIVER).level);
+        for (String line : decisions(Seat.DRIVER)) {
+            assertTrue(line, line.contains("перегрев в прогнозе"));
+        }
     }
 
     @Test

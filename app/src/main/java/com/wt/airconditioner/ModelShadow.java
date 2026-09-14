@@ -3,7 +3,6 @@ package com.wt.airconditioner;
 import java.util.EnumMap;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 /**
  * Тепловая модель в фоне: наблюдатели обоих сидений идут по фактическим
@@ -111,22 +110,26 @@ final class ModelShadow {
     /**
      * Смена подтверждённого уровня запускает задержку повышения. Первый
      * увиденный в процессе уровень её не запускает: при первом запуске
-     * ожидание искусственно не добавляется.
+     * ожидание искусственно не добавляется. Неизвестный уровень увиденным не
+     * считается — иначе первое удачное чтение сошло бы за смену.
      */
     private void trackLevels(long elapsedMs, Map<Seat, Integer> levels) {
         for (Seat seat : Seat.values()) {
             Integer level = levels.get(seat);
-            if (seenLevels.containsKey(seat) && !Objects.equals(seenLevels.get(seat), level)) {
+            if (level == null) {
+                continue;
+            }
+            Integer seen = seenLevels.put(seat, level);
+            if (seen != null && !seen.equals(level)) {
                 levelChangedAtMs.put(seat, elapsedMs);
             }
-            seenLevels.put(seat, level);
         }
     }
 
     /**
      * Досчёт наблюдателей и снимок. false — наблюдателей нет: воздух ещё не был
-     * достоверен. Без салона уже созданные наблюдатели ждут: перерыв досчитается
-     * оболочкой, когда воздух вернётся.
+     * достоверен. Без салона уже созданные наблюдатели откладывают промежуток:
+     * он досчитается оболочкой, когда воздух вернётся.
      */
     private boolean advance(long elapsedMs, long wallMs, Map<Seat, Integer> levels,
             boolean ignitionOn, Double cabinCelsius, Double outsideCelsius) {
@@ -143,7 +146,7 @@ final class ModelShadow {
                 log("модель, " + seat.title + ": " + observer.origin() + ", расчёт "
                         + (System.nanoTime() - started) / 1_000_000L + " мс");
             }
-        } else if (cabinCelsius != null) {
+        } else {
             for (Seat seat : Seat.values()) {
                 observers.get(seat).observe(elapsedMs, levels.get(seat), ignitionOn,
                         cabinCelsius, outsideCelsius);
@@ -157,6 +160,8 @@ final class ModelShadow {
 
     /**
      * Прогноз перегрева — на каждом обновлении, обычный выбор — раз в минуту.
+     * Оба нуля ждать минуты не должны: пока держится прогноз перегрева,
+     * обычный выбор не публикуется, а недостоверный салон даёт ноль сразу.
      * Неизвестный уровень для плана считается нулём.
      */
     private void decide(long elapsedMs, Map<Seat, Integer> levels, Double cabinCelsius) {
@@ -174,7 +179,7 @@ final class ModelShadow {
             if (coast && !wasCoasting) {
                 publish(seat, new SeatThermostat.Decision(0, COAST_REASON), observer);
             }
-            if (regular) {
+            if (!coast && (regular || cabinCelsius == null)) {
                 Long changedAt = levelChangedAtMs.get(seat);
                 double sinceChange = changedAt == null
                         ? Double.POSITIVE_INFINITY

@@ -119,9 +119,6 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     /** Последнее известное зажигание — в ряд; решения принимает IgnitionSession. */
     private Boolean ignitionOn;
 
-    /** elapsedRealtime последнего достоверного салона — для возраста входа модели. */
-    private Long cabinReceivedAtMs;
-
     /**
      * Тепловая модель в фоне: только лог и ряд, в машину решения не уходят.
      * Снимок между перезапусками — в отдельном файле, не в настройках.
@@ -183,7 +180,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     }
 
     private void startSampling() {
-        if (calibrationLog == null || sampling) {
+        if (sampling) {
             return;
         }
         sampling = true;
@@ -202,6 +199,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         modelShadow = new ModelShadow(modelStore(), this::onLog);
         probe = new CarHvacProbe(this, this);
         startCalibrationLog();
+        /** Тик нужен и без ряда: он освежает воздух и ведёт фоновую модель. */
+        startSampling();
     }
 
     /**
@@ -217,7 +216,6 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         }
         calibrationLog = new CalibrationLog(directory);
         onLog("ряд калибровки: " + calibrationLog.file().getName());
-        startSampling();
     }
 
     private ModelShadow.Store modelStore() {
@@ -245,7 +243,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         Double outside = reliable(CarHvacProbe.outsideCelsius(probe.lastOutsideRaw()),
                 probe.lastOutsideAtMs(), now);
         modelShadow.update(now, System.currentTimeMillis(), levels,
-                Boolean.TRUE.equals(ignitionOn), reliable(lastCelsius, cabinReceivedAtMs, now),
+                Boolean.TRUE.equals(ignitionOn),
+                reliable(probe.lastCabinCelsius(), probe.lastCabinAtMs(), now),
                 outside);
     }
 
@@ -438,7 +437,6 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     public void injectTemperature(double celsius) {
         onLog("ОТЛАДКА: подставлена температура " + TemperatureConstants.celsiusText(celsius));
         lastCelsius = celsius;
-        cabinReceivedAtMs = SystemClock.elapsedRealtime();
         UiListener listener = uiListener;
         if (listener != null) {
             listener.onCabinTemperature(celsius);
@@ -577,7 +575,6 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
     @Override
     public void onCabinTemperature(double celsius, int raw) {
         lastCelsius = celsius;
-        cabinReceivedAtMs = SystemClock.elapsedRealtime();
         /**
          * Только при изменении: события идут и от подписки, и от снимков раз в
          * полминуты, а буфер лога — 500 строк. Ряд калибровки пишет каждое

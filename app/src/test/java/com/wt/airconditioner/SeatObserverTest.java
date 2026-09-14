@@ -73,8 +73,8 @@ public class SeatObserverTest {
          * уровень, пришедший событием, действует только дальше.
          */
         SeatObserver observer = restored(
-                snapshot(Seat.DRIVER, "3", 0, 20.0, 20.0, 20.0), 20.0, 3, false);
-        observer.observe(5 * MINUTE_MS, 0, false, 20.0, null);
+                snapshot(Seat.DRIVER, "3", 1, 20.0, 20.0, 20.0), 20.0, 3, true);
+        observer.observe(5 * MINUTE_MS, 0, true, 20.0, null);
         double expected = baseSurface(20, 20, 3, 20, 5);
         assertEquals(expected, observer.base().low, TOLERANCE);
         assertEquals(expected, observer.base().high, TOLERANCE);
@@ -100,6 +100,34 @@ public class SeatObserverTest {
         observer.observe(5 * MINUTE_MS, 0, false, 20.0, null);
         assertEquals(20.0, observer.base().low, TOLERANCE);
         assertEquals(baseSurface(20, 20, 3, 20, 5), observer.base().high, TOLERANCE);
+    }
+
+    @Test
+    public void levelWithoutIgnitionHeatsOnlyTheUpperBound() {
+        /**
+         * Раздел 2 дизайна: подогрев обесточивается вместе с зажиганием, и
+         * только подтверждённое выключение даёт ноль. Выключить не удалось —
+         * нижняя граница не греется, верхняя честно греет.
+         */
+        SeatObserver observer = restored(
+                snapshot(Seat.DRIVER, "2", 0, 20.0, 20.0, 20.0), 20.0, 2, false);
+        observer.observe(5 * MINUTE_MS, 2, false, 20.0, null);
+        assertEquals(20.0, observer.base().low, TOLERANCE);
+        assertEquals(baseSurface(20, 20, 2, 20, 5), observer.base().high, TOLERANCE);
+    }
+
+    @Test
+    public void longUnconfirmedHeatingIsUnknownHistory() {
+        /**
+         * Ночь с уровнем, который не удалось выключить: грел ли подогрев и
+         * сколько — неизвестно. Досчитывать ночь нагрева незачем и дорого на
+         * главном потоке — это неизвестная история от воздуха перерыва.
+         */
+        SeatObserver observer = restored(
+                snapshot(Seat.DRIVER, "2", 0, 10.0, 10.0, 10.0), 10.0, 2, false);
+        observer.observe(8 * 60 * MINUTE_MS, 2, false, 10.0, null);
+        assertEquals(7.0, observer.base().low, TOLERANCE);
+        assertEquals(45.0, observer.base().high, TOLERANCE);
     }
 
     @Test
@@ -244,13 +272,28 @@ public class SeatObserverTest {
     @Test
     public void restoreCountsTheGapWithSnapshotLevel() {
         /**
-         * Процесс перезапущен через 5 минут: перерыв досчитывается с уровнем
-         * из снимка, а не с текущим.
+         * Процесс перезапущен через 5 минут поездки: перерыв досчитывается с
+         * уровнем из снимка, а не с текущим.
          */
         SeatObserver observer = SeatObserver.restore(Seat.DRIVER,
-                snapshot(Seat.DRIVER, "3", 0, 20.0, 20.0, 20.0),
-                WALL + 5 * MINUTE_MS, 0L, 20.0, null, 0, false);
+                snapshot(Seat.DRIVER, "3", 1, 20.0, 20.0, 20.0),
+                WALL + 5 * MINUTE_MS, 0L, 20.0, null, 0, true);
         assertEquals(baseSurface(20, 20, 3, 20, 5), observer.base().low, TOLERANCE);
+    }
+
+    @Test
+    public void longGapAfterSnapshotInTripIsUnknownHistory() {
+        /**
+         * Голова гаснет при OFF вместе с процессом, и последний снимок — из
+         * поездки. Когда выключили зажигание и кто сидел, неизвестно: ночь «с
+         * человеком на тройке» сделала бы промёрзшее сиденье тёплым.
+         */
+        SeatObserver observer = SeatObserver.restore(Seat.DRIVER,
+                snapshot(Seat.DRIVER, "3", 1, 10.0, 40.0, 40.0),
+                WALL + 8 * 60 * MINUTE_MS, 0L, 10.0, null, 0, true);
+        assertEquals(7.0, observer.base().low, TOLERANCE);
+        assertEquals(45.0, observer.base().high, TOLERANCE);
+        assertTrue(observer.origin(), observer.origin().startsWith("неизвестная история"));
     }
 
     @Test
