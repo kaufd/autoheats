@@ -182,6 +182,53 @@ public class SeatObserverTest {
     }
 
     @Test
+    public void staleAirAfterLongParkingIsReplacedWithinSettleWindow() {
+        /**
+         * Замер 14.09: после пробуждения голова ~50 секунд отдаёт салон прошлой
+         * сессии. Перерыв, досчитанный по нему, пересчитывается, когда пришёл
+         * свежий воздух, — вместе с тем, что случилось после перерыва (здесь
+         * ON и тройка).
+         */
+        SeatObserver observer = restored(
+                snapshot(Seat.DRIVER, "0", 0, 20.0, 20.0, 20.0), 20.0, 0, false);
+        observer.observe(40 * 60 * MINUTE_MS, 3, true, 20.0, null);
+        observer.observe(40 * 60 * MINUTE_MS + MINUTE_MS, 3, true, 10.0, null);
+
+        SeatThermalModel.Parameters base = new SeatThermalModel.Parameters();
+        SeatThermalModel.State night = SeatThermalModel.advance(
+                new SeatThermalModel.State(20, 20), 0, 10, base, 40 * 60);
+        double expected = SeatThermalModel.advance(night, 3, 10, base, 1).surface;
+        assertEquals(expected, observer.base().low, 0.02);
+    }
+
+    @Test
+    public void airChangeAfterSettleWindowIsOrdinaryWeather() {
+        SeatObserver observer = restored(
+                snapshot(Seat.DRIVER, "0", 0, 27.5, 27.5, 27.5), 27.5, 0, false);
+        observer.observe(40 * 60 * MINUTE_MS, 0, false, 27.5, null);
+        observer.observe(40 * 60 * MINUTE_MS + 5 * MINUTE_MS, 0, false, 10.0, null);
+        assertEquals(baseSurface(27.5, 27.5, 0, 10, 5), observer.base().low, TOLERANCE);
+    }
+
+    @Test
+    public void unknownHistoryFromStaleAirIsRebuiltWithinSettleWindow() {
+        SeatObserver observer = SeatObserver.restore(
+                Seat.DRIVER, null, WALL, 0L, 27.5, null, 0, false);
+        observer.observe(MINUTE_MS, 0, false, 10.0, null);
+        assertEquals(baseSurface(7, 7, 0, 10, 1), observer.base().low, TOLERANCE);
+    }
+
+    @Test
+    public void snapshotGapFromStaleAirIsReplacedWithinSettleWindow() {
+        SeatObserver observer = SeatObserver.restore(Seat.DRIVER,
+                snapshot(Seat.DRIVER, "0", 0, 27.5, 27.5, 27.5),
+                WALL + 40 * 60 * MINUTE_MS, 0L, 27.5, null, 0, false);
+        observer.observe(MINUTE_MS, 0, false, 10.0, null);
+        assertEquals(10.0, observer.base().low, 0.02);
+        assertEquals(27.5, observer.base().high, 0.02);
+    }
+
+    @Test
     public void snapshotRestoresStatesAcrossProcessRestart() {
         SeatObserver before = restored(
                 snapshot(Seat.DRIVER, "2", 1, 15.0, 15.0, 15.0), 15.0, 2, true);

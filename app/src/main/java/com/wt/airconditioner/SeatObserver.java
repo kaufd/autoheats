@@ -48,6 +48,20 @@ final class SeatObserver {
     /** Между проверками сближения; на точность не влияет. */
     private static final double CHUNK_MINUTES = 1.0;
 
+    /**
+     * Перерыв, после которого воздух может прийти устаревшим: голова засыпает
+     * через 10 минут после ACC, а после пробуждения ~50 секунд отдаёт салон
+     * прошлой сессии (замер 14.09).
+     */
+    private static final double LONG_GAP_MINUTES = 10.0;
+
+    /**
+     * Сколько после долгого перерыва новый воздух ещё пересчитывает сам
+     * перерыв. Дальше изменение воздуха — погода или печка, а не устаревшее
+     * значение.
+     */
+    private static final double SETTLE_MINUTES = 2.0;
+
     private static final double MINUTE_MS = 60_000.0;
 
     /** Банк раздела 6 спецификации: p, r, множитель cₐ. */
@@ -92,6 +106,45 @@ final class SeatObserver {
         }
     }
 
+    /** Отрезок досчёта с уровнем и зажиганием его начала. */
+    private static final class Segment {
+        final double minutes;
+        final Integer level;
+        final boolean ignitionOn;
+        double lowEnvironment;
+        double highEnvironment;
+
+        Segment(double minutes, Integer level, boolean ignitionOn, double environmentStart,
+                double environmentEnd) {
+            this.minutes = minutes;
+            this.level = level;
+            this.ignitionOn = ignitionOn;
+            this.lowEnvironment = Math.min(environmentStart, environmentEnd);
+            this.highEnvironment = Math.max(environmentStart, environmentEnd);
+        }
+    }
+
+    /**
+     * Начало долгого перерыва и всё досчитанное после него, пока воздух мог
+     * быть устаревшим. Свежий воздух, вышедший за оболочку перерыва, расширяет
+     * её, и отрезки прогоняются заново — «пересчитывается при смене значения,
+     * а не фиксируется по первому отсчёту» (раздел 7 спецификации модели).
+     */
+    private static final class Replay {
+        /** Состояния до перерыва; null — история неизвестна и строится от воздуха. */
+        final SeatThermalModel.State[] start;
+        double coldestAir;
+        double warmestAir;
+        final List<Segment> segments = new ArrayList<>();
+        double minutesAfterGap;
+
+        Replay(SeatThermalModel.State[] start, double coldestAir, double warmestAir) {
+            this.start = start;
+            this.coldestAir = coldestAir;
+            this.warmestAir = warmestAir;
+        }
+    }
+
     /**
      * Базовый профиль, совпавший с «жарко» 12.09: одно число для сравнения с
      * ощущением. В сценарии термостата не входит.
@@ -100,6 +153,8 @@ final class SeatObserver {
     private final List<History> histories;
 
     private String origin;
+    /** null — окно пересчёта после долгого перерыва закрыто. */
+    private Replay replay;
     /** Настенное время принятого снимка; только для перерыва при восстановлении. */
     private long snapshotWallMs;
     private long lastElapsedMs;
@@ -149,10 +204,13 @@ final class SeatObserver {
         if (failure == null) {
             double gapMinutes = (wallNowMs - observer.snapshotWallMs) / MINUTE_MS;
             observer.origin = String.format(Locale.US, "снимок, перерыв %.1f мин", gapMinutes);
-            observer.advance(gapMinutes, observer.environment, now);
+            observer.step(gapMinutes, now, cabinCelsius, outsideCelsius);
         } else {
             observer.origin = "неизвестная история: " + failure;
-            observer.startUnknown(cabinCelsius, outsideCelsius);
+            /** Воздух при старте тоже может быть устаревшим — окно открыто. */
+            observer.replay = new Replay(null, coldest(cabinCelsius, outsideCelsius),
+                    warmest(cabinCelsius, outsideCelsius));
+            observer.startUnknown(observer.replay.coldestAir, observer.replay.warmestAir);
         }
         observer.lastElapsedMs = elapsedNowMs;
         observer.level = level;
@@ -174,7 +232,8 @@ final class SeatObserver {
     void observe(long elapsedMs, Integer level, boolean ignitionOn, double cabinCelsius,
             Double outsideCelsius) {
         double now = environment(cabinCelsius, outsideCelsius);
-        advance(Math.max(0L, elapsedMs - lastElapsedMs) / MINUTE_MS, environment, now);
+        step(Math.max(0L, elapsedMs - lastElapsedMs) / MINUTE_MS, now, cabinCelsius,
+                outsideCelsius);
         lastElapsedMs = elapsedMs;
         this.level = level;
         this.ignitionOn = ignitionOn;
@@ -293,13 +352,18 @@ final class SeatObserver {
         return true;
     }
 
+    private static double coldest(double cabinCelsius, Double outsideCelsius) {
+        return outsideCelsius == null ? cabinCelsius : Math.min(cabinCelsius, outsideCelsius);
+    }
+
+    private static double warmest(double cabinCelsius, Double outsideCelsius) {
+        return outsideCelsius == null ? cabinCelsius : Math.max(cabinCelsius, outsideCelsius);
+    }
+
     /** Раздел 3 спецификации: остывшее, прогретое воздухом, недавно грелось. */
-    private void startUnknown(double cabinCelsius, Double outsideCelsius) {
-        double outside = outsideCelsius == null ? cabinCelsius : outsideCelsius;
-        double coldest = Math.min(cabinCelsius, outside);
-        double warmest = Math.max(cabinCelsius, outside);
-        double low = coldest - UNKNOWN_MARGIN_CELSIUS;
-        double high = Math.max(HOT_SEAT_CELSIUS, warmest + UNKNOWN_MARGIN_CELSIUS);
+    private void startUnknown(double coldestAir, double warmestAir) {
+        double low = coldestAir - UNKNOWN_MARGIN_CELSIUS;
+        double high = Math.max(HOT_SEAT_CELSIUS, warmestAir + UNKNOWN_MARGIN_CELSIUS);
         base.low = new SeatThermalModel.State(low, low);
         base.high = new SeatThermalModel.State(high, high);
         for (History history : histories) {
@@ -309,31 +373,109 @@ final class SeatObserver {
     }
 
     /**
-     * Промежуток под текущими уровнем и зажиганием. Нижняя граница — с меньшим
+     * Отрезок от прошлого наблюдения с нынешним окружением в конце. Долгий
+     * перерыв открывает окно пересчёта; в окне воздух, вышедший за оболочку
+     * перерыва, прогоняет перерыв и всё после него заново.
+     */
+    private void step(double minutes, double now, double cabinCelsius, Double outsideCelsius) {
+        Segment segment = new Segment(minutes, level, ignitionOn, environment, now);
+        if (replay != null) {
+            replay.minutesAfterGap += minutes;
+            if (replay.minutesAfterGap > SETTLE_MINUTES) {
+                replay = null;
+            } else {
+                replay.segments.add(segment);
+                if (widen(replay, now, cabinCelsius, outsideCelsius)) {
+                    rerun(replay);
+                } else {
+                    advance(segment);
+                }
+                return;
+            }
+        }
+        if (minutes >= LONG_GAP_MINUTES) {
+            replay = new Replay(states(), now, now);
+            replay.segments.add(segment);
+        }
+        advance(segment);
+    }
+
+    /** true — воздух вышел за то, чем посчитан перерыв. */
+    private static boolean widen(Replay replay, double now, double cabinCelsius,
+            Double outsideCelsius) {
+        if (replay.start == null) {
+            double cold = coldest(cabinCelsius, outsideCelsius);
+            double warm = warmest(cabinCelsius, outsideCelsius);
+            boolean widened = cold < replay.coldestAir || warm > replay.warmestAir;
+            replay.coldestAir = Math.min(replay.coldestAir, cold);
+            replay.warmestAir = Math.max(replay.warmestAir, warm);
+            return widened;
+        }
+        Segment gap = replay.segments.get(0);
+        boolean widened = now < gap.lowEnvironment || now > gap.highEnvironment;
+        gap.lowEnvironment = Math.min(gap.lowEnvironment, now);
+        gap.highEnvironment = Math.max(gap.highEnvironment, now);
+        return widened;
+    }
+
+    private void rerun(Replay replay) {
+        if (replay.start == null) {
+            startUnknown(replay.coldestAir, replay.warmestAir);
+        } else {
+            restoreStates(replay.start);
+        }
+        for (Segment segment : replay.segments) {
+            advance(segment);
+        }
+    }
+
+    /** Нижняя и верхняя граница базового профиля, затем историй — по порядку. */
+    private SeatThermalModel.State[] states() {
+        SeatThermalModel.State[] states = new SeatThermalModel.State[2 * (1 + histories.size())];
+        states[0] = base.low;
+        states[1] = base.high;
+        for (int i = 0; i < histories.size(); i++) {
+            states[2 + 2 * i] = histories.get(i).low;
+            states[3 + 2 * i] = histories.get(i).high;
+        }
+        return states;
+    }
+
+    private void restoreStates(SeatThermalModel.State[] states) {
+        base.low = states[0];
+        base.high = states[1];
+        for (int i = 0; i < histories.size(); i++) {
+            histories.get(i).low = states[2 + 2 * i];
+            histories.get(i).high = states[3 + 2 * i];
+        }
+    }
+
+    /**
+     * Отрезок под его уровнем и зажиганием. Нижняя граница — с меньшим
      * окружением и, при неизвестном уровне, без нагрева; верхняя — с большим и
      * тройкой.
      */
-    private void advance(double minutes, double environmentStart, double environmentEnd) {
-        double lowEnvironment = Math.min(environmentStart, environmentEnd);
-        double highEnvironment = Math.max(environmentStart, environmentEnd);
-        int lowLevel = level == null ? 0 : level;
-        int highLevel = level == null ? 3 : level;
-        double remaining = minutes;
+    private void advance(Segment segment) {
+        int lowLevel = segment.level == null ? 0 : segment.level;
+        int highLevel = segment.level == null ? 3 : segment.level;
+        double low = segment.lowEnvironment;
+        double high = segment.highEnvironment;
+        double remaining = segment.minutes;
         while (remaining > 0) {
             double chunk = Math.min(remaining, CHUNK_MINUTES);
-            advance(base, chunk, lowLevel, highLevel, lowEnvironment, highEnvironment);
+            advance(base, segment.ignitionOn, chunk, lowLevel, highLevel, low, high);
             for (History history : histories) {
-                advance(history, chunk, lowLevel, highLevel, lowEnvironment, highEnvironment);
+                advance(history, segment.ignitionOn, chunk, lowLevel, highLevel, low, high);
             }
             remaining -= chunk;
-            if (highLevel == 0 && !ignitionOn && metTheAir(lowEnvironment, highEnvironment)) {
+            if (highLevel == 0 && !segment.ignitionOn && metTheAir(low, high)) {
                 return;
             }
         }
     }
 
-    private void advance(History history, double minutes, int lowLevel, int highLevel,
-            double lowEnvironment, double highEnvironment) {
+    private static void advance(History history, boolean ignitionOn, double minutes,
+            int lowLevel, int highLevel, double lowEnvironment, double highEnvironment) {
         SeatThermalModel.Parameters parameters = history.parameters(ignitionOn);
         history.low = SeatThermalModel.advance(history.low, lowLevel, lowEnvironment,
                 parameters, minutes);
