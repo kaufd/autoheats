@@ -4,7 +4,7 @@ import java.util.Locale;
 
 /**
  * Расписания подогрева по температуре салона. Значения настроены по живым
- * поездкам — менять их нельзя.
+ * поездкам — менять их только по новым замерам.
  *
  * Диапазон задаёт две вещи: сколько уровень держится максимум (таймер) и при
  * какой температуре можно шагнуть вниз досрочно (порог). Чем холоднее, тем
@@ -96,7 +96,12 @@ final class TemperatureConstants {
 
     private static final HeatSequence WARM = new HeatSequence(3, 2, 5, 6.0, 8.0, 11.0);
     private static final HeatSequence COOL = new HeatSequence(5, 3, 7, 2.0, 6.0, 9.0);
-    private static final HeatSequence COLD = new HeatSequence(8, 5, 7, -2.0, 3.0, 7.0);
+    /**
+     * Замер под человеком при 0…−5 °C: на тройке 7–8 минут, дальше горячо и
+     * двойка лишняя — сразу на единицу, её хватает на 5 минут. Нулевая
+     * длительность двойки и есть «пропустить» (см. AutoHeatEngine.stepDown).
+     */
+    private static final HeatSequence COLD = new HeatSequence(7, 0, 5, -2.0, 3.0, 7.0);
     private static final HeatSequence FREEZING = new HeatSequence(12, 7, 7, -7.0, -2.0, 4.0);
     private static final HeatSequence EXTREME = new HeatSequence(15, 10, 8, -12.0, -7.0, 0.0);
 

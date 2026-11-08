@@ -120,4 +120,17 @@ public class CarHvacProbeTest {
          */
         assertEquals(Double.valueOf(-42.0), CarHvacProbe.celsiusToPublish(0));
     }
+
+    /**
+     * Уровень подогрева из события подписки: вне 0..3 — не уровень, а мусор,
+     * и показать его на экране значило бы соврать о сиденье.
+     */
+    @Test
+    public void parsesSeatLevel() {
+        assertEquals(Integer.valueOf(3), CarHvacProbe.seatLevel(3));
+        assertEquals(Integer.valueOf(0), CarHvacProbe.seatLevel("0"));
+        assertNull(CarHvacProbe.seatLevel(4));
+        assertNull(CarHvacProbe.seatLevel(-1));
+        assertNull(CarHvacProbe.seatLevel(null));
+    }
 }

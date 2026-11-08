@@ -38,21 +38,21 @@ public class AutoHeatEngineTest {
         engine.start(Seat.DRIVER, level -> driverLevels.add(level));
     }
 
-    /** scenario-1: холодный салон (-3 °C) проходит 3→2→1→0 по таймерам 8/5/7. */
+    /**
+     * scenario-1: холодный салон (-3 °C) идёт 3→1→0 по таймерам 7/5 — двойку
+     * замер под человеком признал лишней: после тройки уже горячо.
+     */
     @Test
-    public void coldCabinRunsFullCascadeOnTimers() {
+    public void coldCabinSkipsLevelTwo() {
         engine.setTemperature(-3.0);
         startDriver();
         assertEquals(Arrays.asList(3), driverLevels);
 
-        scheduler.elapse(8);
-        assertEquals(Arrays.asList(3, 2), driverLevels);
+        scheduler.elapse(7);
+        assertEquals(Arrays.asList(3, 1), driverLevels);
 
         scheduler.elapse(5);
-        assertEquals(Arrays.asList(3, 2, 1), driverLevels);
-
-        scheduler.elapse(7);
-        assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
+        assertEquals(Arrays.asList(3, 1, 0), driverLevels);
         assertEquals("после каскада таймеров не остаётся", 0, scheduler.pendingCount());
     }
 
@@ -62,12 +62,12 @@ public class AutoHeatEngineTest {
      */
     @Test
     public void warmingCabinStepsDownAheadOfTimers() {
-        engine.setTemperature(-3.0);
+        engine.setTemperature(-8.0);
         startDriver();
         assertEquals(Arrays.asList(3), driverLevels);
 
         scheduler.elapse(3);
-        engine.setTemperature(-1.0); /** выше cold.level3StepDown (-2 °C) */
+        engine.setTemperature(-6.0); /** выше freezing.level3StepDown (-7 °C) */
         assertEquals("прогрелся до порога — сразу на 2", Arrays.asList(3, 2), driverLevels);
 
         scheduler.elapse(2);
@@ -241,12 +241,12 @@ public class AutoHeatEngineTest {
         assertEquals(Arrays.asList(3), passengerLevels);
 
         engine.stop(Seat.DRIVER);
-        scheduler.elapse(8);
+        scheduler.elapse(7);
         assertEquals("водитель остановлен", Arrays.asList(3), driverLevels);
-        assertEquals("пассажир продолжает по своему таймеру", Arrays.asList(3, 2), passengerLevels);
+        assertEquals("пассажир продолжает по своему таймеру", Arrays.asList(3, 1), passengerLevels);
 
-        scheduler.elapse(12);
-        assertEquals(Arrays.asList(3, 2, 1, 0), passengerLevels);
+        scheduler.elapse(5);
+        assertEquals(Arrays.asList(3, 1, 0), passengerLevels);
         assertEquals(0, scheduler.pendingCount());
     }
 
@@ -262,7 +262,7 @@ public class AutoHeatEngineTest {
         assertEquals("перезапуск с уровня 3", Arrays.asList(3, 3), driverLevels);
 
         scheduler.elapse(20);
-        assertEquals(Arrays.asList(3, 3, 2, 1, 0), driverLevels);
+        assertEquals(Arrays.asList(3, 3, 1, 0), driverLevels);
         assertEquals(0, scheduler.pendingCount());
     }
 
@@ -389,12 +389,10 @@ public class AutoHeatEngineTest {
         engine.setTemperature(-2.5); /** всё ещё ниже cold.level3StepDown (-2 °C) */
         assertEquals("порог не пройден — уровень не меняется", Arrays.asList(3), driverLevels);
 
+        scheduler.elapse(4);
+        assertEquals("max-timer 7 мин истёк", Arrays.asList(3, 1), driverLevels);
         scheduler.elapse(5);
-        assertEquals("max-timer 8 мин истёк", Arrays.asList(3, 2), driverLevels);
-        scheduler.elapse(5);
-        assertEquals(Arrays.asList(3, 2, 1), driverLevels);
-        scheduler.elapse(7);
-        assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
+        assertEquals(Arrays.asList(3, 1, 0), driverLevels);
         assertEquals(0, scheduler.pendingCount());
     }
 
@@ -437,8 +435,8 @@ public class AutoHeatEngineTest {
         startDriver();
         assertEquals(Arrays.asList(3, 3), driverLevels);
 
-        scheduler.elapse(8);
-        assertEquals(Arrays.asList(3, 3, 2), driverLevels);
+        scheduler.elapse(7);
+        assertEquals(Arrays.asList(3, 3, 1), driverLevels);
     }
 
     /**
@@ -453,11 +451,11 @@ public class AutoHeatEngineTest {
         engine.setTemperature(-3.0);
         startDriver();
         scheduler.elapse(20);
-        assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
+        assertEquals(Arrays.asList(3, 1, 0), driverLevels);
 
         engine.setTemperature(-3.0);
         assertEquals("та же температура — каскад не начинается заново",
-                Arrays.asList(3, 2, 1, 0), driverLevels);
+                Arrays.asList(3, 1, 0), driverLevels);
         assertEquals(0, scheduler.pendingCount());
     }
 
@@ -472,11 +470,11 @@ public class AutoHeatEngineTest {
         engine.setTemperature(-3.0);
         startDriver();
         scheduler.elapse(20);
-        assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
+        assertEquals(Arrays.asList(3, 1, 0), driverLevels);
 
         engine.setTemperature(-15.0); /** extreme вместо cold — другое расписание */
         assertEquals("сменилось расписание — снова тройка",
-                Arrays.asList(3, 2, 1, 0, 3), driverLevels);
+                Arrays.asList(3, 1, 0, 3), driverLevels);
     }
 
     /**
@@ -516,7 +514,7 @@ public class AutoHeatEngineTest {
         assertEquals(Arrays.asList(3), driverLevels);
 
         scheduler.elapse(20);
-        assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
+        assertEquals(Arrays.asList(3, 1, 0), driverLevels);
         assertEquals(0, scheduler.pendingCount());
     }
 
@@ -540,13 +538,13 @@ public class AutoHeatEngineTest {
             return true;
         });
 
-        scheduler.elapse(8 + 5 + 7);
+        scheduler.elapse(7 + 5);
         assertEquals("каскад дошёл до нуля, но его не приняли",
-                Arrays.asList(3, 2, 1, 0), attempts);
+                Arrays.asList(3, 1, 0), attempts);
 
         scheduler.elapse(1);
         assertEquals("повторяется тот же ноль, а не новая тройка",
-                Arrays.asList(3, 2, 1, 0, 0), attempts);
+                Arrays.asList(3, 1, 0, 0), attempts);
         assertEquals("после принятого нуля таймеров не остаётся",
                 0, scheduler.pendingCount());
     }
@@ -564,11 +562,11 @@ public class AutoHeatEngineTest {
             return level != 0;
         });
 
-        scheduler.elapse(8 + 5 + 7);
-        assertEquals(Arrays.asList(3, 2, 1, 0), attempts);
+        scheduler.elapse(7 + 5);
+        assertEquals(Arrays.asList(3, 1, 0), attempts);
 
         engine.setTemperature(-3.0);
         assertEquals("уровень не меняется — переход всё ещё ждёт повтора",
-                Arrays.asList(3, 2, 1, 0), attempts);
+                Arrays.asList(3, 1, 0), attempts);
     }
 }

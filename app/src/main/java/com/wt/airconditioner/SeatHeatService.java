@@ -151,6 +151,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         if (lastCelsius != null) {
             listener.onCabinTemperature(lastCelsius);
         }
+        /**
+         * Подстраховка подписки: если голова не шлёт событие о переключении из
+         * своего меню, экран хотя бы при открытии покажет то, что стоит в машине.
+         */
+        if (Boolean.TRUE.equals(hvacReady)) {
+            syncSeatLevels();
+        }
         for (Seat seat : Seat.values()) {
             listener.onSeatLevel(seat, levelOf(seat));
         }
@@ -384,6 +391,33 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
             }
             notifySeatLevel(seat, level);
         }
+    }
+
+    /**
+     * Совпадение с подтверждённым уровнем — эхо нашей же записи: setSeatHeat
+     * обновляет levels в главном потоке раньше, чем сюда доходит событие.
+     *
+     * Иное значение — человек переключил подогрев в меню ГУ. Каскад снимается
+     * до следующей поездки, иначе ближайшим шагом он перебил бы этот выбор.
+     * Режим не трогаем: подогрев гаснет и с питанием ГУ, и такое «внешнее»
+     * выключение не должно навсегда переводить сиденье в ручной режим.
+     */
+    @Override
+    public void onSeatHeat(Seat seat, int level) {
+        Integer known = levels.get(seat);
+        if (known != null && known == level) {
+            return;
+        }
+        onLog("подогрев " + seat.title + " переключён в машине: "
+                + (known == null ? "?" : known) + " → " + level);
+        if (settings.mode(seat) != HeatMode.MANUAL) {
+            autoHeat.stop(seat);
+        }
+        levels.put(seat, level);
+        if (level > 0) {
+            session.seatsHeating();
+        }
+        notifySeatLevel(seat, level);
     }
 
     @Override
