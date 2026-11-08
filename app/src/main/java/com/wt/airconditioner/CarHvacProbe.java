@@ -82,6 +82,12 @@ public class CarHvacProbe {
         /** Событие температуры салона от подписки на HVAC. */
         void onCabinTemperature(double celsius, int raw);
 
+        /**
+         * Уровень подогрева по событию HVAC: и эхо нашей записи, и переключение
+         * из штатного меню ГУ — различает их вызывающий.
+         */
+        void onSeatHeat(Seat seat, int level);
+
         /** Событие зажигания; false — любое состояние, кроме ON. */
         void onIgnition(boolean on);
 
@@ -193,7 +199,20 @@ public class CarHvacProbe {
             new CarHvacManager.CarHvacEventCallback() {
                 @Override
                 public void onChangeEvent(CarPropertyValue value) {
-                    if (value.getPropertyId() != ID_HVAC_IN_OUT_TEMP) {
+                    int property = value.getPropertyId();
+                    if (property == VehiclePropertyIds.HVAC_SEAT_TEMPERATURE) {
+                        publishSeatHeat(value.getAreaId(), value.getValue());
+                        return;
+                    }
+                    if (property != ID_HVAC_IN_OUT_TEMP) {
+                        /**
+                         * Только в лог и по разу на свойство и зону: если меню
+                         * ГУ пишет подогрев не в HVAC_SEAT_TEMPERATURE, а в своё
+                         * свойство, без adb узнать его можно только отсюда.
+                         */
+                        logOnce("hvac:" + property + ":" + value.getAreaId(),
+                                "HVAC событие: property=" + property + ", area="
+                                        + value.getAreaId() + ", value=" + value.getValue());
                         return;
                     }
                     if (value.getAreaId() == AREA_INSIDE) {
@@ -550,6 +569,36 @@ public class CarHvacProbe {
                 : VehicleAreaSeat.SEAT_PASSENGER;
     }
 
+    /** Обратное к areaOf; null — зона не наша (задние ряды, общая зона). */
+    private static Seat seatOf(int areaId) {
+        for (Seat seat : Seat.values()) {
+            if (areaOf(seat) == areaId) {
+                return seat;
+            }
+        }
+        return null;
+    }
+
+    private void publishSeatHeat(int areaId, Object rawValue) {
+        Seat seat = seatOf(areaId);
+        Integer level = seatLevel(rawValue);
+        if (seat == null || level == null) {
+            log("событие подогрева пропущено: area=" + areaId + ", value=" + rawValue);
+            return;
+        }
+        final int value = level;
+        mainHandler.post(() -> listener.onSeatHeat(seat, value));
+    }
+
+    /**
+     * Уровень 0..3 из значения свойства; null — не разобралось или вне
+     * диапазона. Общий для чтения и подписки: голова присылает и числа, и строки.
+     */
+    static Integer seatLevel(Object value) {
+        Integer level = parseRaw(value);
+        return level == null || level < 0 || level > 3 ? null : level;
+    }
+
     /** Разовое чтение температуры салона; результат уходит в listener. */
     public void readCabinTemperature() {
         read(true);
@@ -727,11 +776,11 @@ public class CarHvacProbe {
             return null;
         }
         try {
-            int level = hvacManager.getIntProperty(
+            int raw = hvacManager.getIntProperty(
                     VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, areaOf(seat));
-            if (level < 0 || level > 3) {
-                log("уровень подогрева (" + seat.title + ") вне диапазона: " + level);
-                return null;
+            Integer level = seatLevel(raw);
+            if (level == null) {
+                log("уровень подогрева (" + seat.title + ") вне диапазона: " + raw);
             }
             return level;
         } catch (Exception e) {

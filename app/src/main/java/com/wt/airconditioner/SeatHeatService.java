@@ -242,6 +242,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
      * вызов, а лог пополняют колбэки Car — он идёт под замком LogBuffer.
      */
     public List<String> setUiListener(UiListener listener) {
+        /**
+         * Подстраховка подписки: если голова не шлёт событие о переключении из
+         * своего меню, экран хотя бы при открытии покажет то, что стоит в машине.
+         */
+        if (listener != null && Boolean.TRUE.equals(screen.hvacReady())) {
+            syncSeatLevels();
+        }
         return screen.attach(listener);
     }
 
@@ -253,13 +260,22 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
              */
             return false;
         }
+        confirmLevel(seat, level);
+        return true;
+    }
+
+    /**
+     * Уровень, который подтвердил автомобиль, — от нашей записи или из меню
+     * ГУ. Один путь для обоих: иначе ряд калибровки и модель не узнали бы о
+     * переключении, сделанном не через приложение.
+     */
+    private void confirmLevel(Seat seat, int level) {
         if (level > 0) {
             session.seatsHeating();
         }
         levels.put(seat, level);
         screen.seatLevel(seat, level);
         sampler.record("level");
-        return true;
     }
 
     /** Уровень запоминается в настройках: после перезапуска экран покажет его. */
@@ -512,6 +528,30 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
             screen.seatLevel(seat, level);
         }
         updateModel();
+    }
+
+    /**
+     * Совпадение с подтверждённым уровнем — эхо нашей же записи: setSeatHeat
+     * обновляет levels в главном потоке раньше, чем сюда доходит событие.
+     *
+     * Иное значение — человек переключил подогрев в меню ГУ. Автоматика сиденья
+     * (модель или пресет) снимается до следующей поездки, иначе ближайшим
+     * шагом она перебила бы этот выбор.
+     * Режим не трогаем: подогрев гаснет и с питанием ГУ, и такое «внешнее»
+     * выключение не должно навсегда переводить сиденье в ручной режим.
+     */
+    @Override
+    public void onSeatHeat(Seat seat, int level) {
+        Integer known = levels.get(seat);
+        if (known != null && known == level) {
+            return;
+        }
+        log("подогрев " + seat.title + " переключён в машине: "
+                + (known == null ? "?" : known) + " → " + level);
+        if (settings.mode(seat) != HeatMode.MANUAL) {
+            driver.stop(seat);
+        }
+        confirmLevel(seat, level);
     }
 
     @Override
