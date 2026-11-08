@@ -33,8 +33,8 @@ android {
         // Отладочная сборка ветки: на голове по этой строке видно, что стоит
         // новый код, а не выпущенный 2.0.0. Перед тегом релиза вернуть настоящую
         // версию и добавить секцию в CHANGELOG.
-        versionCode 2002
-        versionName "2.0.1-model-dev"
+        versionCode 2003
+        versionName "2.0.1-model-dev.2"
     }
 
     compileOptions {
