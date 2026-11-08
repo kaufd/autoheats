@@ -1,0 +1,414 @@
+{
+  "source_revision": "69cb0fc64f3c38f2811c6a4382c30d30446f161c",
+  "source_csv": "docs/autoheat-data-20260912-131954.csv",
+  "ports": {
+    "thermal_cases": 400,
+    "maximum_port_error": 4.973799150320701e-13,
+    "decision_cases": 40,
+    "decision_mismatches": 0
+  },
+  "field": {
+    "rows": 23,
+    "start": "2026-09-12 13:22:34",
+    "stop": "2026-09-12 13:26:11",
+    "heating_seconds": 217.0,
+    "cabin_range": [
+      20.0,
+      22.0
+    ],
+    "replays": [
+      {
+        "initial": 17.0,
+        "base": 39.764843647996344,
+        "occupied_bank_low": 32.65353311579557,
+        "occupied_bank_high": 43.95070315369673
+      },
+      {
+        "initial": 20.0,
+        "base": 40.26066674531382,
+        "occupied_bank_low": 33.77282014729502,
+        "occupied_bank_high": 44.02480262143057
+      },
+      {
+        "initial": 23.0,
+        "base": 40.729507884059906,
+        "occupied_bank_low": 34.837822422969204,
+        "occupied_bank_high": 44.09332792619463
+      }
+    ],
+    "unknown_history_at_stop": {
+      "base": [
+        39.465812249,
+        43.360627726
+      ],
+      "bank": [
+        32.228415804,
+        44.461838646
+      ]
+    },
+    "qualitative_observations": [
+      {
+        "air": -10,
+        "minutes": 5,
+        "predicted_surface": 37.241601892210305
+      },
+      {
+        "air": -10,
+        "minutes": 7,
+        "predicted_surface": 40.14587996955543
+      },
+      {
+        "air": 20,
+        "minutes": 2,
+        "predicted_surface": 34.91540951035005
+      },
+      {
+        "air": 20,
+        "minutes": 3,
+        "predicted_surface": 38.79851690026333
+      }
+    ]
+  },
+  "simulations": [
+    {
+      "seat": "DRIVER",
+      "unknown": false,
+      "warming": false,
+      "first_heat_minutes": 0.0,
+      "final_low": 25.218841,
+      "final_high": 37.974434,
+      "peak": 38.817155,
+      "enclosure_error": 0.0,
+      "switches": [
+        [
+          0.0,
+          2
+        ],
+        [
+          4.0,
+          1
+        ],
+        [
+          8.0,
+          2
+        ],
+        [
+          8.5,
+          0
+        ],
+        [
+          11.5,
+          1
+        ],
+        [
+          14.5,
+          2
+        ],
+        [
+          15.25,
+          0
+        ],
+        [
+          18.25,
+          1
+        ],
+        [
+          21.25,
+          2
+        ],
+        [
+          22.0,
+          0
+        ],
+        [
+          25.0,
+          1
+        ],
+        [
+          28.0,
+          2
+        ],
+        [
+          28.75,
+          0
+        ],
+        [
+          31.75,
+          1
+        ],
+        [
+          34.75,
+          2
+        ],
+        [
+          35.5,
+          0
+        ],
+        [
+          38.5,
+          1
+        ]
+      ]
+    },
+    {
+      "seat": "DRIVER",
+      "unknown": true,
+      "warming": false,
+      "first_heat_minutes": 16.0,
+      "final_low": 26.259185,
+      "final_high": 38.71397,
+      "peak": 38.795292,
+      "enclosure_error": 0.0,
+      "switches": [
+        [
+          16.0,
+          1
+        ],
+        [
+          19.0,
+          2
+        ],
+        [
+          19.5,
+          0
+        ],
+        [
+          22.5,
+          1
+        ],
+        [
+          25.5,
+          2
+        ],
+        [
+          26.25,
+          0
+        ],
+        [
+          29.25,
+          1
+        ],
+        [
+          32.25,
+          2
+        ],
+        [
+          33.0,
+          0
+        ],
+        [
+          36.0,
+          1
+        ],
+        [
+          39.0,
+          2
+        ],
+        [
+          39.75,
+          0
+        ]
+      ]
+    },
+    {
+      "seat": "DRIVER",
+      "unknown": false,
+      "warming": true,
+      "first_heat_minutes": 0.0,
+      "final_low": 22.355445,
+      "final_high": 34.673087,
+      "peak": 38.751786,
+      "enclosure_error": 0.0,
+      "switches": [
+        [
+          0.0,
+          2
+        ],
+        [
+          4.0,
+          1
+        ],
+        [
+          18.25,
+          0
+        ]
+      ]
+    },
+    {
+      "seat": "PASSENGER",
+      "unknown": false,
+      "warming": false,
+      "first_heat_minutes": 0.0,
+      "final_low": 21.137199,
+      "final_high": 37.974434,
+      "peak": 38.817155,
+      "enclosure_error": 0.0,
+      "switches": [
+        [
+          0.0,
+          2
+        ],
+        [
+          4.0,
+          1
+        ],
+        [
+          8.0,
+          2
+        ],
+        [
+          8.5,
+          0
+        ],
+        [
+          11.5,
+          1
+        ],
+        [
+          14.5,
+          2
+        ],
+        [
+          15.25,
+          0
+        ],
+        [
+          18.25,
+          1
+        ],
+        [
+          21.25,
+          2
+        ],
+        [
+          22.0,
+          0
+        ],
+        [
+          25.0,
+          1
+        ],
+        [
+          28.0,
+          2
+        ],
+        [
+          28.75,
+          0
+        ],
+        [
+          31.75,
+          1
+        ],
+        [
+          34.75,
+          2
+        ],
+        [
+          35.5,
+          0
+        ],
+        [
+          38.5,
+          1
+        ]
+      ]
+    },
+    {
+      "seat": "PASSENGER",
+      "unknown": true,
+      "warming": false,
+      "first_heat_minutes": 16.0,
+      "final_low": 19.812888,
+      "final_high": 38.71397,
+      "peak": 38.795292,
+      "enclosure_error": 0.0,
+      "switches": [
+        [
+          16.0,
+          1
+        ],
+        [
+          19.0,
+          2
+        ],
+        [
+          19.5,
+          0
+        ],
+        [
+          22.5,
+          1
+        ],
+        [
+          25.5,
+          2
+        ],
+        [
+          26.25,
+          0
+        ],
+        [
+          29.25,
+          1
+        ],
+        [
+          32.25,
+          2
+        ],
+        [
+          33.0,
+          0
+        ],
+        [
+          36.0,
+          1
+        ],
+        [
+          39.0,
+          2
+        ],
+        [
+          39.75,
+          0
+        ]
+      ]
+    },
+    {
+      "seat": "PASSENGER",
+      "unknown": false,
+      "warming": true,
+      "first_heat_minutes": 0.0,
+      "final_low": 18.717523,
+      "final_high": 35.676176,
+      "peak": 38.76379,
+      "enclosure_error": 0.0,
+      "switches": [
+        [
+          0.0,
+          2
+        ],
+        [
+          4.0,
+          1
+        ],
+        [
+          14.0,
+          2
+        ],
+        [
+          14.5,
+          0
+        ],
+        [
+          17.5,
+          1
+        ],
+        [
+          18.25,
+          0
+        ]
+      ]
+    }
+  ]
+}
