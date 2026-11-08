@@ -65,11 +65,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
     private HeatNotification notification;
 
     private CarHvacProbe probe;
-    /**
-     * Что ведёт сиденья. Поле типа интерфейса, а не движка каскада: перевод на
-     * тепловую модель должен быть подстановкой реализации в onCreate.
-     */
-    private SeatHeatDriver driver;
+    /** Авто по модели и пользовательские расписания пресетов. */
+    private ModelHeatDriver driver;
     private HeatSettings settings;
     private PresetStore presets;
 
@@ -86,11 +83,13 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
     private Boolean ignitionOn;
 
     /**
-     * Тепловая модель в фоне: только лог и ряд, в машину решения не уходят.
+     * Тепловая модель: оценки обоих сидений, решения для авто, лог и ряд.
      * Снимок между перезапусками — в отдельном файле, не в настройках.
      */
     private ModelShadow modelShadow;
     private static final String MODEL_FILE = "autoheat_model";
+    private Double injectedCabin;
+    private Long injectedCabinAtMs;
 
     @Override
     public void onCreate() {
@@ -100,11 +99,11 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
         log("сервис запущен");
         settings = new HeatSettings(this);
         presets = new PresetStore(this);
-        driver = new AutoHeatEngine(new HandlerScheduler(), this);
         modelShadow = new ModelShadow(modelStore(), this);
+        driver = new ModelHeatDriver(new HandlerScheduler(), modelShadow, this::updateModel, this);
         probe = new CarHvacProbe(this, this);
         sampler = new CalibrationSampler(getExternalFilesDir(null), sampleSource, this);
-        /** Тик нужен и без ряда: он освежает воздух и ведёт фоновую модель. */
+        /** Тик ряда освежает воздух; авто дополнительно проверяет модель раз в 15 с. */
         sampler.start();
     }
 
@@ -183,19 +182,22 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
         model.bankLow = estimate.bank.low;
         model.bankHigh = estimate.bank.high;
         model.level = estimate.level;
+        model.origin = estimate.origin;
         return model;
     }
 
     /**
-     * Фоновая модель. Достоверность воздуха решает она сама — сервис отдаёт
-     * показания и время их получения. Сбой модели остаётся внутри ModelShadow.
+     * Модель видит подтверждённые уровни. Только после расчёта драйвер может
+     * отправить новую команду через обычный setSeatHeat.
      */
     private void updateModel() {
-        modelShadow.update(SystemClock.elapsedRealtime(), System.currentTimeMillis(), levels,
-                Boolean.TRUE.equals(ignitionOn),
-                new Air(probe.lastCabinCelsius(), probe.lastCabinAtMs(),
-                        CarHvacProbe.outsideCelsius(probe.lastOutsideRaw()),
-                        probe.lastOutsideAtMs()));
+        long nowMs = SystemClock.elapsedRealtime();
+        Air air = new Air(injectedCabin == null ? probe.lastCabinCelsius() : injectedCabin,
+                injectedCabin == null ? probe.lastCabinAtMs() : injectedCabinAtMs,
+                CarHvacProbe.outsideCelsius(probe.lastOutsideRaw()), probe.lastOutsideAtMs());
+        boolean on = Boolean.TRUE.equals(ignitionOn);
+        modelShadow.update(nowMs, System.currentTimeMillis(), levels, on, air);
+        driver.apply(nowMs, levels, on, air);
     }
 
     @Override
@@ -339,7 +341,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
     }
 
     private void startAuto(Seat seat) {
-        log("автоподогрев для " + seat.title + " → жду температуру");
+        log("автоподогрев для " + seat.title + " → тепловая модель");
         driver.start(seat, level -> setSeatHeat(seat, level));
     }
 
@@ -369,6 +371,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
     @Override
     public void injectTemperature(double celsius) {
         log("ОТЛАДКА: подставлена температура " + Temperature.celsiusText(celsius));
+        injectedCabin = celsius;
+        injectedCabinAtMs = SystemClock.elapsedRealtime();
         screen.showTemperature(celsius);
         driver.setTemperature(celsius);
     }
@@ -435,7 +439,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
      */
     @Override
     public void startAutoHeatNow() {
-        log("--- ручной запуск каскада ---");
+        log("--- ручной запуск автоподогрева ---");
         startAutoHeat();
     }
 
@@ -512,6 +516,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener, D
 
     @Override
     public void onCabinTemperature(double celsius, int raw) {
+        injectedCabin = null;
+        injectedCabinAtMs = null;
         screen.cabinTemperature(celsius, raw);
         driver.setTemperature(celsius);
     }

@@ -15,8 +15,8 @@ final class HandlerScheduler implements Scheduler {
     private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
-    public Cancellation schedule(int delayMinutes, Runnable task) {
-        handler.postDelayed(task, delayMinutes * 60_000L);
+    public Cancellation scheduleMillis(long delayMs, Runnable task) {
+        handler.postDelayed(task, delayMs);
         return () -> handler.removeCallbacks(task);
     }
 }

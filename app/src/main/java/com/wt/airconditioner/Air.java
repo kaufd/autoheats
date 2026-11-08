@@ -51,7 +51,7 @@ final class Air {
      * возраста не за чем.
      */
     static Double reliable(Double value, Long receivedAtMs, long nowMs) {
-        if (value == null || receivedAtMs == null) {
+        if (value == null || !Double.isFinite(value) || receivedAtMs == null) {
             return null;
         }
         long age = nowMs - receivedAtMs;

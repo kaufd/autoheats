@@ -280,4 +280,43 @@ public class ModelShadowTest {
         assertEquals(1, containing(log, "фоновая модель отключена").size());
         assertFalse(containing(log, "диск").isEmpty());
     }
+
+    @Test
+    public void confirmedReductionInvalidatesAnEarlierHigherPlan() {
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "3", 1, -25, -25, -25));
+        levels.put(Seat.DRIVER, 3);
+        ModelShadow shadow = shadow();
+        shadow.update(0L, WALL, levels, true, air(0L, -25.0, null));
+        assertEquals(Integer.valueOf(3), shadow.estimate(Seat.DRIVER).level);
+        levels.put(Seat.DRIVER, 0);
+        shadow.update(15_000L, WALL + 15_000L, levels, true, air(15_000L, -25.0, null));
+        assertEquals(Integer.valueOf(0), shadow.estimate(Seat.DRIVER).level);
+    }
+
+    @Test
+    public void startingOtherSeatDoesNotRecomputeThisSeatsRegularPlan() {
+        store.snapshots.put(Seat.DRIVER,
+                SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -25, -25, -25));
+        levels.put(Seat.DRIVER, 0);
+        ModelShadow shadow = shadow();
+        shadow.update(0L, WALL, levels, true, air(0L, -25.0, null));
+        shadow.requestDecision(Seat.PASSENGER);
+        shadow.update(15_000L, WALL + 15_000L, levels, true, air(15_000L, 5.0, null));
+        assertEquals(Integer.valueOf(3), shadow.estimate(Seat.DRIVER).level);
+    }
+
+    @Test
+    public void invalidAirDoesNotPoisonObserverOrPreventRecovery() {
+        ModelShadow shadow = shadow();
+        levels.put(Seat.DRIVER, 0);
+        shadow.update(0L, WALL, levels, true, air(0L, Double.NaN, -15.0));
+        assertNull(shadow.estimate(Seat.DRIVER));
+        shadow.update(15_000L, WALL + 15_000L, levels, true,
+                air(15_000L, -15.0, Double.POSITIVE_INFINITY));
+        shadow.update(30_000L, WALL + 30_000L, levels, true, air(30_000L, -15.0, -15.0));
+        assertNotNull(shadow.estimate(Seat.DRIVER));
+        assertTrue(Double.isFinite(shadow.estimate(Seat.DRIVER).bank.high));
+        assertTrue(containing(log, "отключена").isEmpty());
+    }
 }

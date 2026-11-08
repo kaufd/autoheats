@@ -21,7 +21,6 @@ import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -251,8 +250,9 @@ final class LogUiController implements TabController {
     }
 
     private boolean copy(File from, File to) {
-        try {
-            Files.copy(from.toPath(), to.toPath(), StandardCopyOption.REPLACE_EXISTING);
+        try (FileOutputStream stream = new FileOutputStream(to)) {
+            Files.copy(from.toPath(), stream);
+            stream.getFD().sync();
             return true;
         } catch (IOException | SecurityException e) {
             log("не скопировался " + from.getName() + ": " + e);
@@ -277,9 +277,9 @@ final class LogUiController implements TabController {
         /** Штамп общий с рядом калибровки: в файловом менеджере они лягут рядом. */
         String name = "autoheat-log-" + CalibrationLog.stamp() + ".txt";
         String text = logText();
+        List<File> series = calibrationFiles();
         List<String> saved = new ArrayList<>();
 
-        List<File> targets = new ArrayList<>();
         File[] appDirs = activity.getExternalFilesDirs(null);
         /**
          * Нулевой каталог — primary external, то есть /sdcard/Android/data;
@@ -288,48 +288,67 @@ final class LogUiController implements TabController {
          */
         for (int i = 1; i < appDirs.length; i++) {
             if (appDirs[i] != null) {
-                targets.add(appDirs[i]);
+                saveInto(appDirs[i], name, text, series, saved);
             }
         }
-        targets.add(Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS));
+        /** Всё, что сохранено до Downloads, лежит на съёмном носителе. */
+        int onRemovable = saved.size();
+        saveInto(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS), name, text, series, saved);
 
-        List<File> series = calibrationFiles();
-        for (File dir : targets) {
-            File file = new File(dir, name);
-            try (Writer writer = new OutputStreamWriter(
-                    new FileOutputStream(file), StandardCharsets.UTF_8)) {
-                writer.write(text);
-                saved.add(file.getAbsolutePath());
-            } catch (IOException | SecurityException e) {
-                /**
-                 * Ожидаемо для Downloads без разрешения и для отсутствующей
-                 * флешки: неудача одного места не отменяет остальные.
-                 */
-                log("не сохранилось в " + dir + ": " + e);
-            }
-            /**
-             * Ряды калибровки копятся во внутренней памяти сами; наружу их
-             * выносит только эта кнопка — вместе с логом, одним движением.
-             */
-            for (File csv : series) {
-                File target = new File(dir, csv.getName());
-                if (copy(csv, target)) {
-                    saved.add(target.getAbsolutePath());
-                }
-            }
-        }
-
-        if (saved.isEmpty()) {
-            Toast.makeText(activity, "Некуда сохранить — вставьте флешку (причина в логе)",
-                    Toast.LENGTH_LONG).show();
-            return;
-        }
         for (String path : saved) {
             log("лог сохранён: " + path);
         }
-        Toast.makeText(activity, "Сохранено (" + saved.size() + "): " + saved.get(0),
-                Toast.LENGTH_LONG).show();
+        if (saved.isEmpty()) {
+            Toast.makeText(activity, "Некуда сохранить — вставьте флешку (причина в логе)",
+                    Toast.LENGTH_LONG).show();
+        } else if (onRemovable == 0) {
+            /**
+             * Флешки нет или она не приняла запись. Downloads — внутренняя
+             * память: файл цел, но забирать его придётся файловым менеджером,
+             * и молчать об этом нельзя — иначе успех неотличим от потери.
+             */
+            Toast.makeText(activity, "Мимо флешки, в " + saved.get(0)
+                    + " (причина в логе)", Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(activity, "Сохранено (" + onRemovable + "): " + saved.get(0),
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * Пишет лог и ряды калибровки в каталог, сбрасывая каждый файл на
+     * носитель: флешку вынимают из уснувшей головы, а close() отдаёт данные
+     * только ядру. Без sync файл живёт в странице кэша до ближайшего
+     * writeback и исчезает вместе с ним — запись при этом отчитывается
+     * об успехе.
+     */
+    private void saveInto(File dir, String name, String text, List<File> series,
+            List<String> saved) {
+        File file = new File(dir, name);
+        try (FileOutputStream stream = new FileOutputStream(file)) {
+            Writer writer = new OutputStreamWriter(stream, StandardCharsets.UTF_8);
+            writer.write(text);
+            writer.flush();
+            stream.getFD().sync();
+            saved.add(file.getAbsolutePath());
+        } catch (IOException | SecurityException e) {
+            /**
+             * Ожидаемо для Downloads без разрешения и для отсутствующей
+             * флешки: неудача одного места не отменяет остальные.
+             */
+            log("не сохранилось в " + dir + ": " + e);
+        }
+        /**
+         * Ряды калибровки копятся во внутренней памяти сами; наружу их
+         * выносит только эта кнопка — вместе с логом, одним движением.
+         */
+        for (File csv : series) {
+            File target = new File(dir, csv.getName());
+            if (copy(csv, target)) {
+                saved.add(target.getAbsolutePath());
+            }
+        }
     }
 
     private String logText() {

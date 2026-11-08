@@ -6,10 +6,9 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Тепловая модель в фоне: наблюдатели обоих сидений идут по фактическим
- * уровням, термостат считает решение, и оба только пишутся в лог и ряд. В
- * машину решение не уходит — авто-режим по-прежнему ведёт AutoHeatEngine, пока
- * параметры теплообмена не откалиброваны.
+ * Наблюдатели обоих сидений идут по фактическим уровням, термостат считает
+ * решение. ModelHeatDriver применяет его только к сиденьям в режиме «Авто».
+ * В ручном режиме и пресетах оценка продолжает идти для следующего запуска.
  *
  * Ни одной ссылки на Android: время, воздух и уровни подаёт сервис, снимок
  * хранится через Store. Дизайн —
@@ -50,17 +49,22 @@ final class ModelShadow {
     /** Последний увиденный уровень и когда он сменился; нет ключа — не сменялся. */
     private final Map<Seat, Integer> seenLevels = new EnumMap<>(Seat.class);
     private final Map<Seat, Long> levelChangedAtMs = new EnumMap<>(Seat.class);
-    private Long lastDecisionAtMs;
+    private final Map<Seat, Long> lastDecisionAtMs = new EnumMap<>(Seat.class);
 
     ModelShadow(Store store, LogSink logSink) {
         this.store = store;
         this.logSink = logSink;
     }
 
+    /** Новый запуск авто должен получить свежий план, а не решение из фона. */
+    void requestDecision(Seat seat) {
+        lastDecisionAtMs.remove(seat);
+    }
+
     /**
-     * Обновление на тике ряда и на событиях уровня и зажигания. Сбой любого
-     * рода отключает фон до перезапуска процесса и наружу не выходит: подогрев
-     * от фонового расчёта зависеть не должен.
+     * Обновление на тиках автоматики/ряда и событиях уровня и зажигания.
+     * Сбой отключает расчёт до перезапуска процесса: estimate возвращает null,
+     * а ModelHeatDriver требует ноль. Пресеты и ручное управление продолжаются.
      *
      * @param levels подтверждённые автомобилем уровни; нет ключа — не известен
      * @param air показания воздуха со временем получения; достоверность решает
@@ -84,7 +88,7 @@ final class ModelShadow {
             } else {
                 decisions.clear();
                 coasting.clear();
-                lastDecisionAtMs = null;
+                lastDecisionAtMs.clear();
             }
         } catch (Throwable t) {
             disabled = true;
@@ -111,11 +115,14 @@ final class ModelShadow {
         final SeatObserver.Range bank;
         /** null — решения нет: зажигание не ON или минута ещё не прошла. */
         final Integer level;
+        /** Откуда взялось начальное состояние наблюдателя; см. SeatObserver.origin. */
+        final String origin;
 
-        Estimate(SeatObserver.Range base, SeatObserver.Range bank, Integer level) {
+        Estimate(SeatObserver.Range base, SeatObserver.Range bank, Integer level, String origin) {
             this.base = base;
             this.bank = bank;
             this.level = level;
+            this.origin = origin;
         }
     }
 
@@ -127,7 +134,7 @@ final class ModelShadow {
         SeatObserver observer = observers.get(seat);
         SeatThermostat.Decision decision = decisions.get(seat);
         return new Estimate(observer.base(), observer.bank(),
-                decision == null ? null : decision.level);
+                decision == null ? null : decision.level, observer.origin());
     }
 
     /**
@@ -145,6 +152,9 @@ final class ModelShadow {
             Integer seen = seenLevels.put(seat, level);
             if (seen != null && !seen.equals(level)) {
                 levelChangedAtMs.put(seat, elapsedMs);
+                // После внешнего изменения/ограничения прежний план мог бы
+                // немедленно повысить уровень, обойдя трёхминутную задержку.
+                lastDecisionAtMs.remove(seat);
             }
         }
     }
@@ -190,12 +200,12 @@ final class ModelShadow {
      * Неизвестный уровень для плана считается нулём.
      */
     private void decide(long elapsedMs, Map<Seat, Integer> levels, Double cabinCelsius) {
-        boolean regular = lastDecisionAtMs == null
-                || elapsedMs - lastDecisionAtMs >= DECISION_INTERVAL_MS;
-        if (regular) {
-            lastDecisionAtMs = elapsedMs;
-        }
         for (Seat seat : Seat.values()) {
+            Long last = lastDecisionAtMs.get(seat);
+            boolean regular = last == null || elapsedMs - last >= DECISION_INTERVAL_MS;
+            if (regular) {
+                lastDecisionAtMs.put(seat, elapsedMs);
+            }
             SeatObserver observer = observers.get(seat);
             Integer known = levels.get(seat);
             int current = known == null ? 0 : known;

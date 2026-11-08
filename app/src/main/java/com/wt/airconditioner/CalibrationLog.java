@@ -78,6 +78,13 @@ final class CalibrationLog {
         double bankHigh;
         /** null — решения нет: зажигание не ON или минута ещё не прошла. */
         Integer level;
+        /**
+         * Откуда взялось начальное состояние наблюдателя. Постоянно на всю
+         * сессию, но пишется в каждую строку: без него по ряду не отличить
+         * досчитанный перерыв от истории, построенной с нуля по воздуху, а
+         * текстовый лог с этой строкой сохраняют не всегда.
+         */
+        String origin;
     }
 
     private final File file;
@@ -147,11 +154,12 @@ final class CalibrationLog {
                 + seat + "_base_hi" + SEPARATOR
                 + seat + "_bank_lo" + SEPARATOR
                 + seat + "_bank_hi" + SEPARATOR
-                + seat + "_model_level";
+                + seat + "_model_level" + SEPARATOR
+                + seat + "_origin";
     }
 
     /** Столько колонок отдаёт modelHeader; без модели они пустые. */
-    private static final int MODEL_COLUMNS = 5;
+    private static final int MODEL_COLUMNS = 6;
 
     /** Все колонки всегда: без модели они пустые, и столбцы не съезжают. */
     private static void appendModel(StringBuilder text, Model model) {
@@ -166,6 +174,16 @@ final class CalibrationLog {
         text.append(SEPARATOR).append(celsius(model.bankLow));
         text.append(SEPARATOR).append(celsius(model.bankHigh));
         text.append(SEPARATOR).append(text(model.level));
+        text.append(SEPARATOR).append(field(model.origin));
+    }
+
+    /**
+     * Происхождение — свободная строка от наблюдателя, а не число. Разделитель
+     * внутри неё сдвинул бы все правые колонки, поэтому заменяется запятой:
+     * потерять точку с запятой в одном поле дешевле, чем разбор всего файла.
+     */
+    private static String field(String value) {
+        return value == null ? "" : value.replace(SEPARATOR, ",");
     }
 
     private static String celsius(double value) {

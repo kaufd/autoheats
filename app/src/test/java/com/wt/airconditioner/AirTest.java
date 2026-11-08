@@ -36,4 +36,12 @@ public class AirTest {
         assertEquals(Double.valueOf(12.5), air.cabin(RECEIVED));
         assertNull(air.outside(RECEIVED));
     }
+
+    @Test
+    public void nonFiniteReadingsAreMissingEvenWhenFresh() {
+        for (double value : new double[] {Double.NaN, Double.POSITIVE_INFINITY,
+                Double.NEGATIVE_INFINITY}) {
+            assertNull(Air.reliable(value, RECEIVED, RECEIVED));
+        }
+    }
 }
