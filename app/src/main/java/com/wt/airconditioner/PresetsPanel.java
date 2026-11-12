@@ -121,6 +121,9 @@ final class PresetsPanel implements TabController {
     @Override
     public void applyTheme(ThemePalette palette) {
         this.palette = palette;
+        if (page == null) {
+            return;
+        }
         buildSeatSegments();
         buildLevelSliders();
         paintSeekBar(thresholdBar, THRESHOLDS.length - 1);
@@ -290,6 +293,9 @@ final class PresetsPanel implements TabController {
 
     /** Список показывает пресеты выбранного сиденья. */
     void render() {
+        if (page == null) {
+            return;
+        }
         list.removeAllViews();
         List<Preset> presets = store.load();
         String running = listener.runningPreset(selectedSeat);
