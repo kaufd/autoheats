@@ -3,6 +3,8 @@ package com.wt.airconditioner;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import android.car.VehicleAreaSeat;
+
 import org.junit.Test;
 
 /**
@@ -156,5 +158,24 @@ public class CarHvacProbeTest {
         assertNull(CarHvacProbe.seatLevel(4));
         assertNull(CarHvacProbe.seatLevel(-1));
         assertNull(CarHvacProbe.seatLevel(null));
+    }
+
+    /**
+     * --- события подогрева: зона события → сиденье ---
+     */
+
+    @Test
+    public void mapsSeatAreasBackToSeats() {
+        /**
+         * Обратное к areaOf: иначе событие водителя обновило бы пассажира.
+         */
+        assertEquals(Seat.DRIVER, CarHvacProbe.seatOf(VehicleAreaSeat.SEAT_MAIN_DRIVER));
+        assertEquals(Seat.PASSENGER, CarHvacProbe.seatOf(VehicleAreaSeat.SEAT_PASSENGER));
+    }
+
+    @Test
+    public void ignoresOtherAreas() {
+        assertNull(CarHvacProbe.seatOf(-1));
+        assertNull(CarHvacProbe.seatOf(0));
     }
 }

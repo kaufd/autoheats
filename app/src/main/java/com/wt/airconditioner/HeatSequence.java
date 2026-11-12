@@ -49,24 +49,10 @@ final class HeatSequence {
         }
     }
 
-    /** Температура, при которой уровень можно снизить, не дожидаясь таймера. */
-    double stepDownCelsiusFor(int level) {
-        switch (level) {
-            case 3:
-                return level3StepDownCelsius;
-            case 2:
-                return level2StepDownCelsius;
-            case 1:
-                return level1StepDownCelsius;
-            default:
-                return Double.POSITIVE_INFINITY;
-        }
-    }
-
     /**
      * Сравнение планов: каскад, дошедший до нуля, перезапускается только
-     * если расписание сменилось. Без этого повторное событие с той же
-     * температурой снова включало бы уровень 3 — бесконечный цикл.
+     * при похолодании в другое расписание. Без этого повторное событие с той
+     * же температурой снова включало бы уровень 3 — бесконечный цикл.
      */
     String planKey() {
         return level3Minutes + "," + level2Minutes + "," + level1Minutes + ","

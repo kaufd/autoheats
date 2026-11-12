@@ -216,7 +216,7 @@ public class CarHvacProbe {
                         return;
                     }
                     if (value.getAreaId() == AREA_INSIDE) {
-                        publishTemperature(value.getValue(), false);
+                        publishTemperature(value.getValue(), false, false);
                         return;
                     }
                     /**
@@ -343,11 +343,12 @@ public class CarHvacProbe {
             releaseManagers();
             notifyReady(false);
             /**
-             * Своего реконнекта здесь намеренно нет: Car.createCar биндится с
-             * BIND_AUTO_CREATE, система сама перепривяжется и снова вызовет
-             * onServiceConnected. Ручной car.connect() на том же объекте на
-             * Android 9 либо бросит IllegalStateException (состояние ещё не
-             * DISCONNECTED), либо сделает второй bindService поверх живого.
+             * Своего реконнекта здесь нет, и он не нужен: вендорский Car при
+             * смерти CarService переподключается сам (binderDied → disconnect()
+             * → startCarService()). Но если binderDied пришёл первым, состояние
+             * уже DISCONNECTED, и onServiceDisconnected не вызывается вовсе —
+             * тогда всё заново инициализирует onServiceConnected. Ручной
+             * car.connect() поверх этого — лишний второй bindService.
              */
         }
     };
@@ -415,7 +416,7 @@ public class CarHvacProbe {
                 log("подписка на события HVAC не удалась (чтение и запись работают): " + t);
             }
 
-            readCabinTemperature();
+            read(true, false);
         } catch (Throwable t) {
             /**
              * Ожидаемое место падения, если пакет не в whitelist головы:
@@ -570,7 +571,7 @@ public class CarHvacProbe {
     }
 
     /** Обратное к areaOf; null — зона не наша (задние ряды, общая зона). */
-    private static Seat seatOf(int areaId) {
+    static Seat seatOf(int areaId) {
         for (Seat seat : Seat.values()) {
             if (areaOf(seat) == areaId) {
                 return seat;
@@ -599,9 +600,14 @@ public class CarHvacProbe {
         return level == null || level < 0 || level > 3 ? null : level;
     }
 
-    /** Разовое чтение температуры салона; результат уходит в listener. */
+    /**
+     * Разовое чтение температуры салона по запросу сервиса. Результат уходит в
+     * listener синхронно: вызывающий (startAutoHeat) сразу после чтения запускает
+     * каскады и должен застать в движке свежее значение, а не прошлое. Вызывать
+     * только с главного потока.
+     */
     public void readCabinTemperature() {
-        read(true);
+        read(true, true);
     }
 
     /**
@@ -610,7 +616,7 @@ public class CarHvacProbe {
      * оформиться; забортная и ОЖ идут только в поля.
      */
     public void sample() {
-        read(false);
+        read(false, false);
     }
 
     /**
@@ -622,8 +628,11 @@ public class CarHvacProbe {
      * Забортная и ОЖ — только в лог и в поля: обе величины пока
      * исследовательские, ни на подогрев, ни на экран не влияют, и отказ любой
      * из них не ошибка приложения.
+     *
+     * deliverNow = false — температура салона через post, как события подписки:
+     * при подключении onHvacReady уже стоит в очереди и должен дойти раньше.
      */
-    private void read(boolean verbose) {
+    private void read(boolean verbose, boolean deliverNow) {
         if (!isHvacReady()) {
             if (verbose) {
                 log("readCabinTemperature пропущено: HVAC не готов");
@@ -632,7 +641,7 @@ public class CarHvacProbe {
         }
         try {
             publishTemperature(
-                    hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), verbose);
+                    hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), verbose, deliverNow);
         } catch (Exception e) {
             String message = "ОШИБКА чтения температуры: " + e;
             if (verbose) {
@@ -683,7 +692,7 @@ public class CarHvacProbe {
      * Нужна тепловой модели — окружение подушки холоднее воздуха салона, и
      * поправка считается от разницы с улицей.
      *
-     * Значение уходит в поле; в лог его пишет read(true), и вместе с raw: ряд
+     * Значение уходит в поле; в лог его пишет чтение по кнопке, и вместе с raw: ряд
      * калибровки хранит именно его, и пересчёт в логе должен сверяться с рядом.
      */
     private Integer readOutsideRaw() {
@@ -846,7 +855,7 @@ public class CarHvacProbe {
      *
      * @param requested чтение по кнопке: человек ждёт ответа и на повтор
      */
-    private void publishTemperature(Object rawValue, boolean requested) {
+    private void publishTemperature(Object rawValue, boolean requested, boolean deliverNow) {
         forgetFailure(CABIN);
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
@@ -878,7 +887,11 @@ public class CarHvacProbe {
         lastCabinRaw = raw;
         lastCabinCelsius = value;
         lastCabinAtMs = SystemClock.elapsedRealtime();
-        mainHandler.post(() -> listener.onCabinTemperature(value, raw));
+        if (deliverNow) {
+            listener.onCabinTemperature(value, raw);
+        } else {
+            mainHandler.post(() -> listener.onCabinTemperature(value, raw));
+        }
     }
 
     /**
@@ -933,7 +946,17 @@ public class CarHvacProbe {
         mainHandler.post(() -> listener.onHvacReady(ready));
     }
 
+    /**
+     * На главном потоке пишем сразу: сервис пишет в лог напрямую, и через post
+     * строка пробника обгоняла бы собственные «раньше» — «голова проснулась»
+     * вставала перед «состояние питания: SUSPEND_EXIT». Из других потоков
+     * (колбэки Car) — через post, как и остальные события.
+     */
     private void log(String message) {
-        mainHandler.post(() -> listener.onLog(message));
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            listener.onLog(message);
+        } else {
+            mainHandler.post(() -> listener.onLog(message));
+        }
     }
 }

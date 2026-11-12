@@ -41,8 +41,13 @@ final class AutoHeatEngine implements SeatHeatDriver {
         Integer level;
         /** Ноль уже отправлен в диапазоне «греть не нужно». */
         boolean offSent;
-        /** Расписание, на котором каскад дошёл до нуля; null — не доходил. */
-        String finishedPlan;
+        /**
+         * Расписание и температура последнего удавшегося шага каскада. По ним
+         * отличается похолодание (повод начать заново) от потепления, которое
+         * только меняет диапазон расписания.
+         */
+        String lastPlan;
+        double lastCelsius;
 
         SeatState(LevelCallback callback, PresetSettings preset) {
             this.callback = callback;
@@ -138,7 +143,7 @@ final class AutoHeatEngine implements SeatHeatDriver {
          */
         if (sequence == null) {
             cancelTimer(state);
-            state.level = null;
+            markWarmedOut(state);
             if (!state.offSent) {
                 state.offSent = true;
                 if (!state.callback.onLevel(0)) {
@@ -159,18 +164,20 @@ final class AutoHeatEngine implements SeatHeatDriver {
          */
         if (state.level == null) {
             state.offSent = false;
-            state.finishedPlan = null;
             stepDown(seat, state, 3, sequence);
             return;
         }
 
         /**
-         * Каскад отработал. Заново — только если сменилось расписание, иначе
-         * каждое событие датчика включало бы тройку по кругу.
+         * Каскад отработал (или салон его погасил теплом). Заново — только при
+         * похолодании в другое расписание: потепление меняет диапазон, но
+         * включать подогрев в теплеющем салоне незачем, а колебания около порога
+         * включали бы тройку по кругу.
          */
         if (state.level == 0) {
-            if (!sequence.planKey().equals(state.finishedPlan)) {
-                state.finishedPlan = null;
+            if (currentTemperature < state.lastCelsius
+                    && !sequence.planKey().equals(state.lastPlan)) {
+                state.offSent = false;
                 stepDown(seat, state, 3, sequence);
             }
             return;
@@ -186,9 +193,6 @@ final class AutoHeatEngine implements SeatHeatDriver {
             return;
         }
 
-        if (currentTemperature >= sequence.stepDownCelsiusFor(state.level)) {
-            stepDown(seat, state, state.level - 1, sequence);
-        }
         /**
          * Иначе остаёмся на уровне: сработает таймер, если прогрев не случится.
          */
@@ -219,13 +223,25 @@ final class AutoHeatEngine implements SeatHeatDriver {
             return;
         }
         state.level = newLevel;
+        state.lastPlan = sequence.planKey();
+        state.lastCelsius = currentTemperature;
 
         if (newLevel <= 0) {
-            state.finishedPlan = sequence.planKey();
             cancelTimer(state);
             return;
         }
         scheduleMaxTimer(seat, state, newLevel - 1, sequence.minutesFor(newLevel));
+    }
+
+    /**
+     * Салон вышел за порог. Каскад, который уже шёл, считается завершённым
+     * (level 0): иначе каждое возвращение ниже порога стартовало бы его с тройки.
+     * Не начинавшийся (level == null) остаётся таким же — он ещё ждёт холода.
+     */
+    private static void markWarmedOut(SeatState state) {
+        if (state.level != null) {
+            state.level = 0;
+        }
     }
 
     /**
@@ -277,7 +293,7 @@ final class AutoHeatEngine implements SeatHeatDriver {
              */
             if (state.callback.onLevel(0)) {
                 cancelTimer(state);
-                state.level = null;
+                markWarmedOut(state);
                 state.offSent = true;
             } else {
                 scheduleRetry(seat, 0);

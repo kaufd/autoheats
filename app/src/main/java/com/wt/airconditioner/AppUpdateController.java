@@ -8,6 +8,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.database.Cursor;
 import android.net.Uri;
@@ -26,6 +27,11 @@ final class AppUpdateController {
 
     private static final String APK_MIME = "application/vnd.android.package-archive";
     private static final long NO_DOWNLOAD = -1L;
+    private static final String KEY_ID = "update_download_id";
+    private static final String KEY_PATH = "update_download_path";
+    private static final String KEY_NAME = "update_version_name";
+    private static final String KEY_CODE = "update_version_code";
+    private static final String KEY_URL = "update_apk_url";
 
     private enum State {
         INITIAL,
@@ -64,6 +70,8 @@ final class AppUpdateController {
     private boolean destroyed;
     private long downloadId = NO_DOWNLOAD;
     private File downloadedApk;
+    /** Загрузка осталась с прошлого экрана и уже завершена: «Обновить» открывает установщик. */
+    private boolean downloadFinishedEarlier;
 
     /** На единственной целевой платформе, Android 9, флагов receiver ещё нет. */
     @SuppressLint("UnspecifiedRegisterReceiverFlag")
@@ -72,6 +80,45 @@ final class AppUpdateController {
         downloads = (DownloadManager) activity.getSystemService(Context.DOWNLOAD_SERVICE);
         activity.registerReceiver(downloadReceiver,
                 new IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE));
+        resumePendingDownload();
+    }
+
+    private SharedPreferences saved() {
+        return activity.getSharedPreferences(HeatSettings.FILE, Context.MODE_PRIVATE);
+    }
+
+    /**
+     * Приёмник завершения живёт вместе с Activity: если экран закрыли во время
+     * загрузки, о её конце мы не узнали бы. Поэтому загрузка запоминается, а
+     * новый экран спрашивает DownloadManager, чем она кончилась.
+     */
+    private void resumePendingDownload() {
+        SharedPreferences prefs = saved();
+        long id = prefs.getLong(KEY_ID, NO_DOWNLOAD);
+        if (id == NO_DOWNLOAD) {
+            return;
+        }
+        int status = 0;
+        try (Cursor cursor = downloads.query(new DownloadManager.Query().setFilterById(id))) {
+            if (cursor != null && cursor.moveToFirst()) {
+                status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS));
+            }
+        }
+        boolean finished = status == DownloadManager.STATUS_SUCCESSFUL;
+        boolean running = status == DownloadManager.STATUS_PENDING
+                || status == DownloadManager.STATUS_RUNNING
+                || status == DownloadManager.STATUS_PAUSED;
+        int versionCode = prefs.getInt(KEY_CODE, 0);
+        if (versionCode <= BuildConfig.VERSION_CODE || !(finished || running)) {
+            prefs.edit().remove(KEY_ID).apply();
+            return;
+        }
+        availableRelease = new UpdateRelease(prefs.getString(KEY_NAME, ""), versionCode,
+                prefs.getString(KEY_URL, ""));
+        downloadedApk = new File(prefs.getString(KEY_PATH, ""));
+        downloadId = id;
+        downloadFinishedEarlier = finished;
+        state = finished ? State.AVAILABLE : State.DOWNLOADING;
     }
 
     void bind(View page) {
@@ -191,6 +238,11 @@ final class AppUpdateController {
         if (availableRelease == null || state == State.DOWNLOADING) {
             return;
         }
+        if (downloadFinishedEarlier) {
+            downloadFinishedEarlier = false;
+            onDownloadComplete(downloadId);
+            return;
+        }
         String fileName = String.format(Locale.US, "AutoHeat-update-v%s-vc%d-%d.apk",
                 availableRelease.versionName, availableRelease.versionCode,
                 System.currentTimeMillis());
@@ -211,6 +263,11 @@ final class AppUpdateController {
                         fileName);
         try {
             downloadId = downloads.enqueue(request);
+            saved().edit().putLong(KEY_ID, downloadId)
+                    .putString(KEY_PATH, downloadedApk.getAbsolutePath())
+                    .putString(KEY_NAME, availableRelease.versionName)
+                    .putInt(KEY_CODE, availableRelease.versionCode)
+                    .putString(KEY_URL, availableRelease.apkUrl).apply();
             state = State.DOWNLOADING;
             render();
         } catch (RuntimeException error) {
