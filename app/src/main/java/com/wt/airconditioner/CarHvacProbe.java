@@ -598,7 +598,17 @@ public class CarHvacProbe {
         mainHandler.post(() -> listener.onHvacReady(ready));
     }
 
+    /**
+     * На главном потоке пишем сразу: сервис пишет в лог напрямую, и через post
+     * строка пробника обгоняла бы собственные «раньше» — «голова проснулась»
+     * вставала перед «состояние питания: SUSPEND_EXIT». Из других потоков
+     * (колбэки Car) — через post, как и остальные события.
+     */
     private void log(String message) {
-        mainHandler.post(() -> listener.onLog(message));
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            listener.onLog(message);
+        } else {
+            mainHandler.post(() -> listener.onLog(message));
+        }
     }
 }
