@@ -222,7 +222,7 @@ final class SeatHeatUiController implements TabController {
         if (service == null) {
             return;
         }
-        service.setManualLevel(seat, level);
+        service.setSeatHeat(seat, level);
         render();
     }
 
@@ -233,10 +233,10 @@ final class SeatHeatUiController implements TabController {
         }
         if (service.modeOf(seat) != HeatMode.MANUAL) {
             service.setMode(seat, HeatMode.MANUAL);
-            service.setManualLevel(seat, 1);
+            service.setSeatHeat(seat, 1);
         } else {
             int level = service.levelOf(seat);
-            service.setManualLevel(seat, level >= 3 ? 0 : level + 1);
+            service.setSeatHeat(seat, level >= 3 ? 0 : level + 1);
         }
         render();
     }
