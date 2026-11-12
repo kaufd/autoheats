@@ -68,20 +68,6 @@ final class TemperatureConstants {
             }
         }
 
-        /** Температура, при которой уровень можно снизить, не дожидаясь таймера. */
-        double stepDownCelsiusFor(int level) {
-            switch (level) {
-                case 3:
-                    return level3StepDownCelsius;
-                case 2:
-                    return level2StepDownCelsius;
-                case 1:
-                    return level1StepDownCelsius;
-                default:
-                    return Double.POSITIVE_INFINITY;
-            }
-        }
-
         /**
          * Сравнение планов: каскад, дошедший до нуля, перезапускается только
          * при похолодании в другое расписание. Без этого повторное событие с той

@@ -202,9 +202,6 @@ final class AutoHeatEngine {
             return;
         }
 
-        if (currentTemperature >= sequence.stepDownCelsiusFor(state.level)) {
-            stepDown(seat, state, state.level - 1, sequence);
-        }
         /**
          * Иначе остаёмся на уровне: сработает таймер, если прогрев не случится.
          */
