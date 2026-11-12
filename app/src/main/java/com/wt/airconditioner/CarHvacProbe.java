@@ -63,6 +63,13 @@ public class CarHvacProbe {
         /** Событие температуры салона от подписки на HVAC. */
         void onCabinTemperature(double celsius, int raw);
 
+        /**
+         * Уровень подогрева сиденья изменился по событию HVAC — в том числе
+         * от нашей же записи (эхо) или физической кнопки. Значения вне 0..3
+         * сюда не доходят.
+         */
+        void onSeatLevel(Seat seat, int level);
+
         /** Событие зажигания; false — любое состояние, кроме ON. */
         void onIgnition(boolean on);
 
@@ -93,7 +100,9 @@ public class CarHvacProbe {
                 public void onChangeEvent(CarPropertyValue value) {
                     if (value.getPropertyId() == ID_HVAC_IN_OUT_TEMP
                             && value.getAreaId() == AREA_INSIDE) {
-                        publishTemperature(value.getValue());
+                        publishTemperature(value.getValue(), false);
+                    } else if (value.getPropertyId() == VehiclePropertyIds.HVAC_SEAT_TEMPERATURE) {
+                        publishSeatLevel(value.getAreaId(), value.getValue());
                     }
                 }
 
@@ -214,11 +223,12 @@ public class CarHvacProbe {
             releaseManagers();
             notifyReady(false);
             /**
-             * Своего реконнекта здесь намеренно нет: Car.createCar биндится с
-             * BIND_AUTO_CREATE, система сама перепривяжется и снова вызовет
-             * onServiceConnected. Ручной car.connect() на том же объекте на
-             * Android 9 либо бросит IllegalStateException (состояние ещё не
-             * DISCONNECTED), либо сделает второй bindService поверх живого.
+             * Своего реконнекта здесь нет, и он не нужен: вендорский Car при
+             * смерти CarService переподключается сам (binderDied → disconnect()
+             * → startCarService()). Но если binderDied пришёл первым, состояние
+             * уже DISCONNECTED, и onServiceDisconnected не вызывается вовсе —
+             * тогда всё заново инициализирует onServiceConnected. Ручной
+             * car.connect() поверх этого — лишний второй bindService.
              */
         }
     };
@@ -286,7 +296,7 @@ public class CarHvacProbe {
                 log("подписка на события HVAC не удалась (чтение и запись работают): " + t);
             }
 
-            readCabinTemperature();
+            readCabinTemperature(false);
         } catch (Throwable t) {
             /**
              * Ожидаемое место падения, если пакет не в whitelist головы:
@@ -439,14 +449,54 @@ public class CarHvacProbe {
                 : VehicleAreaSeat.SEAT_PASSENGER;
     }
 
-    /** Разовое чтение температуры салона; результат уходит в listener. */
+    /** Обратное к areaOf; null — зона не сиденья водителя и пассажира. */
+    static Seat seatOfArea(int areaId) {
+        if (areaId == VehicleAreaSeat.SEAT_MAIN_DRIVER) {
+            return Seat.DRIVER;
+        }
+        return areaId == VehicleAreaSeat.SEAT_PASSENGER ? Seat.PASSENGER : null;
+    }
+
+    /**
+     * Событие уровня подогрева. Приходят ли такие события на голове, неизвестно:
+     * если нет — этот путь просто не вызывается, остальное работает как раньше.
+     */
+    private void publishSeatLevel(int areaId, Object rawValue) {
+        Seat seat = seatOfArea(areaId);
+        if (seat == null) {
+            return;
+        }
+        Integer level = parseRaw(rawValue);
+        if (level == null || level < 0 || level > 3) {
+            log("событие подогрева (" + seat.title + ") вне диапазона: " + rawValue);
+            return;
+        }
+        final int value = level;
+        mainHandler.post(() -> listener.onSeatLevel(seat, value));
+    }
+
+    /**
+     * Разовое чтение температуры салона по запросу сервиса. Результат уходит в
+     * listener синхронно: вызывающий (startAutoHeat) сразу после чтения запускает
+     * каскады и должен застать в движке свежее значение, а не прошлое. Вызывать
+     * только с главного потока.
+     */
     public void readCabinTemperature() {
+        readCabinTemperature(true);
+    }
+
+    /**
+     * deliverNow = false — через post, как события подписки: при подключении
+     * onHvacReady уже стоит в очереди и должен дойти до слушателя раньше.
+     */
+    private void readCabinTemperature(boolean deliverNow) {
         if (!isHvacReady()) {
             log("readCabinTemperature пропущено: HVAC не готов");
             return;
         }
         try {
-            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE));
+            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE),
+                    deliverNow);
         } catch (Exception e) {
             log("ОШИБКА чтения температуры: " + e);
         }
@@ -551,7 +601,7 @@ public class CarHvacProbe {
      * строкой, а raw < 0 — sentinel «нет данных», а не -42 °C: показать его как
      * рабочую температуру значило бы соврать об исправности датчика.
      */
-    private void publishTemperature(Object rawValue) {
+    private void publishTemperature(Object rawValue, boolean deliverNow) {
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
             Integer raw = parseRaw(rawValue);
@@ -562,7 +612,11 @@ public class CarHvacProbe {
         }
         final int raw = parseRaw(rawValue);
         final double value = celsius;
-        mainHandler.post(() -> listener.onCabinTemperature(value, raw));
+        if (deliverNow) {
+            listener.onCabinTemperature(value, raw);
+        } else {
+            mainHandler.post(() -> listener.onCabinTemperature(value, raw));
+        }
     }
 
     /**
@@ -597,7 +651,17 @@ public class CarHvacProbe {
         mainHandler.post(() -> listener.onHvacReady(ready));
     }
 
+    /**
+     * На главном потоке пишем сразу: сервис пишет в лог напрямую, и через post
+     * строка пробника обгоняла бы собственные «раньше» — «голова проснулась»
+     * вставала перед «состояние питания: SUSPEND_EXIT». Из других потоков
+     * (колбэки Car) — через post, как и остальные события.
+     */
     private void log(String message) {
-        mainHandler.post(() -> listener.onLog(message));
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            listener.onLog(message);
+        } else {
+            mainHandler.post(() -> listener.onLog(message));
+        }
     }
 }

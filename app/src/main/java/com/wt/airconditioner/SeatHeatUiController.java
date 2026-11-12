@@ -82,6 +82,9 @@ final class SeatHeatUiController implements TabController {
     @Override
     public void applyTheme(ThemePalette palette) {
         this.palette = palette;
+        if (page == null) {
+            return;
+        }
         page.findViewById(R.id.centerDivider).setBackgroundColor(palette.divider);
         /**
          * Плашка бледнее чипов: своя пара значений, здесь единственная.
@@ -117,7 +120,14 @@ final class SeatHeatUiController implements TabController {
         temperaturePill.setAlpha(settings.showCabinTemperature() ? 1f : 0f);
     }
 
+    /**
+     * Сервис может привязаться раньше, чем ViewPager создал страницу: тогда
+     * рисовать нечего, а bind() и applyTheme() нарисуют сами.
+     */
     void render() {
+        if (page == null) {
+            return;
+        }
         for (SeatView seatView : SEAT_VIEWS) {
             renderSeat(seatView);
         }
@@ -222,7 +232,7 @@ final class SeatHeatUiController implements TabController {
         if (service == null) {
             return;
         }
-        service.setManualLevel(seat, level);
+        service.setSeatHeat(seat, level);
         render();
     }
 
@@ -233,10 +243,10 @@ final class SeatHeatUiController implements TabController {
         }
         if (service.modeOf(seat) != HeatMode.MANUAL) {
             service.setMode(seat, HeatMode.MANUAL);
-            service.setManualLevel(seat, 1);
+            service.setSeatHeat(seat, 1);
         } else {
             int level = service.levelOf(seat);
-            service.setManualLevel(seat, level >= 3 ? 0 : level + 1);
+            service.setSeatHeat(seat, level >= 3 ? 0 : level + 1);
         }
         render();
     }

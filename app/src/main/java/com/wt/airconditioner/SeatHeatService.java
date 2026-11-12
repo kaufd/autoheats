@@ -157,33 +157,34 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         return logs.subscribe(listener::onLogLine);
     }
 
+    /**
+     * Единая точка записи уровня: сюда сходятся ручное управление, каскады,
+     * пресеты и выключение по зажиганию.
+     */
     public boolean setSeatHeat(Seat seat, int level) {
         if (!probe.setSeatHeat(seat, level)) {
             /**
-             * levels держит только подтверждённое: иначе UI и engine ушли бы
-             * вперёд после потерянной записи.
+             * levels и настройки держат только подтверждённое: иначе UI и engine
+             * ушли бы вперёд после потерянной записи, а запомнить непринятую
+             * команду значило бы обещать тепло, которого нет.
              */
             return false;
         }
         if (level > 0) {
             session.seatsHeating();
         }
-        levels.put(seat, level);
-        notifySeatLevel(seat, level);
+        rememberLevel(seat, level);
         return true;
     }
 
-    /** Уровень запоминается в настройках: после перезапуска экран покажет его. */
-    public boolean setManualLevel(Seat seat, int level) {
-        /**
-         * Сначала запись в автомобиль: запомнить непринятую команду значило бы
-         * обещать тепло, которого нет.
-         */
-        if (!setSeatHeat(seat, level)) {
-            return false;
-        }
+    /**
+     * Подтверждённый уровень — в память, в настройки (после перезапуска экран
+     * покажет его) и на экран. Единый путь и для наших записей, и для чтения.
+     */
+    private void rememberLevel(Seat seat, int level) {
+        levels.put(seat, level);
         settings.setManualLevel(seat, level);
-        return true;
+        notifySeatLevel(seat, level);
     }
 
     /**
@@ -197,7 +198,7 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
      */
     public boolean stopPreset(Seat seat) {
         setMode(seat, HeatMode.MANUAL);
-        if (setManualLevel(seat, 0)) {
+        if (setSeatHeat(seat, 0)) {
             return true;
         }
         onLog("ВНИМАНИЕ: " + seat.title + " не выключен — пресет снят, тепло могло остаться");
@@ -211,7 +212,8 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
 
     /**
      * Лучшая известная оценка: подтверждённое значение этой сессии, иначе —
-     * прошлой. Точного ответа не существует, свойство подогрева может быть
+     * последнее подтверждённое автомобилем и сохранённое в настройках (запись,
+     * чтение или внешнее изменение). Точного ответа не существует, свойство подогрева может быть
      * недоступно на чтение.
      *
      * Следствие: после реконнекта с неудавшимся чтением остаётся значение до
@@ -378,11 +380,10 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
                         + levelOf(seat));
                 continue;
             }
-            levels.put(seat, level);
             if (level > 0) {
                 session.seatsHeating();
             }
-            notifySeatLevel(seat, level);
+            rememberLevel(seat, level);
         }
     }
 
@@ -397,11 +398,36 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         }
     }
 
+    /**
+     * Уровень изменили не мы (кнопка на сиденье, штатный экран): эхо нашей
+     * записи совпадает с levels и игнорируется. Выбор человека главнее каскада:
+     * идущий каскад сиденья останавливается, иначе его следующий шаг перезаписал
+     * бы выбор. Режим в настройках не трогаем.
+     */
+    @Override
+    public void onSeatLevel(Seat seat, int level) {
+        if (level == levelOf(seat)) {
+            return;
+        }
+        onLog("уровень " + seat.title + " изменён извне: " + levelOf(seat) + " → " + level
+                + ", каскад остановлен");
+        if (level > 0) {
+            session.seatsHeating();
+        }
+        rememberLevel(seat, level);
+        autoHeat.stop(seat);
+    }
+
     @Override
     public void onWakeUp() {
         onLog("голова проснулась → новая сессия");
         session.onWakeUp();
         autoHeat.stopAll();
+        /**
+         * Подогрев запитан от ГУ и мог погаснуть во сне: без перечитывания
+         * экран показал бы уровень до засыпания.
+         */
+        syncSeatLevels();
     }
 
     @Override
@@ -437,7 +463,9 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         /**
          * Освежаем температуру, а не добываем её: последнее известное значение
          * движок помнит и сам, поэтому неудачное чтение (HVAC ещё не готов)
-         * больше не подвешивает каскад в «жду температуру».
+         * больше не подвешивает каскад в «жду температуру». Чтение доставляет
+         * результат синхронно (CarHvacProbe.readCabinTemperature), так что
+         * каскады и проверка порога пресета ниже видят свежее значение.
          */
         probe.readCabinTemperature();
         for (Seat seat : Seat.values()) {
