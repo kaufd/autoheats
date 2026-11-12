@@ -437,7 +437,9 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         /**
          * Освежаем температуру, а не добываем её: последнее известное значение
          * движок помнит и сам, поэтому неудачное чтение (HVAC ещё не готов)
-         * больше не подвешивает каскад в «жду температуру».
+         * больше не подвешивает каскад в «жду температуру». Чтение доставляет
+         * результат синхронно (CarHvacProbe.readCabinTemperature), так что
+         * каскады и проверка порога пресета ниже видят свежее значение.
          */
         probe.readCabinTemperature();
         for (Seat seat : Seat.values()) {

@@ -93,7 +93,7 @@ public class CarHvacProbe {
                 public void onChangeEvent(CarPropertyValue value) {
                     if (value.getPropertyId() == ID_HVAC_IN_OUT_TEMP
                             && value.getAreaId() == AREA_INSIDE) {
-                        publishTemperature(value.getValue());
+                        publishTemperature(value.getValue(), false);
                     }
                 }
 
@@ -287,7 +287,7 @@ public class CarHvacProbe {
                 log("подписка на события HVAC не удалась (чтение и запись работают): " + t);
             }
 
-            readCabinTemperature();
+            readCabinTemperature(false);
         } catch (Throwable t) {
             /**
              * Ожидаемое место падения, если пакет не в whitelist головы:
@@ -440,14 +440,28 @@ public class CarHvacProbe {
                 : VehicleAreaSeat.SEAT_PASSENGER;
     }
 
-    /** Разовое чтение температуры салона; результат уходит в listener. */
+    /**
+     * Разовое чтение температуры салона по запросу сервиса. Результат уходит в
+     * listener синхронно: вызывающий (startAutoHeat) сразу после чтения запускает
+     * каскады и должен застать в движке свежее значение, а не прошлое. Вызывать
+     * только с главного потока.
+     */
     public void readCabinTemperature() {
+        readCabinTemperature(true);
+    }
+
+    /**
+     * deliverNow = false — через post, как события подписки: при подключении
+     * onHvacReady уже стоит в очереди и должен дойти до слушателя раньше.
+     */
+    private void readCabinTemperature(boolean deliverNow) {
         if (!isHvacReady()) {
             log("readCabinTemperature пропущено: HVAC не готов");
             return;
         }
         try {
-            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE));
+            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE),
+                    deliverNow);
         } catch (Exception e) {
             log("ОШИБКА чтения температуры: " + e);
         }
@@ -552,7 +566,7 @@ public class CarHvacProbe {
      * строкой, а raw < 0 — sentinel «нет данных», а не -42 °C: показать его как
      * рабочую температуру значило бы соврать об исправности датчика.
      */
-    private void publishTemperature(Object rawValue) {
+    private void publishTemperature(Object rawValue, boolean deliverNow) {
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
             Integer raw = parseRaw(rawValue);
@@ -563,7 +577,11 @@ public class CarHvacProbe {
         }
         final int raw = parseRaw(rawValue);
         final double value = celsius;
-        mainHandler.post(() -> listener.onCabinTemperature(value, raw));
+        if (deliverNow) {
+            listener.onCabinTemperature(value, raw);
+        } else {
+            mainHandler.post(() -> listener.onCabinTemperature(value, raw));
+        }
     }
 
     /**
