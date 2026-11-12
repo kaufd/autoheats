@@ -398,6 +398,26 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         }
     }
 
+    /**
+     * Уровень изменили не мы (кнопка на сиденье, штатный экран): эхо нашей
+     * записи совпадает с levels и игнорируется. Выбор человека главнее каскада:
+     * идущий каскад сиденья останавливается, иначе его следующий шаг перезаписал
+     * бы выбор. Режим в настройках не трогаем.
+     */
+    @Override
+    public void onSeatLevel(Seat seat, int level) {
+        if (level == levelOf(seat)) {
+            return;
+        }
+        onLog("уровень " + seat.title + " изменён извне: " + levelOf(seat) + " → " + level
+                + ", каскад остановлен");
+        if (level > 0) {
+            session.seatsHeating();
+        }
+        rememberLevel(seat, level);
+        autoHeat.stop(seat);
+    }
+
     @Override
     public void onWakeUp() {
         onLog("голова проснулась → новая сессия");

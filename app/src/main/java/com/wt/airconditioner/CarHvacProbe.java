@@ -63,6 +63,13 @@ public class CarHvacProbe {
         /** Событие температуры салона от подписки на HVAC. */
         void onCabinTemperature(double celsius, int raw);
 
+        /**
+         * Уровень подогрева сиденья изменился по событию HVAC — в том числе
+         * от нашей же записи (эхо) или физической кнопки. Значения вне 0..3
+         * сюда не доходят.
+         */
+        void onSeatLevel(Seat seat, int level);
+
         /** Событие зажигания; false — любое состояние, кроме ON. */
         void onIgnition(boolean on);
 
@@ -94,6 +101,8 @@ public class CarHvacProbe {
                     if (value.getPropertyId() == ID_HVAC_IN_OUT_TEMP
                             && value.getAreaId() == AREA_INSIDE) {
                         publishTemperature(value.getValue(), false);
+                    } else if (value.getPropertyId() == VehiclePropertyIds.HVAC_SEAT_TEMPERATURE) {
+                        publishSeatLevel(value.getAreaId(), value.getValue());
                     }
                 }
 
@@ -438,6 +447,32 @@ public class CarHvacProbe {
         return seat == Seat.DRIVER
                 ? VehicleAreaSeat.SEAT_MAIN_DRIVER
                 : VehicleAreaSeat.SEAT_PASSENGER;
+    }
+
+    /** Обратное к areaOf; null — зона не сиденья водителя и пассажира. */
+    static Seat seatOfArea(int areaId) {
+        if (areaId == VehicleAreaSeat.SEAT_MAIN_DRIVER) {
+            return Seat.DRIVER;
+        }
+        return areaId == VehicleAreaSeat.SEAT_PASSENGER ? Seat.PASSENGER : null;
+    }
+
+    /**
+     * Событие уровня подогрева. Приходят ли такие события на голове, неизвестно:
+     * если нет — этот путь просто не вызывается, остальное работает как раньше.
+     */
+    private void publishSeatLevel(int areaId, Object rawValue) {
+        Seat seat = seatOfArea(areaId);
+        if (seat == null) {
+            return;
+        }
+        Integer level = parseRaw(rawValue);
+        if (level == null || level < 0 || level > 3) {
+            log("событие подогрева (" + seat.title + ") вне диапазона: " + rawValue);
+            return;
+        }
+        final int value = level;
+        mainHandler.post(() -> listener.onSeatLevel(seat, value));
     }
 
     /**
