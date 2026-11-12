@@ -402,6 +402,11 @@ public class SeatHeatService extends Service implements CarHvacProbe.Listener {
         onLog("голова проснулась → новая сессия");
         session.onWakeUp();
         autoHeat.stopAll();
+        /**
+         * Подогрев запитан от ГУ и мог погаснуть во сне: без перечитывания
+         * экран показал бы уровень до засыпания.
+         */
+        syncSeatLevels();
     }
 
     @Override
