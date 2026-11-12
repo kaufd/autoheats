@@ -214,11 +214,12 @@ public class CarHvacProbe {
             releaseManagers();
             notifyReady(false);
             /**
-             * Своего реконнекта здесь намеренно нет: Car.createCar биндится с
-             * BIND_AUTO_CREATE, система сама перепривяжется и снова вызовет
-             * onServiceConnected. Ручной car.connect() на том же объекте на
-             * Android 9 либо бросит IllegalStateException (состояние ещё не
-             * DISCONNECTED), либо сделает второй bindService поверх живого.
+             * Своего реконнекта здесь нет, и он не нужен: вендорский Car при
+             * смерти CarService переподключается сам (binderDied → disconnect()
+             * → startCarService()). Но если binderDied пришёл первым, состояние
+             * уже DISCONNECTED, и onServiceDisconnected не вызывается вовсе —
+             * тогда всё заново инициализирует onServiceConnected. Ручной
+             * car.connect() поверх этого — лишний второй bindService.
              */
         }
     };
