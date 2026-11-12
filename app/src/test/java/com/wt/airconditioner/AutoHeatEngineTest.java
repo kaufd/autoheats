@@ -480,6 +480,52 @@ public class AutoHeatEngineTest {
     }
 
     /**
+     * Зеркало предыдущего теста: потепление после отработавшего каскада тоже
+     * меняет диапазон расписания, но греть теплеющий салон заново незачем —
+     * печка довела салон до 5 °C, а не обнулила потребность в подогреве.
+     */
+    @Test
+    public void finishedCascadeDoesNotRestartWhenCabinWarms() {
+        engine.setTemperature(-3.0);
+        startDriver();
+        scheduler.elapse(20);
+        assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
+
+        engine.setTemperature(1.0); /** cool вместо cold */
+        engine.setTemperature(6.0); /** warm */
+        assertEquals("потепление каскад не перезапускает",
+                Arrays.asList(3, 2, 1, 0), driverLevels);
+        assertEquals(0, scheduler.pendingCount());
+    }
+
+    /**
+     * Колебание около OFF_ABOVE_CELSIUS не должно включать тройку по кругу ни
+     * после отработавшего каскада, ни после погашенного теплом на полпути.
+     */
+    @Test
+    public void oscillationAroundOffThresholdDoesNotRestartCascade() {
+        engine.setTemperature(9.5);
+        startDriver();
+        scheduler.elapse(20);
+        assertEquals(Arrays.asList(3, 2, 1, 0), driverLevels);
+
+        engine.setTemperature(10.5);
+        engine.setTemperature(9.5);
+        engine.setTemperature(10.5);
+        engine.setTemperature(9.5);
+        assertEquals("после отработавшего каскада тройка не возвращается",
+                1, Collections.frequency(driverLevels, 3));
+
+        driverLevels.clear();
+        engine.start(Seat.DRIVER, level -> driverLevels.add(level)); /** новая сессия */
+        assertEquals(Arrays.asList(3), driverLevels);
+        engine.setTemperature(10.5); /** погашен теплом на полпути */
+        engine.setTemperature(9.5);
+        assertEquals("погашенный теплом каскад не стартует заново",
+                1, Collections.frequency(driverLevels, 3));
+    }
+
+    /**
      * Запущенный пресет доводится до конца, даже если салон успел прогреться
      * выше его порога. Порог решает только, стартовать ли: человек выбрал
      * расписание сам, и обрывать его на полпути — не то, о чём он просил.
