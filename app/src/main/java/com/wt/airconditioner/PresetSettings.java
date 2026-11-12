@@ -14,12 +14,12 @@ final class PresetSettings {
     private static final int MAX_LEVEL_MINUTES = 15;
 
     final double thresholdCelsius;
-    final TemperatureConstants.HeatSequence sequence;
+    final HeatSequence sequence;
 
     PresetSettings(double thresholdCelsius, int level3Minutes, int level2Minutes,
             int level1Minutes) {
         this.thresholdCelsius = thresholdCelsius;
-        this.sequence = new TemperatureConstants.HeatSequence(
+        this.sequence = new HeatSequence(
                 clamp(level3Minutes), clamp(level2Minutes), clamp(level1Minutes));
     }
 

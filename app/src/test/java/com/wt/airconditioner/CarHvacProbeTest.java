@@ -68,6 +68,30 @@ public class CarHvacProbeTest {
     }
 
     @Test
+    public void doesNotPublishNoDataByte() {
+        /**
+         * Замер 14.09: на стоянке и после пробуждения голова шлёт 255, и он
+         * уходил в каскад как «салон 85.5 °C». Граница — ровно 255: 254 ещё
+         * разбирается как температура.
+         */
+        assertNull(CarHvacProbe.celsiusToPublish(255));
+        assertNull(CarHvacProbe.celsiusToPublish("255"));
+        assertEquals(Double.valueOf(85.0), CarHvacProbe.celsiusToPublish(254));
+    }
+
+    @Test
+    public void convertsOutsideWithItsOwnOffset() {
+        /**
+         * Опоры по приборке: 106 → 13 °C, 116 → 18 °C. Формула салона дала бы
+         * 11 и 16. Sentinel отсекается так же, как у салона.
+         */
+        assertEquals(Double.valueOf(13.0), CarHvacProbe.outsideCelsius(106));
+        assertEquals(Double.valueOf(18.0), CarHvacProbe.outsideCelsius("116"));
+        assertNull(CarHvacProbe.outsideCelsius(255));
+        assertNull(CarHvacProbe.outsideCelsius(-1));
+    }
+
+    @Test
     public void doesNotPublishUnparseableValue() {
         assertNull(CarHvacProbe.celsiusToPublish("нет данных"));
         assertNull(CarHvacProbe.celsiusToPublish(null));
@@ -118,9 +142,22 @@ public class CarHvacProbeTest {
     @Test
     public void publishesZeroRawAsItsRealValue() {
         /**
-         * raw = 0 валиден (-42 °C): sentinel — это строго отрицательное.
+         * raw = 0 валиден (-42 °C): снизу sentinel — строго отрицательное.
          */
         assertEquals(Double.valueOf(-42.0), CarHvacProbe.celsiusToPublish(0));
+    }
+
+    /**
+     * Уровень подогрева из события подписки: вне 0..3 — не уровень, а мусор,
+     * и показать его на экране значило бы соврать о сиденье.
+     */
+    @Test
+    public void parsesSeatLevel() {
+        assertEquals(Integer.valueOf(3), CarHvacProbe.seatLevel(3));
+        assertEquals(Integer.valueOf(0), CarHvacProbe.seatLevel("0"));
+        assertNull(CarHvacProbe.seatLevel(4));
+        assertNull(CarHvacProbe.seatLevel(-1));
+        assertNull(CarHvacProbe.seatLevel(null));
     }
 
     /**
@@ -132,13 +169,13 @@ public class CarHvacProbeTest {
         /**
          * Обратное к areaOf: иначе событие водителя обновило бы пассажира.
          */
-        assertEquals(Seat.DRIVER, CarHvacProbe.seatOfArea(VehicleAreaSeat.SEAT_MAIN_DRIVER));
-        assertEquals(Seat.PASSENGER, CarHvacProbe.seatOfArea(VehicleAreaSeat.SEAT_PASSENGER));
+        assertEquals(Seat.DRIVER, CarHvacProbe.seatOf(VehicleAreaSeat.SEAT_MAIN_DRIVER));
+        assertEquals(Seat.PASSENGER, CarHvacProbe.seatOf(VehicleAreaSeat.SEAT_PASSENGER));
     }
 
     @Test
     public void ignoresOtherAreas() {
-        assertNull(CarHvacProbe.seatOfArea(-1));
-        assertNull(CarHvacProbe.seatOfArea(0));
+        assertNull(CarHvacProbe.seatOf(-1));
+        assertNull(CarHvacProbe.seatOf(0));
     }
 }

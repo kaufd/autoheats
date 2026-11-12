@@ -1,6 +1,7 @@
 package com.wt.airconditioner;
 
 import android.car.Car;
+import android.car.VehicleAreaInOutCAR;
 import android.car.VehicleAreaSeat;
 import android.car.VehiclePropertyIds;
 import android.car.hardware.CarPropertyValue;
@@ -14,6 +15,12 @@ import android.content.ServiceConnection;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.SystemClock;
+
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 /**
@@ -26,11 +33,23 @@ import android.os.Looper;
  */
 public class CarHvacProbe {
 
-    /** Температура в салоне. Вычислено из HvacPropertyIds плагина. */
-    private static final int ID_HVAC_IN_OUT_TEMP = 675289370;
+    /**
+     * Температура воздуха; салон это или улица, решает зона. Константа есть в
+     * самом android.car.jar, поэтому прежнее магическое 675289370, вычисленное
+     * из HvacPropertyIds плагина, больше не нужно — значение то же.
+     */
+    private static final int ID_HVAC_IN_OUT_TEMP = CarHvacManager.ID_HVAC_IN_OUT_TEMP;
 
-    /** VehicleAreaInOutCAR.InOutCAR_INSIDE — зона «внутри салона». */
-    private static final int AREA_INSIDE = 1;
+    private static final int AREA_INSIDE = VehicleAreaInOutCAR.InOutCAR_INSIDE;
+
+    /** Однобайтовое «нет данных»; выше него значений не бывает. */
+    private static final int NO_DATA_RAW = 255;
+
+    /**
+     * Зона «за бортом». Голова её отдаёт — и чтением, и событиями подписки
+     * (замер 12.09); пересчёт — outsideCelsius.
+     */
+    private static final int AREA_OUTSIDE = VehicleAreaInOutCAR.InOutCAR_OUTSIDE;
 
     /** Без таймаута статус «Подключение к Car…» может висеть вечно. */
     private static final long CONNECT_TIMEOUT_MS = 10_000L;
@@ -64,11 +83,10 @@ public class CarHvacProbe {
         void onCabinTemperature(double celsius, int raw);
 
         /**
-         * Уровень подогрева сиденья изменился по событию HVAC — в том числе
-         * от нашей же записи (эхо) или физической кнопки. Значения вне 0..3
-         * сюда не доходят.
+         * Уровень подогрева по событию HVAC: и эхо нашей записи, и переключение
+         * из штатного меню ГУ — различает их вызывающий.
          */
-        void onSeatLevel(Seat seat, int level);
+        void onSeatHeat(Seat seat, int level);
 
         /** Событие зажигания; false — любое состояние, кроме ON. */
         void onIgnition(boolean on);
@@ -94,16 +112,118 @@ public class CarHvacProbe {
      */
     private boolean serviceConnected;
 
+    /**
+     * Последнее записанное сырое значение температуры не из салона. Событий
+     * может идти сколько угодно, а буфер лога — 500 строк: без отсева повторов
+     * поток одинаковых значений вытеснил бы из него всё, ради чего лог открыт.
+     */
+    private Integer lastZoneRaw;
+
+    /**
+     * elapsedRealtime последнего получения улицы — чтением или событием, в том
+     * числе повтора. Возраст по нему проверяет фоновая модель; null — не
+     * получали.
+     */
+    private Long lastOutsideAtMs;
+
+    /**
+     * Последние прочитанные значения — их забирает ряд калибровки в сервисе.
+     * Здесь, а не в listener: сервис снимает их по своему таймеру, и городить
+     * ради этого ещё один колбэк не за чем.
+     */
+    private Integer lastCabinRaw;
+    /**
+     * Последний салон, не sentinel, и elapsedRealtime его получения — для
+     * фоновой модели. Здесь, а не в сервисе: пересчёт уходит туда через post и
+     * к тику ряда ещё не доходит, а отладочная подстановка сюда не попадает.
+     */
+    private Double lastCabinCelsius;
+    private Long lastCabinAtMs;
+    private float[] lastCoolantFloats;
+    private int[] lastCoolantInts;
+
+    /**
+     * Об отказе чтения сообщаем один раз, а не каждый снимок: недоступная зона
+     * или отсутствующий датчик — состояние, а не событие, и повторять его в
+     * логе раз в полминуты значит потерять всё остальное. Ключи каналов, о чьём
+     * отказе уже сказано; успешное чтение снимает отметку через forgetFailure.
+     *
+     * Конкурентное множество: чтения идут и с главного потока (снимок по
+     * таймеру), и с потока колбэков Car.
+     */
+    private final Set<String> loggedFailures = ConcurrentHashMap.newKeySet();
+
+    private static final String CABIN = "cabin";
+    private static final String OUTSIDE = "outside";
+    private static final String COOLANT = "coolant";
+
+    private void logOnce(String channel, String message) {
+        if (loggedFailures.add(channel)) {
+            log(message);
+        }
+    }
+
+    private void forgetFailure(String channel) {
+        loggedFailures.remove(channel);
+    }
+
+    Integer lastCabinRaw() {
+        return lastCabinRaw;
+    }
+
+    Double lastCabinCelsius() {
+        return lastCabinCelsius;
+    }
+
+    Long lastCabinAtMs() {
+        return lastCabinAtMs;
+    }
+
+    Integer lastOutsideRaw() {
+        return lastZoneRaw;
+    }
+
+    Long lastOutsideAtMs() {
+        return lastOutsideAtMs;
+    }
+
+    float[] lastCoolantFloats() {
+        return lastCoolantFloats;
+    }
+
+    int[] lastCoolantInts() {
+        return lastCoolantInts;
+    }
+
     private final CarHvacManager.CarHvacEventCallback hvacCallback =
             new CarHvacManager.CarHvacEventCallback() {
                 @Override
                 public void onChangeEvent(CarPropertyValue value) {
-                    if (value.getPropertyId() == ID_HVAC_IN_OUT_TEMP
-                            && value.getAreaId() == AREA_INSIDE) {
-                        publishTemperature(value.getValue(), false);
-                    } else if (value.getPropertyId() == VehiclePropertyIds.HVAC_SEAT_TEMPERATURE) {
-                        publishSeatLevel(value.getAreaId(), value.getValue());
+                    int property = value.getPropertyId();
+                    if (property == VehiclePropertyIds.HVAC_SEAT_TEMPERATURE) {
+                        publishSeatHeat(value.getAreaId(), value.getValue());
+                        return;
                     }
+                    if (property != ID_HVAC_IN_OUT_TEMP) {
+                        /**
+                         * Только в лог и по разу на свойство и зону: если меню
+                         * ГУ пишет подогрев не в HVAC_SEAT_TEMPERATURE, а в своё
+                         * свойство, без adb узнать его можно только отсюда.
+                         */
+                        logOnce("hvac:" + property + ":" + value.getAreaId(),
+                                "HVAC событие: property=" + property + ", area="
+                                        + value.getAreaId() + ", value=" + value.getValue());
+                        return;
+                    }
+                    if (value.getAreaId() == AREA_INSIDE) {
+                        publishTemperature(value.getValue(), false, false);
+                        return;
+                    }
+                    /**
+                     * Прежде такие события молча отбрасывались, и по логу нельзя
+                     * было понять даже того, шлёт ли их голова вообще.
+                     */
+                    logZoneTemperature(value.getAreaId(), value.getValue());
                 }
 
                 @Override
@@ -296,7 +416,7 @@ public class CarHvacProbe {
                 log("подписка на события HVAC не удалась (чтение и запись работают): " + t);
             }
 
-            readCabinTemperature(false);
+            read(true, false);
         } catch (Throwable t) {
             /**
              * Ожидаемое место падения, если пакет не в whitelist головы:
@@ -329,6 +449,7 @@ public class CarHvacProbe {
             sensorRetriesLeft = SENSOR_RETRIES;
             log("подписка на зажигание оформлена");
             publishCurrentIgnition(manager);
+            logSupportedSensors(manager);
         } catch (Throwable t) {
             retrySensorManager(String.valueOf(t));
         }
@@ -449,30 +570,34 @@ public class CarHvacProbe {
                 : VehicleAreaSeat.SEAT_PASSENGER;
     }
 
-    /** Обратное к areaOf; null — зона не сиденья водителя и пассажира. */
-    static Seat seatOfArea(int areaId) {
-        if (areaId == VehicleAreaSeat.SEAT_MAIN_DRIVER) {
-            return Seat.DRIVER;
+    /** Обратное к areaOf; null — зона не наша (задние ряды, общая зона). */
+    static Seat seatOf(int areaId) {
+        for (Seat seat : Seat.values()) {
+            if (areaOf(seat) == areaId) {
+                return seat;
+            }
         }
-        return areaId == VehicleAreaSeat.SEAT_PASSENGER ? Seat.PASSENGER : null;
+        return null;
     }
 
-    /**
-     * Событие уровня подогрева. Приходят ли такие события на голове, неизвестно:
-     * если нет — этот путь просто не вызывается, остальное работает как раньше.
-     */
-    private void publishSeatLevel(int areaId, Object rawValue) {
-        Seat seat = seatOfArea(areaId);
-        if (seat == null) {
-            return;
-        }
-        Integer level = parseRaw(rawValue);
-        if (level == null || level < 0 || level > 3) {
-            log("событие подогрева (" + seat.title + ") вне диапазона: " + rawValue);
+    private void publishSeatHeat(int areaId, Object rawValue) {
+        Seat seat = seatOf(areaId);
+        Integer level = seatLevel(rawValue);
+        if (seat == null || level == null) {
+            log("событие подогрева пропущено: area=" + areaId + ", value=" + rawValue);
             return;
         }
         final int value = level;
-        mainHandler.post(() -> listener.onSeatLevel(seat, value));
+        mainHandler.post(() -> listener.onSeatHeat(seat, value));
+    }
+
+    /**
+     * Уровень 0..3 из значения свойства; null — не разобралось или вне
+     * диапазона. Общий для чтения и подписки: голова присылает и числа, и строки.
+     */
+    static Integer seatLevel(Object value) {
+        Integer level = parseRaw(value);
+        return level == null || level < 0 || level > 3 ? null : level;
     }
 
     /**
@@ -482,23 +607,150 @@ public class CarHvacProbe {
      * только с главного потока.
      */
     public void readCabinTemperature() {
-        readCabinTemperature(true);
+        read(true, true);
     }
 
     /**
-     * deliverNow = false — через post, как события подписки: при подключении
-     * onHvacReady уже стоит в очереди и должен дойти до слушателя раньше.
+     * Тихий снимок для ряда калибровки. Температура салона по-прежнему уходит
+     * в listener — от неё зависят экран и каскад, а подписка HVAC может и не
+     * оформиться; забортная и ОЖ идут только в поля.
      */
-    private void readCabinTemperature(boolean deliverNow) {
+    public void sample() {
+        read(false, false);
+    }
+
+    /**
+     * Единственный путь чтения всех трёх каналов. verbose — чтение по кнопке:
+     * человек ждёт ответа, поэтому строки пишутся на каждый результат, включая
+     * повтор и повторный отказ. На снимке раз в полминуты в лог уходит только
+     * первый отказ канала — иначе ночь стоянки вытеснит из буфера всё.
+     *
+     * Забортная и ОЖ — только в лог и в поля: обе величины пока
+     * исследовательские, ни на подогрев, ни на экран не влияют, и отказ любой
+     * из них не ошибка приложения.
+     *
+     * deliverNow = false — температура салона через post, как события подписки:
+     * при подключении onHvacReady уже стоит в очереди и должен дойти раньше.
+     */
+    private void read(boolean verbose, boolean deliverNow) {
         if (!isHvacReady()) {
-            log("readCabinTemperature пропущено: HVAC не готов");
+            if (verbose) {
+                log("readCabinTemperature пропущено: HVAC не готов");
+            }
             return;
         }
         try {
-            publishTemperature(hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE),
-                    deliverNow);
+            publishTemperature(
+                    hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_INSIDE), verbose, deliverNow);
         } catch (Exception e) {
-            log("ОШИБКА чтения температуры: " + e);
+            String message = "ОШИБКА чтения температуры: " + e;
+            if (verbose) {
+                log(message);
+            } else {
+                logOnce(CABIN, message);
+            }
+        }
+        Integer outside = readOutsideRaw();
+        if (verbose && outside != null) {
+            Double celsius = outsideCelsius(outside);
+            log(celsius == null
+                    ? "за бортом: raw=" + outside + " — sentinel, данных нет"
+                    : "за бортом: raw=" + outside + " → "
+                            + Temperature.celsiusText(celsius));
+        }
+        if (readCoolant() && verbose) {
+            log("ОЖ: float=" + Arrays.toString(lastCoolantFloats)
+                    + ", int=" + Arrays.toString(lastCoolantInts));
+        }
+    }
+
+    /**
+     * Температура из зоны, отличной от салона, — почти наверняка улица. Только
+     * в лог: годится ли для неё формула салона, до сверки со штатным
+     * показанием неизвестно, поэтому пишется и сырое значение.
+     *
+     * Повторы отсеиваются — нужен ряд значений, а не частота событий. Objects
+     * .equals, а не сравнение через raw: два подряд неразобранных значения
+     * тоже повтор, и поток таких строк забил бы лог не хуже обычных.
+     */
+    private void logZoneTemperature(int areaId, Object rawValue) {
+        Integer raw = parseRaw(rawValue);
+        lastOutsideAtMs = SystemClock.elapsedRealtime();
+        if (Objects.equals(raw, lastZoneRaw)) {
+            return;
+        }
+        lastZoneRaw = raw;
+        Double celsius = outsideCelsius(rawValue);
+        log("температура зоны " + areaId + ": raw=" + raw
+                + (celsius == null
+                        ? " — sentinel или неразбираемое значение"
+                        : " → " + Temperature.celsiusText(celsius)));
+    }
+
+    /**
+     * Температура за бортом: то же свойство, что и салон, зона «снаружи».
+     * Нужна тепловой модели — окружение подушки холоднее воздуха салона, и
+     * поправка считается от разницы с улицей.
+     *
+     * Значение уходит в поле; в лог его пишет чтение по кнопке, и вместе с raw: ряд
+     * калибровки хранит именно его, и пересчёт в логе должен сверяться с рядом.
+     */
+    private Integer readOutsideRaw() {
+        try {
+            int raw = hvacManager.getIntProperty(ID_HVAC_IN_OUT_TEMP, AREA_OUTSIDE);
+            /**
+             * Заодно гасит повтор от подписки: то же значение событием писать
+             * уже незачем, а по кнопке человек ждёт ответа в любом случае.
+             */
+            lastZoneRaw = raw;
+            lastOutsideAtMs = SystemClock.elapsedRealtime();
+            forgetFailure(OUTSIDE);
+            return raw;
+        } catch (Exception e) {
+            logOnce(OUTSIDE, "за бортом прочитать не удалось: " + e);
+            return null;
+        }
+    }
+
+    /**
+     * Температура ОЖ. В выборе уровня подогрева не участвует; читается, чтобы
+     * потом связать прогрев салона с моментом, когда печка начинает отдавать
+     * тепло. Оба массива значений целиком: какой индекс несёт температуру на
+     * этой голове, из документации не следует.
+     *
+     * false — значения нет, причина в логе не повторяется.
+     */
+    private boolean readCoolant() {
+        CarSensorManager manager = sensorManager;
+        if (manager == null) {
+            return false;
+        }
+        try {
+            CarSensorEvent event = manager.getLatestSensorEvent(
+                    CarSensorManager.SENSOR_TYPE_ENGINE_COOLAN_TEMPERATURE);
+            if (event == null) {
+                logOnce(COOLANT, "ОЖ: getLatestSensorEvent вернул null");
+                return false;
+            }
+            lastCoolantFloats = event.floatValues;
+            lastCoolantInts = event.intValues;
+            forgetFailure(COOLANT);
+            return true;
+        } catch (Throwable t) {
+            logOnce(COOLANT, "ОЖ прочитать не удалось: " + t);
+            return false;
+        }
+    }
+
+    /**
+     * Что эта голова вообще отдаёт. Один раз на соединение: список нужен, чтобы
+     * не гадать про доступность датчиков по одной неудачной попытке чтения.
+     */
+    private void logSupportedSensors(CarSensorManager manager) {
+        try {
+            log("поддерживаемые сенсоры: " + Arrays.toString(manager.getSupportedSensors()));
+        } catch (Throwable t) {
+            log("список сенсоров недоступен: " + t);
         }
     }
 
@@ -533,11 +785,11 @@ public class CarHvacProbe {
             return null;
         }
         try {
-            int level = hvacManager.getIntProperty(
+            int raw = hvacManager.getIntProperty(
                     VehiclePropertyIds.HVAC_SEAT_TEMPERATURE, areaOf(seat));
-            if (level < 0 || level > 3) {
-                log("уровень подогрева (" + seat.title + ") вне диапазона: " + level);
-                return null;
+            Integer level = seatLevel(raw);
+            if (level == null) {
+                log("уровень подогрева (" + seat.title + ") вне диапазона: " + raw);
             }
             return level;
         } catch (Exception e) {
@@ -598,13 +850,33 @@ public class CarHvacProbe {
 
     /**
      * Формула датчика головы: (raw - 84) / 2 = °C. Значение приходит числом ИЛИ
-     * строкой, а raw < 0 — sentinel «нет данных», а не -42 °C: показать его как
-     * рабочую температуру значило бы соврать об исправности датчика.
+     * строкой, а sentinel «нет данных» (см. celsiusToPublish) — не температура:
+     * показать его как рабочую значило бы соврать об исправности датчика.
+     *
+     * @param requested чтение по кнопке: человек ждёт ответа и на повтор
      */
-    private void publishTemperature(Object rawValue, boolean deliverNow) {
+    private void publishTemperature(Object rawValue, boolean requested, boolean deliverNow) {
+        forgetFailure(CABIN);
         Double celsius = celsiusToPublish(rawValue);
         if (celsius == null) {
             Integer raw = parseRaw(rawValue);
+            /**
+             * Неразбираемое значение не отсеивается: потока таких не ждём, и
+             * каждое — сведение о типе, которого голова раньше не слала.
+             */
+            boolean repeated = !requested && raw != null && raw.equals(lastCabinRaw);
+            /**
+             * Sentinel тоже в ряд: «датчик молчал» — сведение, которое при
+             * разборе записи не должно выглядеть как отсутствие строки.
+             */
+            lastCabinRaw = raw;
+            /**
+             * 255 голова шлёт всю стоянку, пока не спит, а снимок идёт раз в
+             * полминуты: ночь таких строк вытеснила бы из буфера лога всё.
+             */
+            if (repeated) {
+                return;
+            }
             log(raw == null
                     ? "температура проигнорирована: неожиданный тип значения (" + rawValue + ")"
                     : "температура проигнорирована: sentinel raw=" + raw + " (нет данных с датчика)");
@@ -612,6 +884,9 @@ public class CarHvacProbe {
         }
         final int raw = parseRaw(rawValue);
         final double value = celsius;
+        lastCabinRaw = raw;
+        lastCabinCelsius = value;
+        lastCabinAtMs = SystemClock.elapsedRealtime();
         if (deliverNow) {
             listener.onCabinTemperature(value, raw);
         } else {
@@ -621,15 +896,35 @@ public class CarHvacProbe {
 
     /**
      * Единственное место, где решается, показывать ли температуру. null — не
-     * публиковать: значение не разобралось или пришёл sentinel raw < 0. Отдельно
-     * — чтобы проверялось тестом: на эмуляторе путь недостижим.
+     * публиковать: значение не разобралось или пришёл sentinel. Отдельно — чтобы
+     * проверялось тестом: на эмуляторе путь недостижим.
+     *
+     * Sentinel двух видов: raw < 0 и 255 — байт без данных. 255 голова шлёт на
+     * стоянке и первые секунды после пробуждения, и без отсева он уходил в
+     * каскад как «салон 85.5 °C» (замер 14.09, раздел 7 спецификации модели).
      */
     static Double celsiusToPublish(Object rawValue) {
+        Integer raw = readingRaw(rawValue);
+        return raw == null ? null : (raw - 84) / 2.0;
+    }
+
+    /**
+     * Забортная: шаг тот же, что у салона, смещение другое — raw/2 − 40. Две
+     * опоры по приборке (106 → 13 °C, 116 → 18 °C), замер 14.09, раздел 7
+     * спецификации модели. Формула салона давала на 2 °C холоднее.
+     */
+    static Double outsideCelsius(Object rawValue) {
+        Integer raw = readingRaw(rawValue);
+        return raw == null ? null : (raw - 80) / 2.0;
+    }
+
+    /** Разобранный raw без sentinel; null — температуры нет. */
+    private static Integer readingRaw(Object rawValue) {
         Integer raw = parseRaw(rawValue);
-        if (raw == null || raw < 0) {
+        if (raw == null || raw < 0 || raw >= NO_DATA_RAW) {
             return null;
         }
-        return (raw - 84) / 2.0;
+        return raw;
     }
 
     /** package-private ради юнит-теста: на эмуляторе этот путь не проверить. */

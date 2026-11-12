@@ -11,14 +11,14 @@ import java.util.List;
 final class FakeScheduler implements Scheduler {
 
     private final List<Task> pending = new ArrayList<>();
-    private long nowMinutes;
+    private long nowMs;
 
     private final class Task implements Cancellation {
-        final long dueAtMinutes;
+        final long dueAtMs;
         final Runnable action;
 
-        Task(long dueAtMinutes, Runnable action) {
-            this.dueAtMinutes = dueAtMinutes;
+        Task(long dueAtMs, Runnable action) {
+            this.dueAtMs = dueAtMs;
             this.action = action;
         }
 
@@ -29,8 +29,8 @@ final class FakeScheduler implements Scheduler {
     }
 
     @Override
-    public Cancellation schedule(int delayMinutes, Runnable task) {
-        Task scheduled = new Task(nowMinutes + delayMinutes, task);
+    public Cancellation scheduleMillis(long delayMs, Runnable task) {
+        Task scheduled = new Task(nowMs + delayMs, task);
         pending.add(scheduled);
         return scheduled;
     }
@@ -41,12 +41,20 @@ final class FakeScheduler implements Scheduler {
      * интервал, — иначе каскад 3→2→1→0 не прошёл бы за один вызов.
      */
     void elapse(int minutes) {
-        long target = nowMinutes + minutes;
+        elapseMillis(minutes * 60_000L);
+    }
+
+    long nowMs() {
+        return nowMs;
+    }
+
+    void elapseMillis(long millis) {
+        long target = nowMs + millis;
         while (true) {
             Task next = null;
             for (Task task : pending) {
-                if (task.dueAtMinutes <= target
-                        && (next == null || task.dueAtMinutes < next.dueAtMinutes)) {
+                if (task.dueAtMs <= target
+                        && (next == null || task.dueAtMs < next.dueAtMs)) {
                     next = task;
                 }
             }
@@ -54,10 +62,10 @@ final class FakeScheduler implements Scheduler {
                 break;
             }
             pending.remove(next);
-            nowMinutes = next.dueAtMinutes;
+            nowMs = next.dueAtMs;
             next.action.run();
         }
-        nowMinutes = target;
+        nowMs = target;
     }
 
     /** Сколько таймеров ждёт срабатывания: 0 в конце каскада — часть проверки. */

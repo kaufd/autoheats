@@ -1,11 +1,9 @@
 package com.wt.airconditioner;
 
 import android.app.Activity;
-import android.content.ClipData;
-import android.content.ClipboardManager;
-import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.PorterDuff;
+import android.os.Environment;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.CheckBox;
@@ -16,9 +14,20 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Deque;
 import java.util.List;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 /** Локальное представление диагностического лога и debug-инжектора. */
 final class LogUiController implements TabController {
@@ -32,7 +41,12 @@ final class LogUiController implements TabController {
     private static final int PANEL_FILL = 0x99000000;
 
     private final Activity activity;
-    private final ServiceBindingController serviceProvider;
+    /**
+     * Роль, а не сервис целиком: вкладке логов нечего делать с подогревом.
+     * Supplier — потому что binding случается позже открытия экрана, и до него
+     * здесь null.
+     */
+    private final Supplier<Diagnostics> diagnostics;
     private final Deque<String> logLines = new ArrayDeque<>();
     private ThemePalette palette;
 
@@ -54,10 +68,21 @@ final class LogUiController implements TabController {
      */
     private boolean visible;
 
-    LogUiController(Activity activity, ServiceBindingController serviceProvider, ThemePalette palette) {
+    LogUiController(Activity activity, Supplier<Diagnostics> diagnostics, ThemePalette palette) {
         this.activity = activity;
-        this.serviceProvider = serviceProvider;
+        this.diagnostics = diagnostics;
         this.palette = palette;
+    }
+
+    /**
+     * Действие над сервисом, если он уже привязан. Шесть кнопок вкладки иначе
+     * повторяли бы одну и ту же проверку на null.
+     */
+    private void withService(Consumer<Diagnostics> action) {
+        Diagnostics service = diagnostics.get();
+        if (service != null) {
+            action.accept(service);
+        }
     }
 
     /** Страница создана адаптером: разбираем её и вешаем слушателей. */
@@ -72,27 +97,15 @@ final class LogUiController implements TabController {
         injectValue = page.findViewById(R.id.injectValue);
         quickTemperatures = page.findViewById(R.id.quickTemperatures);
 
-        page.findViewById(R.id.startCascade).setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.startAutoHeatNow();
-            }
-        });
-        page.findViewById(R.id.readTemp).setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.readCabinTemperature();
-            }
-        });
-        page.findViewById(R.id.copyLog).setOnClickListener(v -> copyLog());
+        page.findViewById(R.id.startCascade).setOnClickListener(
+                v -> withService(Diagnostics::startAutoHeatNow));
+        page.findViewById(R.id.readTemp).setOnClickListener(
+                v -> withService(Diagnostics::readCabinTemperature));
+        page.findViewById(R.id.saveLog).setOnClickListener(v -> saveLog());
         page.findViewById(R.id.clearLog).setOnClickListener(v -> clearLog());
         page.findViewById(R.id.injectTemp).setOnClickListener(v -> injectTemperature());
-        page.findViewById(R.id.restartCar).setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.restartCarConnection();
-            }
-        });
+        page.findViewById(R.id.restartCar).setOnClickListener(
+                v -> withService(Diagnostics::restartCarConnection));
     }
 
     /** Отладку выключили — страницы больше нет, но лог копится дальше. */
@@ -147,10 +160,7 @@ final class LogUiController implements TabController {
     }
 
     void clearLog() {
-        SeatHeatService service = serviceProvider.get();
-        if (service != null) {
-            service.clearLogs();
-        }
+        withService(Diagnostics::clearLogs);
         logLines.clear();
         renderLog();
     }
@@ -176,10 +186,7 @@ final class LogUiController implements TabController {
     }
 
     void log(String message) {
-        SeatHeatService service = serviceProvider.get();
-        if (service != null) {
-            service.onLog(message);
-        }
+        withService(service -> service.log(message));
     }
 
     private void buildQuickTemperatures() {
@@ -211,12 +218,7 @@ final class LogUiController implements TabController {
 
         button.setBackground(Ui.roundRect(activity, CHIP_RADIUS_DP,
                 palette.chipFill, palette.chipStroke));
-        button.setOnClickListener(v -> {
-            SeatHeatService service = serviceProvider.get();
-            if (service != null) {
-                service.injectTemperature(celsius);
-            }
-        });
+        button.setOnClickListener(v -> withService(service -> service.injectTemperature(celsius)));
 
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, Ui.dp(activity, 38), 1f);
         if (withMargin) {
@@ -228,25 +230,125 @@ final class LogUiController implements TabController {
 
     private void injectTemperature() {
         String text = injectValue.getText().toString().trim().replace(',', '.');
-        SeatHeatService service = serviceProvider.get();
-        if (service == null || text.isEmpty()) {
+        if (text.isEmpty()) {
             return;
         }
         try {
-            service.injectTemperature(Double.parseDouble(text));
+            double celsius = Double.parseDouble(text);
+            withService(service -> service.injectTemperature(celsius));
         } catch (NumberFormatException e) {
             Toast.makeText(activity, "Не похоже на температуру", Toast.LENGTH_SHORT).show();
         }
     }
 
-    private void copyLog() {
-        ClipboardManager clipboard =
-                (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
-        if (clipboard == null) {
-            return;
+    /** Накопленные ряды калибровки во внутренней памяти приложения. */
+    private List<File> calibrationFiles() {
+        File directory = activity.getExternalFilesDir(null);
+        File[] files = directory == null ? null : directory.listFiles(
+                (dir, name) -> name.endsWith(CalibrationLog.EXTENSION));
+        return files == null ? new ArrayList<>() : Arrays.asList(files);
+    }
+
+    private boolean copy(File from, File to) {
+        try (FileOutputStream stream = new FileOutputStream(to)) {
+            Files.copy(from.toPath(), stream);
+            stream.getFD().sync();
+            return true;
+        } catch (IOException | SecurityException e) {
+            log("не скопировался " + from.getName() + ": " + e);
+            return false;
         }
-        clipboard.setPrimaryClip(ClipData.newPlainText("AutoHeat", logText()));
-        Toast.makeText(activity, "Лог скопирован", Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * Лог в файл, а не в буфер обмена: на голове его некуда вставить — ни
+     * почты, ни редактора, ни adb.
+     *
+     * Пишем на съёмные носители и в Downloads — туда, откуда файл реально
+     * забрать. Внутренняя память намеренно исключена: /sdcard/Android/data
+     * штатными средствами головы не открывается, и файл там всё равно что
+     * потерян. Downloads виден файловому менеджеру, но требует выданного
+     * WRITE_EXTERNAL_STORAGE, которого приложение не запрашивает, поэтому
+     * одной флешки может не оказаться достаточно — пишем в оба места.
+     *
+     * Пути уходят и в лог: тост гаснет, а прочитать, куда именно легло, нужно.
+     */
+    private void saveLog() {
+        /** Штамп общий с рядом калибровки: в файловом менеджере они лягут рядом. */
+        String name = "autoheat-log-" + CalibrationLog.stamp() + ".txt";
+        String text = logText();
+        List<File> series = calibrationFiles();
+        List<String> saved = new ArrayList<>();
+
+        File[] appDirs = activity.getExternalFilesDirs(null);
+        /**
+         * Нулевой каталог — primary external, то есть /sdcard/Android/data;
+         * он пропускается. Все последующие появляются только при подключённом
+         * съёмном носителе, и разрешений они не требуют.
+         */
+        for (int i = 1; i < appDirs.length; i++) {
+            if (appDirs[i] != null) {
+                saveInto(appDirs[i], name, text, series, saved);
+            }
+        }
+        /** Всё, что сохранено до Downloads, лежит на съёмном носителе. */
+        int onRemovable = saved.size();
+        saveInto(Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS), name, text, series, saved);
+
+        for (String path : saved) {
+            log("лог сохранён: " + path);
+        }
+        if (saved.isEmpty()) {
+            Toast.makeText(activity, "Некуда сохранить — вставьте флешку (причина в логе)",
+                    Toast.LENGTH_LONG).show();
+        } else if (onRemovable == 0) {
+            /**
+             * Флешки нет или она не приняла запись. Downloads — внутренняя
+             * память: файл цел, но забирать его придётся файловым менеджером,
+             * и молчать об этом нельзя — иначе успех неотличим от потери.
+             */
+            Toast.makeText(activity, "Мимо флешки, в " + saved.get(0)
+                    + " (причина в логе)", Toast.LENGTH_LONG).show();
+        } else {
+            Toast.makeText(activity, "Сохранено (" + onRemovable + "): " + saved.get(0),
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /**
+     * Пишет лог и ряды калибровки в каталог, сбрасывая каждый файл на
+     * носитель: флешку вынимают из уснувшей головы, а close() отдаёт данные
+     * только ядру. Без sync файл живёт в странице кэша до ближайшего
+     * writeback и исчезает вместе с ним — запись при этом отчитывается
+     * об успехе.
+     */
+    private void saveInto(File dir, String name, String text, List<File> series,
+            List<String> saved) {
+        File file = new File(dir, name);
+        try (FileOutputStream stream = new FileOutputStream(file)) {
+            Writer writer = new OutputStreamWriter(stream, StandardCharsets.UTF_8);
+            writer.write(text);
+            writer.flush();
+            stream.getFD().sync();
+            saved.add(file.getAbsolutePath());
+        } catch (IOException | SecurityException e) {
+            /**
+             * Ожидаемо для Downloads без разрешения и для отсутствующей
+             * флешки: неудача одного места не отменяет остальные.
+             */
+            log("не сохранилось в " + dir + ": " + e);
+        }
+        /**
+         * Ряды калибровки копятся во внутренней памяти сами; наружу их
+         * выносит только эта кнопка — вместе с логом, одним движением.
+         */
+        for (File csv : series) {
+            File target = new File(dir, csv.getName());
+            if (copy(csv, target)) {
+                saved.add(target.getAbsolutePath());
+            }
+        }
     }
 
     private String logText() {

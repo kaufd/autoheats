@@ -165,8 +165,9 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
         /**
          * Контроллеры заводятся без своих View: страницы им раздаст адаптер.
          */
-        heatUi = new SeatHeatUiController(this, settings, serviceBinding, heatListener, palette);
-        logUi = new LogUiController(this, serviceBinding, palette);
+        heatUi = new SeatHeatUiController(this, settings, serviceBinding::get,
+                heatListener, palette);
+        logUi = new LogUiController(this, serviceBinding::get, palette);
         presetsPanel = new PresetsPanel(this, new PresetStore(this), palette, presetListener);
         updateController = new AppUpdateController(this);
         settingsUi = new SettingsUiController(this, settings, updateController,
@@ -402,7 +403,7 @@ public class MainActivity extends Activity implements SeatHeatService.UiListener
     @Override
     public void onCabinTemperature(double celsius) {
         runOnUiThread(() -> {
-            String text = TemperatureConstants.celsiusText(celsius);
+            String text = Temperature.celsiusText(celsius);
             int color = Ui.temperatureColor(this, celsius);
             heatUi.onCabinTemperature(text, color);
             logUi.onCabinTemperature(text, color);

@@ -12,5 +12,10 @@ interface Scheduler {
         void cancel();
     }
 
-    Cancellation schedule(int delayMinutes, Runnable task);
+    default Cancellation schedule(int delayMinutes, Runnable task) {
+        return scheduleMillis(delayMinutes * 60_000L, task);
+    }
+
+    /** Такт модели короче минуты; часы пресетов используют тот же механизм. */
+    Cancellation scheduleMillis(long delayMs, Runnable task);
 }

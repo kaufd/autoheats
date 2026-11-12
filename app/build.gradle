@@ -30,8 +30,11 @@ android {
         // Приложение предназначено только для головы Changan на Android 9.
         minSdk 28
         targetSdk 33
-        versionCode 2000
-        versionName "2.0.0"
+        // Отладочная сборка ветки: на голове по этой строке видно, что стоит
+        // новый код, а не выпущенный 2.0.0. Перед тегом релиза вернуть настоящую
+        // версию и добавить секцию в CHANGELOG.
+        versionCode 2004
+        versionName "2.0.1-model-dev.3"
     }
 
     compileOptions {
