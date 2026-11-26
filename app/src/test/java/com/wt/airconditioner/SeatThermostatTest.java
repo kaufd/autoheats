@@ -31,20 +31,37 @@ public class SeatThermostatTest {
     }
 
     @Test
-    public void frostStartsAtTheTopLevelAndPlansToReleaseIt() {
+    public void frostStartsAtTheTopLevel() {
         SeatThermostat.Decision decision = SeatThermostat.choose(frozenSeat(), 0, 3.0, -15.0);
         assertEquals(3, decision.level);
-        assertEquals("план 3,3,3,3,0,0", decision.reason);
+        assertEquals("план 3,3,3,3,3,3", decision.reason);
     }
 
     @Test
-    public void warmCabinForbidsTheTopLevel() {
+    public void coldSeatInWarmCabinAlsoStartsAtTheTopLevel() {
         /**
-         * Явное предпочтение владельца, а не следствие уравнений: тройка
-         * разрешена только при салоне не выше нуля.
+         * Требование владельца (26.11.2026): холодное сиденье без тройки не
+         * разогревается. Прежний запрет тройки при салоне выше нуля снят;
+         * отпускает её накопленное в мате тепло.
          */
         List<SeatThermostat.Scenario> warm = Collections.singletonList(scenario(5, 5, 5));
-        assertEquals(2, SeatThermostat.choose(warm, 0, 3.0, 5.0).level);
+        SeatThermostat.Decision decision = SeatThermostat.choose(warm, 0, 3.0, 5.0);
+        assertEquals(3, decision.level);
+        assertEquals("план 3,3,3,0,0,0", decision.reason);
+    }
+
+    @Test
+    public void guardFollowsTheProfileHotThreshold() {
+        /**
+         * Ограничитель — порог «жарко» профиля, а не общие 39 °C: та же
+         * поверхность перегревает профиль с порогом 40 и не перегревает
+         * профиль с порогом 44.3, у которого «жарко» наступает позже.
+         */
+        SeatThermostat.Scenario common = scenario(41, 41, 0);
+        SeatThermostat.Scenario late = scenario(41, 41, 0);
+        late.parameters.hotCelsius = 44.3;
+        assertTrue(SeatThermostat.mustCoast(Collections.singletonList(common), 1));
+        assertFalse(SeatThermostat.mustCoast(Collections.singletonList(late), 1));
     }
 
     @Test
@@ -117,7 +134,7 @@ public class SeatThermostatTest {
     public void coastingStopsHeatingBeforeTheNextMinute() {
         /**
          * Промежуточная проверка на 15-секундном такте: удержание уровня ещё
-         * на минуту хотя бы в одном сценарии выходит за 39 °C.
+         * на минуту хотя бы в одном сценарии выходит за порог «жарко» (40 °C).
          */
         assertTrue(SeatThermostat.mustCoast(
                 Collections.singletonList(scenario(45, 42, 0)), 3));
@@ -125,19 +142,20 @@ public class SeatThermostatTest {
     }
 
     @Test
-    public void widestBankIsHeatedMoreCarefully() {
+    public void calibratedBankAgreesOnTheTopLevel() {
         /**
-         * Минимакс по сценариям, а не среднее: в том же морозе широкий набор
-         * гипотез снижает уровень с тройки до двойки. Это цена неопределённости
-         * параметров — систематический недогрев.
+         * До подбора порогов «жарко» широкий банк в морозе снижал тройку до
+         * двойки (план 2,2,2,2,1,1): быстрый профиль упирался в общие 39 °C.
+         * С порогами, подобранными по поездкам, профили одинаково предсказывают
+         * момент «жарко», и банк, как и один профиль, держит тройку.
          */
         SeatThermostat.Decision decision = SeatThermostat.choose(hypotheticalBank(), 0, 3.0, -15.0);
-        assertEquals(2, decision.level);
-        assertEquals("план 2,2,2,2,1,1", decision.reason);
+        assertEquals(3, decision.level);
+        assertEquals("план 3,3,3,3,3,3", decision.reason);
     }
 
     /**
-     * Банк из 18 гипотетических профилей раздела 6 спецификации — тот, что
+     * Банк из 18 профилей раздела 6 спецификации с подобранными порогами «жарко» — тот, что
      * ведёт наблюдатель пассажира: три набора теплообмена × две гипотезы
      * устройства уровней × три профиля контакта. Набор для поиска проблем, не
      * калибровка и не распределение вероятностей.

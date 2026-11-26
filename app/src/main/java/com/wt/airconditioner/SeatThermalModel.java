@@ -59,6 +59,11 @@ final class SeatThermalModel {
         double[] duty = {0.0, 0.40, 0.66, 1.0};
         /** Уставки уровней 0…3 — оценка владельца, не паспортные значения. */
         double[] setpoint = {0.0, 35.0, 40.0, 45.0};
+        /**
+         * Поверхность, при которой человеку «жарко», в шкале этого профиля.
+         * 40 °C — сентябрьское допущение; в банке — подобранные по поездкам.
+         */
+        double hotCelsius = 40.0;
     }
 
     private SeatThermalModel() {
@@ -115,7 +120,8 @@ final class SeatThermalModel {
         }
         if (!(Double.isFinite(p.p) && p.p > 0 && Double.isFinite(p.a) && p.a > 0
                 && Double.isFinite(p.r) && p.r > 0 && Double.isFinite(p.air) && p.air >= 0
-                && Double.isFinite(p.body) && p.body >= 0 && Double.isFinite(p.bodyCelsius))) {
+                && Double.isFinite(p.body) && p.body >= 0 && Double.isFinite(p.bodyCelsius)
+                && Double.isFinite(p.hotCelsius))) {
             return false;
         }
         if (p.duty[0] != 0.0) {
