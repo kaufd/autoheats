@@ -29,11 +29,14 @@ class Parameters:
     body_temperature: float = 33.0
     duty: Tuple[float, ...] = (0.0, 0.40, 0.66, 1.0)
     setpoint: Tuple[float, ...] = (0.0, 35.0, 40.0, 45.0)
+    # Surface at which an occupant reports "hot" under this profile. 40 C is the
+    # September assumption; bank profiles carry values fitted to trips.
+    hot: float = 40.0
 
     def __post_init__(self):
         assert all(isfinite(x) for x in (
             self.p, self.a, self.r, self.air, self.body,
-            self.body_temperature, *self.duty, *self.setpoint))
+            self.body_temperature, self.hot, *self.duty, *self.setpoint))
         assert self.p > 0 and self.a > 0 and self.r > 0
         assert self.air >= 0 and self.body >= 0
         assert len(self.duty) == len(self.setpoint) == 4
@@ -96,19 +99,27 @@ def parameter_bank():
 
     These are representative combinations, not guaranteed physical bounds.
     No probability or measured confidence is attached to them.
+
+    Every profile reproduces the seven confirmed "hot" moments of 12.09 and
+    November 2026 equally well, each with its own threshold (time residual
+    0.7 min, the spread of the driver's timing). Heating times alone cannot
+    reject a profile; the thresholds make the bank agree on when it is hot.
     """
     base = Parameters()
     seeds = [base, replace(base, p=base.p * 0.7, r=0.5, air=base.air * 2),
              replace(base, p=base.p * 1.3, r=2.0, air=base.air * 0.5)]
+    # Fitted "hot" per seed and contact: empty, light, firm.
+    hot = [(41.2, 41.5, 41.7), (32.0, 33.2, 35.3), (44.3, 44.2, 44.0)]
     profiles = []
-    for seed in seeds:
+    for seed, thresholds in zip(seeds, hot):
         for duty in [base.duty, (0.0, 1.0, 1.0, 1.0)]:
-            for air_factor, body, temperature in [(1.0, 0.0, 33.0),
-                                                   (0.75, 0.02, 32.0),
-                                                   (0.5, 0.08, 35.0)]:
+            for (air_factor, body, temperature), threshold in zip(
+                    [(1.0, 0.0, 33.0), (0.75, 0.02, 32.0), (0.5, 0.08, 35.0)],
+                    thresholds):
                 profiles.append(replace(seed, duty=duty,
                                         air=seed.air * air_factor,
-                                        body=body, body_temperature=temperature))
+                                        body=body, body_temperature=temperature,
+                                        hot=threshold))
     return profiles
 
 
@@ -131,12 +142,20 @@ def plan_candidates(current, elapsed, max_level, horizon=6, dwell=3.0):
                 yield (first,) * when + (second,) * (horizon - when)
 
 
-def discomfort(temperature):
-    return max(0.0, 33.0 - temperature) + 1.3 * max(0.0, temperature - 36.0)
+def discomfort(temperature, hot=40.0):
+    """Comfort zone from 7 C below the profile's "hot" to 0.5 C below it.
+
+    Taken from the owner's trips: level 3 is held until "hot", and a seat
+    cooling to 7 C below it is not switched on again.
+    """
+    return (max(0.0, hot - 7.0 - temperature)
+            + 1.3 * max(0.0, temperature - (hot - 0.5)))
 
 
-def evaluate(plan, scenario, limit=39.0, max_step=MODEL_STEP):
+def evaluate(plan, scenario, max_step=MODEL_STEP):
     state = scenario.state
+    hot = scenario.parameters.hot
+    limit = hot  # the guard is "hot" itself
     total = 0.0
     peak = state.surface
     # Include boundaries and integrate discomfort with the trapezoidal rule.
@@ -147,12 +166,13 @@ def evaluate(plan, scenario, limit=39.0, max_step=MODEL_STEP):
             before = state
             state = advance(state, level, scenario.environment(minute + substep * dt),
                             scenario.parameters, duration=dt, max_step=max_step)
-            total += dt * (discomfort(before.surface) + discomfort(state.surface)) / 2
+            total += dt * (discomfort(before.surface, hot)
+                             + discomfort(state.surface, hot)) / 2
             peak = max(peak, state.surface)
     return total / len(plan), peak, peak <= limit + 1e-9
 
 
-def choose(scenarios, current, elapsed, cabin, horizon=6, force_off=False,
+def choose(scenarios, current, elapsed, horizon=6, force_off=False,
            max_step=MODEL_STEP):
     """Reference receding-horizon choice, conditional on supplied scenarios.
 
@@ -162,10 +182,10 @@ def choose(scenarios, current, elapsed, cabin, horizon=6, force_off=False,
     zero = (0,) * horizon
     if force_off:
         return zero, None, "forced off"
-    # Explicit comfort policy: boost only at cabin <= 0 C.
-    max_level = 3 if cabin <= 0 else 2
+    # Owner's requirement (November 2026): a cold seat starts from level 3
+    # at any cabin temperature; "do not heat at all" stays the caller's.
     best = None
-    for plan in plan_candidates(current, elapsed, max_level, horizon):
+    for plan in plan_candidates(current, elapsed, 3, horizon):
         costs = []
         admissible = True
         for scenario in scenarios:
@@ -207,6 +227,7 @@ def closed_loop(initial_states, profiles, cabin_at, outside, minutes=120, horizo
     current, elapsed = 0, 3.0
     switches = []
     peak = max(s.surface for s in states)
+    overshoot = max(s.surface - p.hot for s, p in zip(states, profiles))
     outside_zone = 0.0
     guard_stops = 0
     integrals = [0.0 for _ in profiles]
@@ -216,7 +237,7 @@ def closed_loop(initial_states, profiles, cabin_at, outside, minutes=120, horizo
         slopes = (0.0, slope) if use_trend else (0.0,)
         scenarios = [Scenario(s, p, cabin_forecast(cabin, outside, v))
                      for s, p in zip(states, profiles) for v in slopes]
-        plan, _, _ = choose(scenarios, current, elapsed, cabin, horizon=horizon)
+        plan, _, _ = choose(scenarios, current, elapsed, horizon=horizon)
         if plan[0] != current:
             current, elapsed = plan[0], 0.0
             switches.append((float(minute), current))
@@ -234,14 +255,18 @@ def closed_loop(initial_states, profiles, cabin_at, outside, minutes=120, horizo
             states = [advance(s, current, environment, p)
                       for s, p in zip(states, profiles)]
             for i, (before, after) in enumerate(zip(previous, states)):
-                integrals[i] += 0.125 * (discomfort(before.surface)
-                                         + discomfort(after.surface))
+                hot = profiles[i].hot
+                integrals[i] += 0.125 * (discomfort(before.surface, hot)
+                                         + discomfort(after.surface, hot))
             peak = max(peak, max(s.surface for s in states))
-            if any(s.surface < 33 or s.surface > 36 for s in states):
+            overshoot = max(overshoot, max(s.surface - p.hot
+                                           for s, p in zip(states, profiles)))
+            if any(s.surface < p.hot - 7 or s.surface > p.hot - 0.5
+                   for s, p in zip(states, profiles)):
                 outside_zone += 0.25
             elapsed += 0.25
     return dict(final=(min(s.surface for s in states), max(s.surface for s in states)),
-                peak=peak, outside_minutes=outside_zone, switches=switches,
+                peak=peak, overshoot=overshoot, outside_minutes=outside_zone, switches=switches,
                 guard_stops=guard_stops, discomfort_integral=max(integrals))
 
 
@@ -252,13 +277,14 @@ def forecast_study():
     synthetic trips is small; this is not proof of irrelevance in all states.
     """
     p = Parameters()
-    state = State(35, 33)
+    # Found by search over states after the November 2026 comfort zone.
+    state = State(38, 38)
     base = Scenario(state, p, cabin_forecast(-15, -15, 0))
     trend = Scenario(state, p, cabin_forecast(-15, -15, 3))
     for dt in [MODEL_STEP, 1 / 120]:
-        constant = choose([base], 1, 3, -15, max_step=dt)
-        combined = choose([base, trend], 1, 3, -15, max_step=dt)
-        assert constant[0][0] == 2 and combined[0][0] == 1
+        constant = choose([base], 3, 3, max_step=dt)
+        combined = choose([base, trend], 3, 3, max_step=dt)
+        assert constant[0][0] == 3 and combined[0][0] == 2
         print("Counterexample, step", dt * 60, "seconds: constant", constant[0],
               "constant + trend", combined[0])
 
@@ -284,7 +310,7 @@ def forecast_study():
             print(name, mode, "integral", round(result["discomfort_integral"], 6),
                   "peak", round(result["peak"], 6), "outside minutes",
                   result["outside_minutes"], "switches", result["switches"])
-    assert changed == 2
+    assert changed == 1
     print("PASS: first-action sensitivity survives step refinement;",
           changed, "of", len(cases), "closed-loop schedules differ")
 
@@ -350,18 +376,18 @@ def checks():
                                 max(abs(x - y) for x, y in zip(*traces)))
     assert worst_trace_error < 0.3
 
-    # Warm-cabin behavior is a policy, independent of the prediction horizon.
+    # A cold seat starts from level 3 in a warm cabin too, at any horizon.
     warm = [Scenario(State(5, 5), p, lambda t: 5)]
     for horizon in [3, 4, 6, 8]:
-        plan, _, _ = choose(warm, 0, 3, cabin=5, horizon=horizon)
-        assert max(plan) <= 2
+        plan, _, _ = choose(warm, 0, 3, horizon=horizon)
+        assert plan[0] == 3
     cold = [Scenario(State(-15, -15), p, lambda t: -15)]
-    plan, _, _ = choose(cold, 0, 3, cabin=-15)
+    plan, _, _ = choose(cold, 0, 3)
     assert plan[0] == 3
     # A forced stop and excessively warm hypotheses override dwell.
-    assert choose(cold, 3, 0, -15, force_off=True)[0][0] == 0
+    assert choose(cold, 3, 0, force_off=True)[0][0] == 0
     hot = [Scenario(State(45, 42), p, lambda t: 0)]
-    assert choose(hot, 3, 0, 0)[0][0] == 0
+    assert choose(hot, 3, 0)[0][0] == 0
     assert must_coast(hot, 3)
     for plan in plan_candidates(1, 0, 3):
         assert plan[0] <= 1
@@ -392,12 +418,12 @@ def checks():
           ", ".join(f"{s.surface:.3f}" for s in trajectories))
     print("Worst whole-trace error, 2 vs 0.5 seconds, 18 profiles:",
           f"{worst_trace_error:.3f}")
-    for label, scenarios, cabin in [("cold reference", cold, -15),
-                                     ("warm reference", warm, 5),
-                                     ("cold 18-profile bank", [Scenario(State(-15, -15), b,
-                                                                       lambda t: -15)
-                                                               for b in bank], -15)]:
-        plan, score, reason = choose(scenarios, 0, 3, cabin)
+    for label, scenarios in [("cold reference", cold),
+                             ("warm reference", warm),
+                             ("cold 18-profile bank", [Scenario(State(-15, -15), b,
+                                                               lambda t: -15)
+                                                       for b in bank])]:
+        plan, score, reason = choose(scenarios, 0, 3)
         print(label, "plan", plan, "cost", None if score is None else round(score, 3), reason)
 
     # Closed-loop regressions check outcomes, not a prescribed cascade.
@@ -408,7 +434,7 @@ def checks():
     restart_run = closed_loop([State(45, 38)], [p], lambda t: 22, -15, minutes=60)
     bank_run = closed_loop([State(-15, -15)] * len(bank), bank,
                            lambda t: -15, -15, minutes=40)
-    assert all(level <= 2 for _, level in warm_run["switches"])
+    assert warm_run["switches"][0] == (0.0, 3)
     assert 33 <= warming_run["final"][0] <= 36
     assert restart_run["switches"] and restart_run["switches"][0][0] > 0
     # The initially hot mat can produce an unavoidable peak even at zero.
@@ -419,7 +445,7 @@ def checks():
                          ("120min warming", warming_run), ("60min warm seat", restart_run),
                          ("40min 18-profile stress", bank_run)]:
         if result is not restart_run:
-            assert result["peak"] <= 39.3
+            assert result["overshoot"] <= 0.3
         print(name, "final", tuple(round(t, 3) for t in result["final"]),
               "peak", round(result["peak"], 3), "minutes outside zone",
               result["outside_minutes"], "switch count", len(result["switches"]),

@@ -170,22 +170,23 @@ public class ModelShadowTest {
     @Test
     public void regularDecisionWaitsAMinute() {
         /**
-         * Промёрзшее сиденье при −25 °C — тройка. Салон прогрелся выше нуля, и
-         * тройка больше не разрешена: решение, посчитанное сразу, сменилось бы.
-         * Через 30 секунд оно прежнее, через минуту — новое.
+         * Сиденье на тройке подходит к «жарко»: решение, посчитанное через 30
+         * секунд, было бы уже двойкой, а через минуту — единица. Через 30
+         * секунд публикуется прежнее, через минуту — новое; перегрева в
+         * прогнозе ещё нет, так что ноль без ожидания не подаётся.
          */
         store.snapshots.put(Seat.DRIVER,
-                SeatObserverTest.snapshot(Seat.DRIVER, "0", 1, -25.0, -25.0, -25.0));
-        levels.put(Seat.DRIVER, 0);
+                SeatObserverTest.snapshot(Seat.DRIVER, "3", 1, -15.0, 32.5, 32.5));
+        levels.put(Seat.DRIVER, 3);
         ModelShadow shadow = shadow();
-        shadow.update(0L, WALL, levels, true, air(0L, -25.0, null));
+        shadow.update(0L, WALL, levels, true, air(0L, -15.0, null));
         assertEquals(Integer.valueOf(3), shadow.estimate(Seat.DRIVER).level);
 
-        shadow.update(30_000L, WALL, levels, true, air(30_000L, 5.0, null));
+        shadow.update(30_000L, WALL, levels, true, air(30_000L, -15.0, null));
         assertEquals(Integer.valueOf(3), shadow.estimate(Seat.DRIVER).level);
 
-        shadow.update(60_000L, WALL, levels, true, air(60_000L, 5.0, null));
-        assertEquals(Integer.valueOf(2), shadow.estimate(Seat.DRIVER).level);
+        shadow.update(60_000L, WALL, levels, true, air(60_000L, -15.0, null));
+        assertEquals(Integer.valueOf(1), shadow.estimate(Seat.DRIVER).level);
     }
 
     @Test
@@ -256,17 +257,17 @@ public class ModelShadowTest {
     @Test
     public void newPlanAtTheSameLevelIsNotLogged() {
         /**
-         * Промёрзшее сиденье на тройке: через минуту план меняется
-         * (2,2,2,2,1,1 → 2,2,2,1,1,1), уровень тот же — строка одна. Иначе
+         * Прогретое сиденье на тройке: через минуту план меняется
+         * (3,3,0,0,0,0 → 3,0,0,0,0,0), уровень тот же — строка одна. Иначе
          * буфер лога на 500 строк забивался бы за поездку.
          */
         levels.put(Seat.DRIVER, 3);
         store.snapshots.put(Seat.DRIVER,
-                SeatObserverTest.snapshot(Seat.DRIVER, "3", 1, -15.0, -15.0, -15.0));
+                SeatObserverTest.snapshot(Seat.DRIVER, "3", 1, -15.0, 24.0, 24.0));
         ModelShadow shadow = shadow();
         shadow.update(0L, WALL, levels, true, air(0L, -15.0, null));
         shadow.update(60_000L, WALL + 60_000L, levels, true, air(60_000L, -15.0, null));
-        assertEquals(Integer.valueOf(2), shadow.estimate(Seat.DRIVER).level);
+        assertEquals(Integer.valueOf(3), shadow.estimate(Seat.DRIVER).level);
         assertEquals(1, decisions(Seat.DRIVER).size());
     }
 

@@ -76,6 +76,14 @@ final class SeatObserver {
     private static final double[] EMPTY = {1.0, 0.0, 33.0};
     private static final double[][] CONTACTS = {EMPTY, {0.75, 0.02, 32.0}, {0.5, 0.08, 35.0}};
 
+    /**
+     * Порог «жарко» по набору теплообмена и контакту — подобран 26.11.2026 по
+     * семи подтверждённым отметкам (2026-11-26-hot-threshold-fit.py). Время до
+     * «жарко» все профили объясняют одинаково, каждый своим порогом.
+     */
+    private static final double[][] HOT = {
+            {41.2, 41.5, 41.7}, {32.0, 33.2, 35.3}, {44.3, 44.2, 44.0}};
+
     /** Поверхность нижней и верхней оценки. */
     static final class Range {
         final double low;
@@ -552,14 +560,15 @@ final class SeatObserver {
 
     private static List<History> bank(Seat seat) {
         List<History> bank = new ArrayList<>();
-        for (double[] exchange : HEAT_EXCHANGE) {
+        for (int e = 0; e < HEAT_EXCHANGE.length; e++) {
             for (double[] duty : DUTIES) {
-                for (double[] contact : CONTACTS) {
-                    if (seat == Seat.DRIVER && contact == EMPTY) {
+                for (int c = 0; c < CONTACTS.length; c++) {
+                    if (seat == Seat.DRIVER && CONTACTS[c] == EMPTY) {
                         continue;
                     }
-                    bank.add(new History(profile(exchange, duty, contact),
-                            profile(exchange, duty, EMPTY)));
+                    bank.add(new History(
+                            profile(HEAT_EXCHANGE[e], duty, CONTACTS[c], HOT[e][c]),
+                            profile(HEAT_EXCHANGE[e], duty, EMPTY, HOT[e][0])));
                 }
             }
         }
@@ -567,7 +576,7 @@ final class SeatObserver {
     }
 
     private static SeatThermalModel.Parameters profile(double[] exchange, double[] duty,
-            double[] contact) {
+            double[] contact, double hotCelsius) {
         SeatThermalModel.Parameters parameters = new SeatThermalModel.Parameters();
         parameters.p = exchange[0];
         parameters.r = exchange[1];
@@ -575,6 +584,7 @@ final class SeatObserver {
         parameters.duty = duty.clone();
         parameters.body = contact[1];
         parameters.bodyCelsius = contact[2];
+        parameters.hotCelsius = hotCelsius;
         return parameters;
     }
 }

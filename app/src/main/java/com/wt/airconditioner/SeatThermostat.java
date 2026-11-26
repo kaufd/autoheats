@@ -27,19 +27,17 @@ final class SeatThermostat {
     private static final double SWITCH_PENALTY = 0.2;
 
     /**
-     * Ограничитель расчётного комфорта. Не гарантия фактической температуры:
-     * датчика поверхности нет.
+     * Зона комфорта и ограничитель отсчитываются от порога «жарко» профиля
+     * ({@link SeatThermalModel.Parameters#hotCelsius}): профили банка расходятся
+     * в абсолютных градусах, но одинаково предсказывают, когда водителю жарко.
+     * Ограничитель — сам порог; это не гарантия фактической температуры, датчика
+     * поверхности нет. Границы зоны — по поведению владельца, ноябрь 2026.
      */
-    private static final double GUARD_CELSIUS = 39.0;
-
-    private static final double COMFORT_LOW_CELSIUS = 33.0;
-    private static final double COMFORT_HIGH_CELSIUS = 36.0;
+    private static final double COMFORT_LOW_BELOW_HOT = 7.0;
+    private static final double COMFORT_HIGH_BELOW_HOT = 0.5;
 
     /** Перегрев неприятнее недогрева — исходное предпочтение владельца. */
     private static final double OVERHEAT_WEIGHT = 1.3;
-
-    /** Тройка разрешена только при достоверном салоне не выше этой температуры. */
-    private static final double TOP_LEVEL_CABIN_CELSIUS = 0.0;
 
     /** Цены считаются равными с этой точностью, °C. */
     private static final double TIE_CELSIUS = 1e-9;
@@ -115,10 +113,13 @@ final class SeatThermostat {
                 || elapsedMinutes < 0) {
             return new Decision(0, "уровень или время недостоверны, нагрев выключен");
         }
-        int maxLevel = cabinCelsius <= TOP_LEVEL_CABIN_CELSIUS ? 3 : 2;
+        /**
+         * Тройка разрешена при любом салоне: холодное сиденье без неё не
+         * разогревается (требование владельца, 26.11.2026).
+         */
         int[] best = null;
         double bestScore = 0;
-        for (int[] plan : planCandidates(currentLevel, elapsedMinutes, maxLevel)) {
+        for (int[] plan : planCandidates(currentLevel, elapsedMinutes)) {
             /**
              * Минимакс: план допустим, только если ни один сценарий не выходит
              * за предел, и оценивается по худшему из них. Усреднение здесь
@@ -128,7 +129,7 @@ final class SeatThermostat {
             boolean admissible = true;
             for (Scenario scenario : scenarios) {
                 Outcome outcome = evaluate(plan, scenario);
-                if (outcome.peak > GUARD_CELSIUS + TIE_CELSIUS) {
+                if (outcome.peak > scenario.parameters.hotCelsius + TIE_CELSIUS) {
                     admissible = false;
                     break;
                 }
@@ -163,7 +164,8 @@ final class SeatThermostat {
             return true;
         }
         for (Scenario scenario : scenarios) {
-            if (evaluate(new int[] {currentLevel}, scenario).peak > GUARD_CELSIUS + TIE_CELSIUS) {
+            if (evaluate(new int[] {currentLevel}, scenario).peak
+                    > scenario.parameters.hotCelsius + TIE_CELSIUS) {
                 return true;
             }
         }
@@ -191,9 +193,9 @@ final class SeatThermostat {
      * оптимизация всех последовательностей: применяется только первая минута,
      * а через минуту задача решается заново.
      */
-    private static List<int[]> planCandidates(int current, double elapsed, int maxLevel) {
+    private static List<int[]> planCandidates(int current, double elapsed) {
         List<int[]> plans = new ArrayList<>();
-        for (int first = 0; first <= maxLevel; first++) {
+        for (int first = 0; first <= 3; first++) {
             if (first > current && elapsed < DWELL_MINUTES) {
                 continue;
             }
@@ -203,7 +205,7 @@ final class SeatThermostat {
             java.util.Arrays.fill(constant, first);
             plans.add(constant);
             for (int when = 1; when < HORIZON; when++) {
-                for (int second = 0; second <= maxLevel; second++) {
+                for (int second = 0; second <= 3; second++) {
                     if (second == first || (second > first && age + when < DWELL_MINUTES)) {
                         continue;
                     }
@@ -233,17 +235,18 @@ final class SeatThermostat {
                 /** Сценарии и уровни планов проверены выше — см. usable, maxLevel. */
                 state = SeatThermalModel.advanceValid(state, level, scenario.environment,
                         scenario.parameters, dt);
-                total += dt * (discomfort(before.surface) + discomfort(state.surface)) / 2;
+                total += dt * (discomfort(before.surface, scenario.parameters.hotCelsius)
+                        + discomfort(state.surface, scenario.parameters.hotCelsius)) / 2;
                 peak = Math.max(peak, state.surface);
             }
         }
         return new Outcome(total / plan.length, peak);
     }
 
-    /** Внутри зоны комфорта цена нулевая: ради ровных 35 °C переключаться незачем. */
-    private static double discomfort(double surface) {
-        return Math.max(0.0, COMFORT_LOW_CELSIUS - surface)
-                + OVERHEAT_WEIGHT * Math.max(0.0, surface - COMFORT_HIGH_CELSIUS);
+    /** Внутри зоны комфорта цена нулевая: ради одной точки переключаться незачем. */
+    private static double discomfort(double surface, double hot) {
+        return Math.max(0.0, hot - COMFORT_LOW_BELOW_HOT - surface)
+                + OVERHEAT_WEIGHT * Math.max(0.0, surface - (hot - COMFORT_HIGH_BELOW_HOT));
     }
 
     /** Смена текущего уровня в начале плана считается наравне со сменой внутри. */
